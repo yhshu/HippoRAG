@@ -57,3 +57,13 @@ def extract_json_dict(text):
 
 def min_max_normalize(x):
     return (x - np.min(x)) / (np.max(x) - np.min(x))
+
+
+def softmax_with_zeros(logits):
+    mask = (logits != 0)
+
+    exp_logits = np.exp(logits[mask] - np.max(logits[mask]))
+    probabilities = np.zeros_like(logits)
+    probabilities[mask] = exp_logits / np.sum(exp_logits)
+
+    return probabilities

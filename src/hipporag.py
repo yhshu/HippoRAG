@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 import torch
 from colbert import Searcher
-from colbert.data import Queries
 from colbert.infra import RunConfig, Run, ColBERTConfig
 from tqdm import tqdm
 
@@ -18,7 +17,7 @@ from src.colbertv2_indexing import colbertv2_index
 from src.langchain_util import init_langchain_model, LangChainModel
 from src.lm_wrapper.util import init_embedding_model
 from src.named_entity_extraction_parallel import named_entity_recognition
-from src.processing import processing_phrases, min_max_normalize
+from src.processing import processing_phrases, min_max_normalize, softmax_with_zeros
 
 os.environ['TOKENIZERS_PARALLELISM'] = 'FALSE'
 
@@ -179,66 +178,50 @@ class HippoRAG:
         """
 
         assert isinstance(query, str), 'Query must be a string'
-        query_ner_list = self.query_ner(query)
-
+        query_doc_scores = None
         if 'colbertv2' in self.linking_retriever_name:
-            # Get Query Doc Scores
-            queries = Queries(path=None, data={0: query})
-            if self.doc_ensemble:
-                query_doc_scores = np.zeros(self.doc_to_phrases_mat.shape[0])
-                ranking = self.corpus_searcher.search_all(queries, k=self.doc_to_phrases_mat.shape[0])
-                # max_query_score = self.get_colbert_max_score(query)
-                for doc_id, rank, score in ranking.data[0]:
-                    query_doc_scores[doc_id] = score
-
-                if len(query_ner_list) > 0:  # if no entities are found, assign uniform probability to documents
-                    all_phrase_weights, linking_score_map = self.link_node_by_colbertv2(query_ner_list)
-            elif self.dpr_only:
-                query_doc_scores = np.zeros(len(self.dataset_df))
-                ranking = self.corpus_searcher.search_all(queries, k=len(self.dataset_df))
-                for doc_id, rank, score in ranking.data[0]:
-                    query_doc_scores[doc_id] = score
-        else:  # dense retrieval model
-            # Get Query Doc Scores
+            pass  # todo
+        else:  # huggingface dense retrieval
             if self.doc_ensemble or self.dpr_only:
                 query_embedding = self.embed_model.encode_text(query, return_cpu=True, return_numpy=True, norm=True)
                 query_doc_scores = np.dot(self.doc_embedding_mat, query_embedding.T)
                 query_doc_scores = query_doc_scores.T[0]
 
-            if len(query_ner_list) > 0:  # if no entities are found, assign uniform probability to documents
-                all_phrase_weights, linking_score_map = self.link_node_by_dpr(query_ner_list)
+        all_phrase_weights, linking_score_map = self.link_node_by_dpr(query, top_k=3)
+        logs, sorted_doc_ids, sorted_scores = self.graph_search_with_entities(all_phrase_weights, linking_score_map, query_doc_scores)
 
-        # Run Personalized PageRank (PPR) or other Graph Algorithm Doc Scores
+        return sorted_doc_ids.tolist()[:top_k], sorted_scores.tolist()[:top_k], logs
+
+    def graph_search_with_entities(self, all_phrase_weights, linking_score_map, query_doc_scores=None):
+        """
+        Run Personalized PageRank (PPR) or other graph algorithm to get doc rankings
+        @param query_doc_scores: query-doc scores based on dense model, without phrase as mediators
+        @return:
+        """
+
         if not self.dpr_only:
-            if len(query_ner_list) > 0:
-                combined_vector = np.max([all_phrase_weights], axis=0)
+            combined_vector = np.max([all_phrase_weights], axis=0)
 
-                if self.graph_alg == 'ppr':
-                    ppr_phrase_probs = self.run_pagerank_igraph_chunk([all_phrase_weights])[0]
-                elif self.graph_alg == 'none':
-                    ppr_phrase_probs = combined_vector
-                elif self.graph_alg == 'neighbor_2':
-                    ppr_phrase_probs = self.get_neighbors(combined_vector, 2)
-                elif self.graph_alg == 'neighbor_3':
-                    ppr_phrase_probs = self.get_neighbors(combined_vector, 3)
-                elif self.graph_alg == 'paths':
-                    ppr_phrase_probs = self.get_neighbors(combined_vector, 3)
-                else:
-                    assert False, f'Graph Algorithm {self.graph_alg} Not Implemented'
+            if self.graph_alg == 'ppr':
+                ppr_phrase_probs = self.run_pagerank_igraph_chunk([all_phrase_weights])[0]
+            elif self.graph_alg == 'none':
+                ppr_phrase_probs = combined_vector
+            elif self.graph_alg == 'neighbor_2':
+                ppr_phrase_probs = self.get_neighbors(combined_vector, 2)
+            elif self.graph_alg == 'neighbor_3':
+                ppr_phrase_probs = self.get_neighbors(combined_vector, 3)
+            elif self.graph_alg == 'paths':
+                ppr_phrase_probs = self.get_neighbors(combined_vector, 3)
+            else:
+                assert False, f'Graph Algorithm {self.graph_alg} Not Implemented'
 
-                fact_prob = self.facts_to_phrases_mat.dot(ppr_phrase_probs)
-                ppr_doc_prob = self.docs_to_facts_mat.dot(fact_prob)
-                ppr_doc_prob = min_max_normalize(ppr_doc_prob)
-            else:  # dpr_only or no entities found
-                ppr_doc_prob = np.ones(len(self.extracted_triples)) / len(self.extracted_triples)
-
+            fact_prob = self.facts_to_phrases_mat.dot(ppr_phrase_probs)
+            ppr_doc_prob = self.docs_to_facts_mat.dot(fact_prob)
+            ppr_doc_prob = min_max_normalize(ppr_doc_prob)
         # Combine Query-Doc and PPR Scores
         if self.doc_ensemble or self.dpr_only:
             # doc_prob = ppr_doc_prob * 0.5 + min_max_normalize(query_doc_scores) * 0.5
-            if len(query_ner_list) == 0:
-                doc_prob = query_doc_scores
-                self.statistics['doc'] = self.statistics.get('doc', 0) + 1
-            elif np.min(list(linking_score_map.values())) > self.recognition_threshold:  # high confidence in named entities
+            if np.min(list(linking_score_map.values())) > self.recognition_threshold:  # high confidence in named entities
                 doc_prob = ppr_doc_prob
                 self.statistics['ppr'] = self.statistics.get('ppr', 0) + 1
             else:  # relatively low confidence in named entities, combine the two scores
@@ -259,15 +242,13 @@ class HippoRAG:
                 self.statistics['ppr_doc_ensemble'] = self.statistics.get('ppr_doc_ensemble', 0) + 1
         else:
             doc_prob = ppr_doc_prob
-
         # Return ranked docs and ranked scores
         sorted_doc_ids = np.argsort(doc_prob, kind='mergesort')[::-1]
         sorted_scores = doc_prob[sorted_doc_ids]
-
-        if not (self.dpr_only) and len(query_ner_list) > 0:
+        if not self.dpr_only:
             # logs
             phrase_one_hop_triples = []
-            for phrase_id in np.where(all_phrase_weights > 0)[0]:
+            for phrase_id in np.where(all_phrase_weights > 0.001)[0]:
                 # get all the triples that contain the phrase from self.graph_plus
                 for t in list(self.kg_adj_list[phrase_id].items())[:20]:
                     phrase_one_hop_triples.append([self.phrases[t[0]], t[1]])
@@ -285,13 +266,12 @@ class HippoRAG:
 
             # get phrases for top_pagerank_phrase_ids
             top_ranked_nodes = [self.phrases[phrase_id] for phrase_id in top_pagerank_phrase_ids]
-            logs = {'named_entities': query_ner_list, 'linked_node_scores': [list(k) + [float(v)] for k, v in linking_score_map.items()],
+            logs = {'linked_node_scores': {k: float(v) for k, v in linking_score_map.items()},
                     '1-hop_graph_for_linked_nodes': phrase_one_hop_triples,
                     'top_ranked_nodes': top_ranked_nodes, 'nodes_in_retrieved_doc': nodes_in_retrieved_doc}
         else:
             logs = {}
-
-        return sorted_doc_ids.tolist()[:top_k], sorted_scores.tolist()[:top_k], logs
+        return logs, sorted_doc_ids, sorted_scores
 
     def query_ner(self, query):
         if self.dpr_only:
@@ -387,12 +367,12 @@ class HippoRAG:
                                                                     self.extraction_type, self.version), 'rb'))
 
         try:
-            self.relations_dict = pickle.load(open(
-                'output/{}_{}_graph_relation_dict_{}_{}_{}.{}.subset.p'.format(
-                    self.corpus_name, self.graph_type, self.phrase_type,
-                    self.extraction_type, self.graph_creating_retriever_name_processed, self.version), 'rb'))
+            node_pair_to_edge_label_path = 'output/{}_{}_graph_relation_dict_{}_{}_{}.{}.subset.p'.format(
+                self.corpus_name, self.graph_type, self.phrase_type,
+                self.extraction_type, self.graph_creating_retriever_name_processed, self.version)
+            self.node_pair_to_edge_label_dict = pickle.load(open(node_pair_to_edge_label_path, 'rb'))
         except:
-            pass
+            self.logger.exception('Node pair to edge label dict not found: ' + node_pair_to_edge_label_path)
 
         self.lose_facts = list(self.lose_fact_dict.keys())
         self.lose_facts = [self.lose_facts[i] for i in np.argsort(list(self.lose_fact_dict.values()))]
@@ -527,9 +507,10 @@ class HippoRAG:
         """
         pageranked_probabilities = []
 
-        for reset_prob in tqdm(reset_prob_chunk, desc='pagerank chunk'):
-            pageranked_probs = self.g.personalized_pagerank(vertices=range(len(self.kb_node_phrase_to_id)), damping=self.damping, directed=False,
-                                                            weights='weight', reset=reset_prob, implementation='prpack')
+        for reset_prob in reset_prob_chunk:
+            pageranked_probs = self.g.personalized_pagerank(vertices=range(len(self.kb_node_phrase_to_id)),
+                                                            damping=self.damping, directed=False,
+                                                            weights=None, reset=reset_prob, implementation='prpack')
 
             pageranked_probabilities.append(np.array(pageranked_probs))
 
@@ -554,77 +535,42 @@ class HippoRAG:
 
         return real_score
 
-    def link_node_by_colbertv2(self, query_ner_list):
-        phrase_ids = []
-        max_scores = []
+    def link_node_by_colbertv2(self, query: str):
+        pass  # todo
 
-        for query in query_ner_list:
-            queries = Queries(path=None, data={0: query})
-
-            queries_ = [query]
-            encoded_query = self.phrase_searcher.encode(queries_, full_length_search=False)
-
-            max_score = self.get_colbert_max_score(query)
-
-            ranking = self.phrase_searcher.search_all(queries, k=1)
-            for phrase_id, rank, score in ranking.data[0]:
-                phrase = self.phrases[phrase_id]
-                phrases_ = [phrase]
-                encoded_doc = self.phrase_searcher.checkpoint.docFromText(phrases_).float()
-                real_score = encoded_query[0].matmul(encoded_doc[0].T).max(dim=1).values.sum().detach().cpu().numpy()
-
-                phrase_ids.append(phrase_id)
-                max_scores.append(real_score / max_score)
-
-        # create a vector (num_doc) with 1s at the indices of the retrieved documents and 0s elsewhere
-        top_phrase_vec = np.zeros(len(self.phrases))
-
-        for phrase_id in phrase_ids:
-            if self.node_specificity:
-                if self.phrase_to_num_doc[phrase_id] == 0:
-                    weight = 1
-                else:
-                    weight = 1 / self.phrase_to_num_doc[phrase_id]
-                top_phrase_vec[phrase_id] = weight
-            else:
-                top_phrase_vec[phrase_id] = 1.0
-
-        return top_phrase_vec, {(query, self.phrases[phrase_id]): max_score for phrase_id, max_score, query in zip(phrase_ids, max_scores, query_ner_list)}
-
-    def link_node_by_dpr(self, query_ner_list: list):
+    def link_node_by_dpr(self, query: str, top_k=10):
         """
-        Get the most similar phrases (as vector) in the KG given the named entities
-        :param query_ner_list:
-        :return:
+        Get the most similar phrases given the query
+        :param query: query text
+        :param top_k: number of top phrases to retrieve
+        :return: all_phrase_weights, linking_score_map
         """
-        query_ner_embeddings = self.embed_model.encode_text(query_ner_list, return_cpu=True, return_numpy=True, norm=True)
+        query_embedding = self.embed_model.encode_text(query, return_cpu=True, return_numpy=True, norm=True)
 
         # Get Closest Entity Nodes
-        prob_vectors = np.dot(query_ner_embeddings, self.kb_node_phrase_embeddings.T)  # (num_ner, dim) x (num_phrases, dim).T -> (num_ner, num_phrases)
+        prob_vectors = np.dot(query_embedding, self.kb_node_phrase_embeddings.T)  # (1, dim) x (num_phrases, dim).T = (1, num_phrases)
 
         linked_phrase_ids = []
-        max_scores = []
+        linked_phrase_scores = []
 
         for prob_vector in prob_vectors:
-            phrase_id = np.argmax(prob_vector)  # the phrase with the highest similarity
-            linked_phrase_ids.append(phrase_id)
-            max_scores.append(prob_vector[phrase_id])
+            top_k_indices = np.argsort(prob_vector)[-top_k:][::-1]  # indices of top k phrases
+            linked_phrase_ids.extend(top_k_indices)
+            linked_phrase_scores.extend(prob_vector[top_k_indices])
 
-        # create a vector (num_phrase) with 1s at the indices of the linked phrases and 0s elsewhere
-        # if node_specificity is True, it's not one-hot but a weight
-        all_phrase_weights = np.zeros(len(self.phrases))
+        all_phrase_weights = np.zeros_like(prob_vectors[0])
+        all_phrase_weights[linked_phrase_ids] = prob_vectors[0][linked_phrase_ids]
 
-        for phrase_id in linked_phrase_ids:
-            if self.node_specificity:
+        if self.node_specificity:
+            for phrase_id in linked_phrase_ids:
                 if self.phrase_to_num_doc[phrase_id] == 0:  # just in case the phrase is not recorded in any documents
                     weight = 1
                 else:  # the more frequent the phrase, the less weight it gets
                     weight = 1 / self.phrase_to_num_doc[phrase_id]
 
-                all_phrase_weights[phrase_id] = weight
-            else:
-                all_phrase_weights[phrase_id] = 1.0
+                all_phrase_weights[phrase_id] = all_phrase_weights[phrase_id] * weight
+        all_phrase_weights = softmax_with_zeros(all_phrase_weights)
 
-        linking_score_map = {(query_phrase, self.phrases[linked_phrase_id]): max_score
-                             for linked_phrase_id, max_score, query_phrase in zip(linked_phrase_ids, max_scores, query_ner_list)}
+        linking_score_map = {self.phrases[linked_phrase_id]: max_score
+                             for linked_phrase_id, max_score in zip(linked_phrase_ids, linked_phrase_scores)}
         return all_phrase_weights, linking_score_map
