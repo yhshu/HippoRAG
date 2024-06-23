@@ -7,7 +7,6 @@ import ipdb
 import pandas as pd
 
 import pickle
-import numpy as np
 import os
 from tqdm import tqdm
 
