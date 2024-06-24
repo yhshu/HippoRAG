@@ -12,7 +12,7 @@ from src.hipporag import HippoRAG
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, required=True, default='sample')
-    parser.add_argument('--extraction_model', type=str, default='gpt-3.5-turbo-1106')
+    parser.add_argument('--extraction_model', type=str, default='gpt-3.5-turbo')
     parser.add_argument('--retrieval_model', type=str, required=True, help='e.g., "facebook/contriever", "colbertv2"')
     parser.add_argument('--doc_ensemble', action='store_true')
     parser.add_argument('--dpr_only', action='store_true')

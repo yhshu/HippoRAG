@@ -198,6 +198,14 @@ To initiate an instance of the HippoRAG class, just choose an **LLM** and a **re
 
 To run HippoRAG on a custom dataset, follow the indexing and retrieval steps as described above, and also add data processing and evaluation as follows. Here's an example for [BEIR](https://arxiv.org/abs/2104.08663) datasets, see `src/data_process` and `src/demo`.
 
+### Clearing Cache
+
+Indexing and retrieval process will cache intermediate and final results. If you want to clear the cache for a specific dataset, run the following command:
+
+```shell
+sh src/clear_cache.sh $DATA
+```
+
 ## Paper Reproducibility
 
 In this section, you will find all the code necessary to reproduce the results shown in [our paper](https://arxiv.org/abs/2405.14831).  

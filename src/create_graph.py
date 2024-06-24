@@ -24,7 +24,7 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
     extracted_file = json.load(open('output/openie_{}_results_{}_{}_{}.json'.format(dataset, extraction_type, extraction_model, max_samples), 'r'))
 
     extracted_triples = extracted_file['docs']
-    if extraction_model != 'gpt-3.5-turbo-1106':
+    if not extraction_model.startswith('gpt-3.5-turbo'):
         extraction_type = extraction_type + '_' + extraction_model
     phrase_type = 'ents_only_lower_preprocess'  # entities only, lower case, preprocessed
     if cosine_sim_edges:
