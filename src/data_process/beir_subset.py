@@ -61,7 +61,7 @@ def generate_dataset_with_relevant_corpus(split: str, qrels_path: str, chunk=Fal
         print(f'{split} corpus saved to {corpus_output_path}, len: {len(split_corpus)}')
 
     # save split_queries
-    queries_output_path = f'data/beir_{subset_name}_{split}{chunk_state}_queries.json'
+    queries_output_path = f'data/beir_{subset_name}_{split}{chunk_state}.json'
     with open(queries_output_path, 'w') as f:
         json.dump(split_queries, f)
         print(f'{split} queries saved to {queries_output_path}, len: {len(split_queries)}')
@@ -127,7 +127,7 @@ def generate_dataest_with_full_corpus(split, qrels_path: str, chunk=False):
         print(f'{split} corpus saved to {corpus_output_path}, len: {len(full_corpus)}')
 
     # save split_queries
-    queries_output_path = f'data/beir_{subset_name}_{split}{chunk_state}_queries.json'
+    queries_output_path = f'data/beir_{subset_name}_{split}{chunk_state}.json'
     with open(queries_output_path, 'w') as f:
         json.dump(split_queries, f)
         print(f'{split} queries saved to {queries_output_path}, len: {len(split_queries)}')

@@ -12,21 +12,21 @@ import json
 from tqdm import tqdm
 
 
-def detailed_log(queries, run_dict, eval_res, chunk=False, threshold=None, dpr_only=False):
+def detailed_log(dataset: list, run_dict, eval_res, chunk=False, threshold=None, dpr_only=False):
     logs = []
     for idx, query_id in tqdm(enumerate(run_dict['retrieved']), desc='Error analysis', total=len(run_dict['retrieved'])):
-        query_item = queries[idx]
+        item = dataset[idx]
         if threshold is not None and eval_res[query_id]['ndcg'] >= threshold:
             continue
-        gold_passages = queries[idx]['paragraphs']
-        gold_passage_ids = [p['idx'] for p in query_item['paragraphs']]
+        gold_passages = dataset[idx]['paragraphs']
+        gold_passage_ids = [p['idx'] for p in item['paragraphs']]
 
         distances = []
         num_dis = 0
         gold_passage_extracted_entities = []
         gold_passage_extracted_triples = []
         if not dpr_only:
-            gold_passage_extractions = [hipporag.get_extraction_by_passage_idx(p_idx, chunk) for p_idx in gold_passage_ids]
+            gold_passage_extractions = [hipporag.get_raw_extraction_by_passage_idx(p_idx, chunk) for p_idx in gold_passage_ids]
             gold_passage_extracted_entities = [e for extr in gold_passage_extractions for e in extr['extracted_entities']]
             gold_passage_extracted_triples = [t for extr in gold_passage_extractions for t in extr['extracted_triples']]
 
@@ -58,7 +58,7 @@ def detailed_log(queries, run_dict, eval_res, chunk=False, threshold=None, dpr_o
             pred_passages = merge_chunks(pred_passages)
 
         logs.append({
-            'query': queries[idx]['text'],
+            'query': dataset[idx]['text'],
             'ndcg': eval_res[query_id]['ndcg'],
             'gold_passages': gold_passages,
             'pred_passages': pred_passages,
@@ -71,19 +71,18 @@ def detailed_log(queries, run_dict, eval_res, chunk=False, threshold=None, dpr_o
     return logs
 
 
-def test_retrieve_beir(dataset: str, extraction_model: str, retrieval_model: str, linking_model: str, linking: str, doc_ensemble: bool, dpr_only: bool, chunk: bool, detail: bool,
+def test_retrieve_beir(dataset_name: str, extraction_model: str, retrieval_model: str, linking_model: str, linking: str, doc_ensemble: bool, dpr_only: bool, chunk: bool, detail: bool,
                        link_top_k=3, oracle_extraction=False):
     doc_ensemble_str = 'doc_ensemble' if doc_ensemble else 'no_ensemble'
     extraction_str = extraction_model.replace('/', '_').replace('.', '_')
     graph_creating_str = retrieval_model.replace('/', '_').replace('.', '_')
     if linking_model is None:
         linking_model = retrieval_model
-    if not oracle_extraction:
-        linking_str = linking_model.replace('/', '_').replace('.', '_') + '_link_top_k_' + str(link_top_k)
-    else:
-        linking_str = 'oracle_ie' + '_link_top_k_' + str(link_top_k)
+    linking_str = f"{linking_model.replace('/', '_').replace('.', '_')}_linking_{linking}_top_k_{link_top_k}"
+    if oracle_extraction:
+        linking_str += '_oracle_ie'
     dpr_only_str = '_dpr_only' if dpr_only else ''
-    run_output_path = f'exp/{dataset}_run_{doc_ensemble_str}_{extraction_str}_{graph_creating_str}_{linking_str}{dpr_only_str}.json'
+    run_output_path = f'exp/{dataset_name}_run_{doc_ensemble_str}_{extraction_str}_{graph_creating_str}_{linking_str}{dpr_only_str}.json'
 
     metrics = {'map', 'ndcg'}
     evaluator = pytrec_eval.RelevanceEvaluator(qrel, metrics)
@@ -94,15 +93,16 @@ def test_retrieve_beir(dataset: str, extraction_model: str, retrieval_model: str
         run_dict = {'retrieved': {}, 'log': {}}  # for pytrec_eval
 
     to_update_run = False
-    for query in tqdm(queries):
+    for query in tqdm(dataset):
         query_text = query['text']
         query_id = query['id']
         if query_id in run_dict['retrieved']:
             continue
         supporting_docs = query['paragraphs']
-        extraction_of_supporting_docs = [hipporag.get_extraction_by_passage_idx(p['idx'], chunk) for p in supporting_docs]
         if oracle_extraction:
-            oracle_triples = [t for extr in extraction_of_supporting_docs for t in extr['extracted_triples']]
+            oracle_triples = []
+            for p in supporting_docs:
+                oracle_triples += hipporag.get_facts_by_corpus_idx(hipporag.get_corpus_idx_by_passage_idx(p['idx']))[0]
         else:
             oracle_triples = None
         ranks, scores, log = hipporag.rank_docs(query_text, doc_top_k=10, link_top_k=link_top_k, linking=linking, oracle_triples=oracle_triples)
@@ -129,8 +129,8 @@ def test_retrieve_beir(dataset: str, extraction_model: str, retrieval_model: str
     print(f'Evaluation results: {avg_scores}')
 
     if detail:
-        logs = detailed_log(queries, run_dict, eval_res, chunk, dpr_only=dpr_only)
-        detailed_log_output_path = f'exp/{dataset}_log_{doc_ensemble_str}_{extraction_str}_{graph_creating_str}{linking_str}{dpr_only_str}.json'
+        logs = detailed_log(dataset, run_dict, eval_res, chunk, dpr_only=dpr_only)
+        detailed_log_output_path = f'exp/{dataset_name}_log_{doc_ensemble_str}_{extraction_str}_{graph_creating_str}{linking_str}{dpr_only_str}.json'
         with open(detailed_log_output_path, 'w') as f:
             json.dump(logs, f)
         print(f'Detailed log saved to {detailed_log_output_path}')
@@ -159,10 +159,10 @@ if __name__ == '__main__':
     hipporag = HippoRAG(args.dataset, 'openai', args.extraction_model, args.retrieval_model, doc_ensemble=args.doc_ensemble, dpr_only=args.dpr_only,
                         linking_retriever_name=args.linking_model)
 
-    with open(f'data/{args.dataset}_queries.json') as f:
-        queries = json.load(f)
+    with open(f'data/{args.dataset}.json') as f:
+        dataset = json.load(f)
 
     link_top_k_list = [1, 2, 3, 5, 10]
-    for k in link_top_k_list:
+    for link_top_k in link_top_k_list:
         test_retrieve_beir(args.dataset, args.extraction_model, args.retrieval_model, args.linking_model, args.linking,
-                           args.doc_ensemble, args.dpr_only, args.chunk, args.detail, link_top_k=k, oracle_extraction=args.oracle_ie)
+                           args.doc_ensemble, args.dpr_only, args.chunk, args.detail, link_top_k=link_top_k, oracle_extraction=args.oracle_ie)

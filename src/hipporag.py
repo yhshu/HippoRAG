@@ -107,8 +107,7 @@ class HippoRAG:
 
             # Loading Node Embeddings
             self.load_node_vectors()
-        else:
-            self.load_corpus()
+        self.load_corpus()
 
         if (doc_ensemble or dpr_only) and self.linking_retriever_name not in ['colbertv2', 'bm25']:
             # Loading Doc Embeddings
@@ -140,7 +139,7 @@ class HippoRAG:
         """
         return self.dataset_df.iloc[passage_idx]['paragraph']
 
-    def get_extraction_by_passage_idx(self, passage_idx, chunk=False):
+    def get_raw_extraction_by_passage_idx(self, passage_idx, chunk=False):
         """
         Get the extraction results for a specific passage.
         @param passage_idx: the passage idx, i.e., 'idx' within each passage dict, not the array index for the corpus
@@ -153,6 +152,33 @@ class HippoRAG:
                 return item
             elif chunk and (item['idx'] == passage_idx or item['idx'].startswith(passage_idx + '_')):
                 return item
+        return None
+
+    def get_facts_by_corpus_idx(self, corpus_idx):
+        """
+        Get the facts in the knowledge graph for a specific passage.
+        @param corpus_idx: the passage idx, i.e., 'idx' within each passage dict, not the array index for the corpus
+        @return: the facts in the knowledge graph for the passage and their fact ids
+        """
+        # Get the start and end indices for the rows corresponding to the corpus_idx
+        start_idx = self.docs_to_facts_mat.indptr[corpus_idx]
+        end_idx = self.docs_to_facts_mat.indptr[corpus_idx + 1]
+
+        # Extract the fact_ids and corresponding facts from the matrix
+        fact_ids = self.docs_to_facts_mat.indices[start_idx:end_idx]
+        facts = [self.triplet_id_to_fact_dict[fact_id] for fact_id in fact_ids]
+
+        return facts, fact_ids
+
+    def get_corpus_idx_by_passage_idx(self, passage_idx):
+        """
+        Get the corpus index by the passage index
+        @param passage_idx: the passage index
+        @return: the corpus index
+        """
+        for corpus_idx, item in enumerate(self.corpus):
+            if item['idx'] == passage_idx:
+                return corpus_idx
         return None
 
     def get_shortest_distance_between_nodes(self, node1: str, node2: str):
@@ -188,34 +214,65 @@ class HippoRAG:
             self.logger.info('No oracle triples found for the query: ' + query)
 
         if oracle_triples:
-            from src.linking.query_to_node import graph_search_with_entities
+            if linking in ['query_to_node', 'ner_to_node']:
+                from src.linking.query_to_node import graph_search_with_entities
 
-            oracle_node_phrases = set()
-            for t in oracle_triples:
-                if len(t):
-                    oracle_node_phrases.add(t[0])
-                if len(t) >= 3:
-                    oracle_node_phrases.add(t[2])
-            oracle_node_phrases = list(oracle_node_phrases)
-            node_embeddings = self.embed_model.encode_text(oracle_node_phrases, return_cpu=True, return_numpy=True, norm=True)
-            query_embedding = self.embed_model.encode_text(query, return_cpu=True, return_numpy=True, norm=True)
-            # rank and get link_top_k oracle nodes given the query
-            query_node_scores = np.dot(node_embeddings, query_embedding.T)
-            top_k_indices = np.argsort(query_node_scores)[-link_top_k:][::-1].tolist()[0]
-            top_k_phrases = [oracle_node_phrases[i] for i in top_k_indices]
+                oracle_node_phrases = set()
+                for t in oracle_triples:
+                    if len(t):
+                        oracle_node_phrases.add(t[0])
+                    if len(t) >= 3:
+                        oracle_node_phrases.add(t[2])
+                oracle_node_phrases = list(oracle_node_phrases)
+                node_embeddings = self.embed_model.encode_text(oracle_node_phrases, return_cpu=True, return_numpy=True, norm=True)
+                query_embedding = self.embed_model.encode_text(query, return_cpu=True, return_numpy=True, norm=True)
+                # rank and get link_top_k oracle nodes given the query
+                query_node_scores = np.dot(node_embeddings, query_embedding.T)  # (num_nodes, dim) x (1, dim).T = (num_nodes, 1)
+                top_k_indices = np.argsort(query_node_scores)[-link_top_k:][::-1].tolist()[0]
+                top_k_phrases = [oracle_node_phrases[i] for i in top_k_indices]
 
-            all_phrase_weights = np.zeros(len(self.node_phrases))
-            for i, phrase in enumerate(self.node_phrases):
-                matching_index = next((index for index, top_phrase in enumerate(top_k_phrases) if phrase.lower() == top_phrase.lower()), None)
-                if matching_index is not None:
-                    all_phrase_weights[i] = query_node_scores[matching_index][0]
+                all_phrase_weights = np.zeros(len(self.node_phrases))
+                for i, phrase in enumerate(self.node_phrases):
+                    matching_index = next((index for index, top_phrase in enumerate(top_k_phrases) if phrase.lower() == top_phrase.lower()), None)
+                    if matching_index is not None:
+                        all_phrase_weights[i] = query_node_scores[matching_index][0]
 
-            if sum(all_phrase_weights) == 0:
-                doc_rank_logs, sorted_doc_ids, sorted_scores = self.query_to_node_linking(link_top_k, query, query_doc_scores)
-            else:
-                all_phrase_weights = softmax_with_zeros(all_phrase_weights)
-                linking_score_map = {oracle_node_phrases[i]: query_node_scores[i][0] for i in top_k_indices}
-                doc_rank_logs, sorted_doc_ids, sorted_scores = graph_search_with_entities(self, all_phrase_weights, linking_score_map, None)
+                if sum(all_phrase_weights) == 0:
+                    doc_rank_logs, sorted_doc_ids, sorted_scores = self.query_to_node_linking(link_top_k, query, query_doc_scores)
+                else:
+                    all_phrase_weights = softmax_with_zeros(all_phrase_weights)
+                    linking_score_map = {oracle_node_phrases[i]: query_node_scores[i][0] for i in top_k_indices}
+                    doc_rank_logs, sorted_doc_ids, sorted_scores = graph_search_with_entities(self, all_phrase_weights, linking_score_map, None)
+            elif linking in ['query_to_fact']:
+                query_doc_scores = np.zeros(self.docs_to_phrases_mat.shape[0])
+                # using query to score facts and using facts to score documents
+                query_embedding = self.embed_model.encode_text(query, return_cpu=True, return_numpy=True, norm=True)
+                oracle_triples_str = [str(t) for t in oracle_triples]
+                fact_embeddings = self.embed_model.encode_text(oracle_triples_str, return_cpu=True, return_numpy=True, norm=True)
+                # rank and get link_top_k oracle facts given the query
+                query_fact_scores = np.dot(fact_embeddings, query_embedding.T)  # (num_facts, dim) x (1, dim).T = (num_facts, 1)
+
+                top_k_indices = np.argsort(query_fact_scores)[-link_top_k:][::-1].tolist()[0]
+                top_k_facts = [oracle_triples[i] for i in top_k_indices]
+
+                for rank, f in enumerate(top_k_facts):
+                    try:
+                        triple_tuple = tuple([phrase.lower() for phrase in f])
+                        retrieved_fact_id = self.triplet_fact_to_id_dict.get(triple_tuple)
+                    except Exception as e:
+                        self.logger.exception(f'Fact not found in the graph: {f}, {e}')
+                        continue
+                    else:
+                        fact_score = query_fact_scores[top_k_indices[rank]][0]
+                        for doc_id_fact_id in self.docs_to_facts:
+                            corpus_id = doc_id_fact_id[0]
+                            fact_id = doc_id_fact_id[1]
+                            if fact_id == retrieved_fact_id:
+                                query_doc_scores[corpus_id] += fact_score
+
+                sorted_doc_ids = np.argsort(query_doc_scores)[::-1]
+                sorted_scores = query_doc_scores[sorted_doc_ids.tolist()]
+                return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], None
 
         elif linking == 'ner_to_node':
             from src.linking.ner_to_node import link_node_by_dpr, link_node_by_colbertv2, graph_search_with_entities
@@ -227,16 +284,16 @@ class HippoRAG:
                     query_doc_scores = np.zeros(self.docs_to_phrases_mat.shape[0])
                     ranking = self.corpus_searcher.search_all(queries, k=self.docs_to_phrases_mat.shape[0])
                     # max_query_score = self.get_colbert_max_score(query)
-                    for doc_id, rank, score in ranking.data[0]:
-                        query_doc_scores[doc_id] = score
+                    for corpus_id, rank, score in ranking.data[0]:
+                        query_doc_scores[corpus_id] = score
 
                     if len(query_ner_list) > 0:  # if no entities are found, assign uniform probability to documents
                         all_phrase_weights, linking_score_map = link_node_by_colbertv2(self, query_ner_list)
                 elif self.dpr_only:
                     query_doc_scores = np.zeros(len(self.dataset_df))
                     ranking = self.corpus_searcher.search_all(queries, k=len(self.dataset_df))
-                    for doc_id, rank, score in ranking.data[0]:
-                        query_doc_scores[doc_id] = score
+                    for corpus_id, rank, score in ranking.data[0]:
+                        query_doc_scores[corpus_id] = score
             else:  # huggingface dense retrieval
                 if self.doc_ensemble or self.dpr_only:
                     query_embedding = self.embed_model.encode_text(query, return_cpu=True, return_numpy=True, norm=True)
@@ -251,7 +308,7 @@ class HippoRAG:
             doc_rank_logs, sorted_doc_ids, sorted_scores = self.query_to_node_linking(link_top_k, query, query_doc_scores)
 
         elif linking == 'query_to_fact':
-            pass
+            pass  # todo
 
         return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], doc_rank_logs
 
@@ -353,9 +410,10 @@ class HippoRAG:
         self.kb_node_phrase_to_id = pickle.load(open(
             'output/{}_{}_graph_phrase_dict_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type, self.phrase_type,
                                                                       self.extraction_type, self.version), 'rb'))  # node phrase string -> phrase id
-        self.triplet_fact_to_id_dict = pickle.load(open(
-            'output/{}_{}_graph_fact_dict_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type, self.phrase_type,
-                                                                    self.extraction_type, self.version), 'rb'))  # fact string -> fact id
+        triplet_fact_to_id_path = 'output/{}_{}_graph_fact_dict_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type, self.phrase_type,
+                                                                                          self.extraction_type, self.version)
+        self.triplet_fact_to_id_dict = pickle.load(open(triplet_fact_to_id_path, 'rb'))  # fact string -> fact id
+        self.triplet_id_to_fact_dict = {v: k for k, v in self.triplet_fact_to_id_dict.items()}
 
         try:
             node_pair_to_edge_label_path = 'output/{}_{}_graph_relation_dict_{}_{}_{}.{}.subset.p'.format(
@@ -367,6 +425,7 @@ class HippoRAG:
 
         self.triplet_facts = list(self.triplet_fact_to_id_dict.keys())
         self.triplet_facts = [self.triplet_facts[i] for i in np.argsort(list(self.triplet_fact_to_id_dict.values()))]
+        self.triplet_facts_str = [str(fact) for fact in self.triplet_facts]
         self.node_phrases = np.array(list(self.kb_node_phrase_to_id.keys()))[np.argsort(list(self.kb_node_phrase_to_id.values()))]
 
         self.docs_to_facts = pickle.load(open(
