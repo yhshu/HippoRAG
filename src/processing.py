@@ -1,5 +1,6 @@
 import json
 import re
+from typing import List
 
 import numpy as np
 import torch
@@ -67,3 +68,23 @@ def softmax_with_zeros(logits):
     probabilities[mask] = exp_logits / np.sum(exp_logits)
 
     return probabilities
+
+
+def deduplicate_triples(triples: list):
+    unique_triples = set()
+    deduplicated_triples = []
+    for triple in triples:
+        if tuple(triple) not in unique_triples:
+            unique_triples.add(tuple(triple))
+            deduplicated_triples.append(triple)
+
+    return deduplicated_triples
+
+
+def fix_broken_generated_json(json_str: str):
+    last_comma_index = json_str.rfind(',')
+    if last_comma_index != -1:
+        json_str = json_str[:last_comma_index]
+
+    processed_string = json_str + ']\n}'
+    return processed_string

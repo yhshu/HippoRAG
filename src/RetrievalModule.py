@@ -3,18 +3,21 @@ import argparse
 from glob import glob
 import os.path
 
-import ipdb
+import numpy as np
 import pandas as pd
 
 import pickle
 import os
+
+import torch
 from tqdm import tqdm
 
 import faiss
 import gc
 
 from transformers import AutoModel, AutoTokenizer
-from processing import *
+
+from src.processing import processing_phrases, mean_pooling
 
 # TODO: Change hard-coded vector output directory
 VECTOR_DIR = 'data/lm_vectors'
@@ -57,9 +60,12 @@ class RetrievalModule:
 
         if not (os.path.exists(self.retrieval_name_dir)):
             os.makedirs(self.retrieval_name_dir)
+            print('Creating Directory: {}'.format(self.retrieval_name_dir))
 
         # Get previously computed vectors
         precomp_strings, precomp_vectors = self.get_precomputed_plm_vectors(self.retrieval_name_dir)
+        print('len precomp_strings: ', len(precomp_strings))
+        print('len precomp_vectors: ', len(precomp_vectors))
 
         # Get AUI Strings to be Encoded
         string_df = pd.read_csv(string_filename, sep='\t')
@@ -70,7 +76,7 @@ class RetrievalModule:
         missing_strings = self.find_missing_strings(sorted_df.strings.unique(), precomp_strings)
 
         # Encode Missing Strings
-        if len(missing_strings) > 0:
+        if len(missing_strings):
             print('Encoding {} Missing Strings'.format(len(missing_strings)))
             new_vectors, new_strings, = self.encode_strings(missing_strings, pool_method)
 
@@ -82,7 +88,7 @@ class RetrievalModule:
 
             precomp_vectors = np.array(precomp_vectors)
 
-            self.save_vecs(precomp_strings, precomp_vectors, self.retrieval_name_dir)
+            self.save_vectors(precomp_strings, precomp_vectors, self.retrieval_name_dir)
 
         self.vector_dict = self.make_dictionary(sorted_df, precomp_strings, precomp_vectors)
 
@@ -113,15 +119,17 @@ class RetrievalModule:
 
         return lengths_df.sort_values(0)
 
-    def save_vecs(self, strings, vectors, direc_name, bin_size=50000):
+    def save_vectors(self, strings, vectors, direc_name, bin_size=50000):
         with open(direc_name + '/encoded_strings.txt', 'w') as f:
             for string in strings:
                 f.write(string + '\n')
 
         split_vecs = np.array_split(vectors, int(len(vectors) / bin_size) + 1)
 
-        for i, vecs in tqdm(enumerate(split_vecs)):
-            pickle.dump(vecs, open(direc_name + '/vecs_{}.p'.format(i), 'wb'))
+        for i, vecs in tqdm(enumerate(split_vecs), total=len(split_vecs), desc='Saving Vectors'):
+            file_path = direc_name + '/vecs_{}.p'.format(i)
+            pickle.dump(vecs, open(file_path, 'wb'))
+            print('Saved {} vectors to {}'.format(len(vecs), file_path))
 
     def load_precomp_strings(self, retrieval_name_dir):
         filename = retrieval_name_dir + '/encoded_strings.txt'
@@ -149,7 +157,9 @@ class RetrievalModule:
             if len(i_files) != 1:
                 break
             else:
-                vectors.append(pickle.load(open(i_files[0], 'rb')))
+                file_path = i_files[0]
+                vectors.append(pickle.load(open(file_path, 'rb')))
+                print('Loaded {} vectors from {}'.format(len(vectors[-1]), file_path))
 
         vectors = np.vstack(vectors)
 
@@ -175,8 +185,8 @@ class RetrievalModule:
             try:
                 vector_id = precomp_string_ids[string]
                 vector_dict[string] = precomp_vectors[vector_id]
-            except:
-                ipdb.set_trace()
+            except Exception as e:
+                print('make dictionary exception: {}'.format(e))
 
         return vector_dict
 
@@ -248,6 +258,8 @@ class RetrievalModule:
         original_vecs = []
         new_vecs = []
 
+        print('knowledge base size: ', len(knowledge_base))
+        print('vector dict size: ', len(self.vector_dict))
         for string in knowledge_base:
             original_vecs.append(self.vector_dict[string])
 

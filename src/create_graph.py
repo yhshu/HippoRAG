@@ -14,8 +14,9 @@ import argparse
 os.environ['TOKENIZERS_PARALLELISM'] = 'FALSE'
 
 
-def create_graph(dataset: str, extraction_type: str, extraction_model: str, retriever_name: str, processed_retriever_name: str, threshold: float = 0.9,
+def create_graph(dataset: str, extraction_type: str, extraction_model: str, retriever_name: str, threshold: float = 0.9,
                  create_graph_flag: bool = False, cosine_sim_edges: bool = False):
+    processed_retriever_name = retriever_name.replace('/', '_').replace('.', '')
     version = 'v3'
     inter_triple_weight = 1.0
     similarity_max = 1.0
@@ -105,24 +106,25 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
     print('Correct Wiki Format: {} out of {}'.format(correct_wiki_format, len(extracted_triples)))
 
     try:
-        queries_full = pd.read_csv('output/{}_queries.named_entity_output.tsv'.format(dataset), sep='\t')
+        queries_full_df = pd.read_csv('output/{}_queries.named_entity_output.tsv'.format(dataset), sep='\t')
 
         if 'hotpotqa' in args.dataset:
             queries = json.load(open(f'data/{args.dataset}.json', 'r'))
             questions = [q['question'] for q in queries]
-            queries_full = queries_full.set_index('0', drop=False)
+            queries_full_df = queries_full_df.set_index('0', drop=False)
         else:
             queries_df = pd.read_json(f'data/{args.dataset}.json')
             questions = queries_df['question'].values
-            queries_full = queries_full.set_index('question', drop=False)
-            queries_full = queries_full.loc[questions]
+            queries_full_df = queries_full_df.set_index('question', drop=False)
+            queries_full_df = queries_full_df.loc[questions]
 
-        queries_full = queries_full.loc[questions]
+        queries_full_df = queries_full_df.loc[questions]
     except:
-        queries_full = pd.DataFrame([], columns=['question', 'triples'])
+        queries_full_df = pd.DataFrame([], columns=['question', 'triples'])
+
     q_entities = []
     q_entities_by_doc = []
-    for doc_ents in tqdm(queries_full.triples):
+    for doc_ents in tqdm(queries_full_df.triples):
         doc_ents = eval(doc_ents)['named_entities']
         try:
             clean_doc_ents = [processing_phrases(p) for p in doc_ents]
@@ -135,23 +137,26 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
     q_phrases = list(np.unique(q_entities))
     all_phrases = copy.deepcopy(unique_phrases)
     all_phrases.extend(q_phrases)
-    kb = pd.DataFrame(unique_phrases, columns=['strings'])
-    kb2 = copy.deepcopy(kb)
-    kb['type'] = 'query'
-    kb2['type'] = 'kb'
-    kb_full = pd.concat([kb, kb2])
+
+    kb_df = pd.DataFrame(unique_phrases, columns=['strings'])
+    kb_df2 = copy.deepcopy(kb_df)
+    kb_df['type'] = 'query'
+    kb_df2['type'] = 'kb'
+    kb_full = pd.concat([kb_df, kb_df2])
     kb_full.to_csv('output/kb_to_kb.tsv', sep='\t')
-    rel_kb = pd.DataFrame(unique_relations, columns=['strings'])
-    rel_kb2 = copy.deepcopy(rel_kb)
-    rel_kb['type'] = 'query'
-    rel_kb2['type'] = 'kb'
-    rel_kb_full = pd.concat([rel_kb, rel_kb2])
-    rel_kb_full.to_csv('output/rel_kb_to_kb.tsv', sep='\t')
+
+    rel_kb_df = pd.DataFrame(unique_relations, columns=['strings'])
+    rel_kb_df2 = copy.deepcopy(rel_kb_df)
+    rel_kb_df['type'] = 'query'
+    rel_kb_df2['type'] = 'kb'
+    rel_kb_full_df = pd.concat([rel_kb_df, rel_kb_df2])
+    rel_kb_full_df.to_csv('output/rel_kb_to_kb.tsv', sep='\t')
     query_df = pd.DataFrame(q_phrases, columns=['strings'])
     query_df['type'] = 'query'
-    kb['type'] = 'kb'
-    kb_query = pd.concat([kb, query_df])
-    kb_query.to_csv('output/query_to_kb.tsv', sep='\t')
+
+    kb_df['type'] = 'kb'
+    kb_query_df = pd.concat([kb_df, query_df])
+    kb_query_df.to_csv('output/query_to_kb.tsv', sep='\t')
 
     if create_graph_flag:
         print('Creating Graph')
@@ -160,20 +165,20 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
         kb_phrase_df = pd.DataFrame(unique_phrases)
         kb_phrase_dict = {p: i for i, p in enumerate(unique_phrases)}
 
-        lose_facts = []
+        triplet_facts = []
 
         for triples in triple_tuples:
-            lose_facts.extend([tuple(t) for t in triples])
+            triplet_facts.extend([tuple(t) for t in triples])
 
-        lose_fact_dict = {f: i for i, f in enumerate(lose_facts)}
-        fact_json = [{'idx': i, 'head': t[0], 'relation': t[1], 'tail': t[2]} for i, t in enumerate(lose_facts)]
+        triplet_fact_to_id_dict = {f: i for i, f in enumerate(triplet_facts)}
+        fact_json_list = [{'idx': i, 'head': t[0], 'relation': t[1], 'tail': t[2]} for i, t in enumerate(triplet_facts)]
 
         json.dump(passage_json, open('output/{}_{}_graph_passage_chatgpt_openIE.{}_{}.{}.subset.json'.format(dataset, graph_type, phrase_type, extraction_type, version), 'w'))
         json.dump(node_json, open('output/{}_{}_graph_nodes_chatgpt_openIE.{}_{}.{}.subset.json'.format(dataset, graph_type, phrase_type, extraction_type, version), 'w'))
-        json.dump(fact_json, open('output/{}_{}_graph_clean_facts_chatgpt_openIE.{}_{}.{}.subset.json'.format(dataset, graph_type, phrase_type, extraction_type, version), 'w'))
+        json.dump(fact_json_list, open('output/{}_{}_graph_clean_facts_chatgpt_openIE.{}_{}.{}.subset.json'.format(dataset, graph_type, phrase_type, extraction_type, version), 'w'))
 
         pickle.dump(kb_phrase_dict, open('output/{}_{}_graph_phrase_dict_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, version), 'wb'))
-        pickle.dump(lose_fact_dict, open('output/{}_{}_graph_fact_dict_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, version), 'wb'))
+        pickle.dump(triplet_fact_to_id_dict, open('output/{}_{}_graph_fact_dict_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, version), 'wb'))
 
         graph_json = {}
 
@@ -194,7 +199,7 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
             for triple in triples:
                 triple = tuple(triple)
 
-                fact_id = lose_fact_dict[triple]
+                fact_id = triplet_fact_to_id_dict[triple]
 
                 if len(triple) == 3:
                     relation = triple[1]
@@ -236,9 +241,9 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
         pickle.dump(facts_to_phrases, open('output/{}_{}_graph_facts_to_phrases_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, version), 'wb'))
 
         docs_to_facts_mat = csr_array(([int(v) for v in docs_to_facts.values()], ([int(e[0]) for e in docs_to_facts.keys()], [int(e[1]) for e in docs_to_facts.keys()])),
-                                      shape=(len(triple_tuples), len(lose_facts)))
+                                      shape=(len(triple_tuples), len(triplet_facts)))
         facts_to_phrases_mat = csr_array(([int(v) for v in facts_to_phrases.values()], ([e[0] for e in facts_to_phrases.keys()], [e[1] for e in facts_to_phrases.keys()])),
-                                         shape=(len(lose_facts), len(unique_phrases)))
+                                         shape=(len(triplet_facts), len(unique_phrases)))
 
         pickle.dump(docs_to_facts_mat, open('output/{}_{}_graph_doc_to_facts_csr_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, version), 'wb'))
         pickle.dump(facts_to_phrases_mat,
@@ -317,10 +322,10 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
 
         stat_df = [('Total Phrases', len(phrases)),
                    ('Unique Phrases', len(unique_phrases)),
-                   ('Number of Individual Triples', len(lose_facts)),
-                   ('Number of Incorrectly Formatted Triples (ChatGPT Error)', len(incorrectly_formatted_triples)),
-                   ('Number of Triples w/o NER Entities (ChatGPT Error)', len(triples_wo_ner_entity)),
-                   ('Number of Unique Individual Triples', len(lose_fact_dict)),
+                   ('Number of Individual Triples', len(triplet_facts)),
+                   ('Number of Incorrectly Formatted Triples (LLM Error)', len(incorrectly_formatted_triples)),
+                   ('Number of Triples w/o NER Entities (LLM Error)', len(triples_wo_ner_entity)),
+                   ('Number of Unique Individual Triples', len(triplet_fact_to_id_dict)),
                    ('Number of Entities', len(entities)),
                    ('Number of Relations', len(relations)),
                    ('Number of Unique Entities', len(np.unique(entities))),
@@ -356,11 +361,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     dataset = args.dataset
     retriever_name = args.model_name
-    processed_retriever_name = retriever_name.replace('/', '_').replace('.', '')
     extraction_model = args.extraction_model.replace('/', '_')
     threshold = args.threshold
     create_graph_flag = args.create_graph
     extraction_type = args.extraction_type
     cosine_sim_edges = args.cosine_sim_edges
 
-    create_graph(dataset, extraction_type, extraction_model, retriever_name, processed_retriever_name, threshold, create_graph_flag, cosine_sim_edges)
+    create_graph(dataset, extraction_type, extraction_model, retriever_name, threshold, create_graph_flag, cosine_sim_edges)

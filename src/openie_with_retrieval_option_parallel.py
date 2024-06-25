@@ -1,4 +1,5 @@
 import sys
+from concurrent.futures import ThreadPoolExecutor
 
 sys.path.append('.')
 
@@ -10,14 +11,12 @@ from glob import glob
 
 import numpy as np
 from langchain_openai import ChatOpenAI
-
-import ipdb
 from multiprocessing import Pool
 from tqdm import tqdm
 
 from src.langchain_util import init_langchain_model
 from src.openie_extraction_instructions import ner_prompts, openie_post_ner_prompts
-from src.processing import extract_json_dict
+from src.processing import extract_json_dict, deduplicate_triples, fix_broken_generated_json
 
 
 def print_messages(messages):
@@ -25,19 +24,22 @@ def print_messages(messages):
         print(message['content'])
 
 
-def named_entity_recognition(passage: str):
+def named_entity_recognition(passage: str, client, max_retry=5):
     ner_messages = ner_prompts.format_prompt(user_input=passage)
 
-    not_done = True
+    done = False
 
     total_tokens = 0
-    response_content = '{}'
-
-    while not_done:
+    named_entities = []
+    num_try = 0
+    while not done and num_try < max_retry:
         try:
             if isinstance(client, ChatOpenAI):  # JSON mode
                 chat_completion = client.invoke(ner_messages.to_messages(), temperature=0, response_format={"type": "json_object"})
-                response_content = chat_completion.content
+                if chat_completion.response_metadata['finish_reason'] == 'length':
+                    response_content = fix_broken_generated_json(chat_completion.content)
+                else:
+                    response_content = chat_completion.content
                 response_content = eval(response_content)
                 total_tokens += chat_completion.response_metadata['token_usage']['total_tokens']
             elif isinstance(client, ChatOllama):
@@ -51,26 +53,28 @@ def named_entity_recognition(passage: str):
                 total_tokens += chat_completion.response_metadata['token_usage']['total_tokens']
 
             if 'named_entities' not in response_content:
-                response_content = []
+                named_entities = []
             else:
-                response_content = response_content['named_entities']
-
-            not_done = False
+                named_entities = response_content['named_entities']
+            done = True
         except Exception as e:
-            print('Passage NER exception')
-            print(e)
+            print('Passage NER exception', e)
+        num_try += 1
 
-    return response_content, total_tokens
+    return named_entities, total_tokens
 
 
-def openie_post_ner_extract(passage: str, entities: list, model: str):
-    named_entity_json = {"named_entities": entities}
-    openie_messages = openie_post_ner_prompts.format_prompt(passage=passage, named_entity_json=json.dumps(named_entity_json))
-
+def openie_post_ner_extract(passage: str, entities: list, client):
     try:
+        named_entity_json = {"named_entities": entities}
+        openie_messages = openie_post_ner_prompts.format_prompt(passage=passage, named_entity_json=json.dumps(named_entity_json))
+
         if isinstance(client, ChatOpenAI):  # JSON mode
             chat_completion = client.invoke(openie_messages.to_messages(), temperature=0, max_tokens=4096, response_format={"type": "json_object"})
-            response_content = chat_completion.content
+            if chat_completion.response_metadata['finish_reason'] == 'length':
+                response_content = fix_broken_generated_json(chat_completion.content)
+            else:
+                response_content = chat_completion.content
             total_tokens = chat_completion.response_metadata['token_usage']['total_tokens']
         elif isinstance(client, ChatOllama):
             response_content = client.invoke(openie_messages.to_messages())
@@ -91,24 +95,49 @@ def openie_post_ner_extract(passage: str, entities: list, model: str):
     return response_content, total_tokens
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str)
-    parser.add_argument('--run_ner', action='store_true')
-    parser.add_argument('--num_passages', type=str, default='10')
-    parser.add_argument('--llm', type=str, default='openai', help="LLM, e.g., 'openai' or 'together'")
-    parser.add_argument('--model_name', type=str, default='gpt-3.5-turbo-1106', help='Specific model name')
-    parser.add_argument('--num_processes', type=int, default=10)
+def extract_openie_from_triples(client, existing_json, auxiliary_file_exists, ents_by_doc, corpus_json):
+    new_json = []
+    all_entities = []
+    chatgpt_total_tokens = 0
 
-    args = parser.parse_args()
+    for i, r in tqdm(corpus_json, total=len(corpus_json), desc='Extracting OpenIE triples'):
 
-    dataset = args.dataset
-    run_ner = args.run_ner
-    num_passages = args.num_passages
-    model_name = args.model_name
+        passage = r['passage']
 
+        if i < len(existing_json):
+            new_json.append(existing_json[i])
+        else:
+            if auxiliary_file_exists:
+                doc_entities = ents_by_doc[i]
+            else:
+                doc_entities, total_ner_tokens = named_entity_recognition(passage, client)
+
+                doc_entities = list(np.unique(doc_entities))
+                chatgpt_total_tokens += total_ner_tokens
+
+                ents_by_doc.append(doc_entities)
+
+            triples, total_tokens = openie_post_ner_extract(passage, doc_entities, client)
+
+            chatgpt_total_tokens += total_tokens
+
+            r['extracted_entities'] = doc_entities
+
+            try:
+                r['extracted_triples'] = eval(triples)["triples"]
+                r['extracted_triples'] = deduplicate_triples(r['extracted_triples'])
+            except Exception as e:
+                print('extracting OpenIE from triples exception', e)
+                print(triples)
+                r['extracted_triples'] = []
+
+            new_json.append(r)
+
+    return (new_json, all_entities, chatgpt_total_tokens)
+
+
+def openie_with_retrieval(dataset: str, run_ner: bool, num_passages, llm: str, model_name: str, num_processes: int):
     corpus = json.load(open(f'data/{dataset}_corpus.json', 'r'))
-
     if 'hotpotqa' in dataset:
         keys = list(corpus.keys())
         retrieval_corpus = [{'idx': i, 'passage': key + '\n' + ''.join(corpus[key])} for i, key in enumerate(keys)]
@@ -118,7 +147,6 @@ if __name__ == '__main__':
             document['passage'] = document['title'] + '\n' + document['text']
 
     dataset = '_' + dataset
-
     if num_passages == 'all':
         num_passages = len(retrieval_corpus)
     else:
@@ -133,12 +161,10 @@ if __name__ == '__main__':
         arg_str = '_'.join(flags_present) + '_' + model_name.replace('/', '_') + f'_{num_passages}'
     else:
         arg_str = model_name.replace('/', '_') + f'_{num_passages}'
-
     print(arg_str)
 
-    client = init_langchain_model(args.llm, model_name)  # LangChain model
+    client = init_langchain_model(llm, model_name)  # LangChain model
     already_done = False
-
     try:
         # Get incomplete extraction output with same settings
         arg_str_regex = arg_str.replace(str(num_passages), '*')
@@ -167,12 +193,10 @@ if __name__ == '__main__':
         ents_by_doc = []
 
     # Loading files which would reduce API consumption
-    aux_file_str = '_'.join(flags_present) + '*_' + model_name + f'_{args.num_passages}'
+    aux_file_str = '_'.join(flags_present) + '*_' + model_name + f'_{num_passages}'
     aux_file_str = aux_file_str.replace('{}'.format(num_passages), '*')
     auxiliary_files = glob('output/openie{}_results_{}.json'.format(dataset, aux_file_str))
-
     auxiliary_file_exists = False
-
     if len(auxiliary_files) > 0:
         for auxiliary_file in auxiliary_files:
             aux_info_json = json.load(open(auxiliary_file, 'r'))
@@ -182,65 +206,19 @@ if __name__ == '__main__':
                 print('Using Auxiliary File: {}'.format(auxiliary_file))
                 break
 
-
-    def extract_openie_from_triples(triple_json):
-
-        new_json = []
-        all_entities = []
-
-        chatgpt_total_tokens = 0
-
-        for i, r in tqdm(triple_json, total=len(triple_json)):
-
-            passage = r['passage']
-
-            if i < len(existing_json):
-                new_json.append(existing_json[i])
-            else:
-                if auxiliary_file_exists:
-                    doc_entities = ents_by_doc[i]
-                else:
-                    doc_entities, total_ner_tokens = named_entity_recognition(passage)
-
-                    doc_entities = list(np.unique(doc_entities))
-                    chatgpt_total_tokens += total_ner_tokens
-
-                    ents_by_doc.append(doc_entities)
-
-                triples, total_tokens = openie_post_ner_extract(passage, doc_entities, model_name)
-
-                chatgpt_total_tokens += total_tokens
-
-                r['extracted_entities'] = doc_entities
-
-                try:
-                    r['extracted_triples'] = eval(triples)["triples"]
-                except:
-                    print('ERROR')
-                    print(triples)
-                    r['extracted_triples'] = []
-
-                new_json.append(r)
-
-        return (new_json, all_entities, chatgpt_total_tokens)
-
-
     extracted_triples_subset = retrieval_corpus[:num_passages]
-
-    num_processes = args.num_processes
-
     splits = np.array_split(range(len(extracted_triples_subset)), num_processes)
 
-    args = []
-
+    func_args = []
     for split in splits:
-        args.append([(i, extracted_triples_subset[i]) for i in split])
+        func_args.append([(i, extracted_triples_subset[i]) for i in split])
 
     if num_processes > 1:
-        with Pool(processes=num_processes) as pool:
-            outputs = pool.map(extract_openie_from_triples, args)
+        with ThreadPoolExecutor(max_workers=num_processes) as executor:
+            packed_args = [(client, existing_json, auxiliary_file_exists, ents_by_doc, triple_json) for triple_json in func_args]
+            outputs = list(executor.map(lambda args: extract_openie_from_triples(*args), packed_args))
     else:
-        outputs = [extract_openie_from_triples(arg) for arg in args]
+        outputs = [extract_openie_from_triples(client, existing_json, auxiliary_file_exists, ents_by_doc, corpus_json) for corpus_json in func_args]
 
     new_json = []
     all_entities = []
@@ -268,3 +246,16 @@ if __name__ == '__main__':
         output_path = 'output/openie{}_results_{}.json'.format(dataset, arg_str)
         json.dump(extra_info_json, open(output_path, 'w'))
         print('OpenIE saved to', output_path)
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dataset', type=str)
+    parser.add_argument('--run_ner', action='store_true')
+    parser.add_argument('--num_passages', type=str, default='10')
+    parser.add_argument('--llm', type=str, default='openai', help="LLM, e.g., 'openai' or 'together'")
+    parser.add_argument('--model_name', type=str, default='gpt-3.5-turbo-1106', help='Specific model name')
+    parser.add_argument('--num_processes', type=int, default=10)
+
+    args = parser.parse_args()
+    openie_with_retrieval(args.dataset, args.run_ner, args.num_passages, args.llm, args.model_name, args.num_processes)

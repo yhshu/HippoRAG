@@ -57,21 +57,25 @@ def retrieve_knn(kb, queries, duplicate=True, nns=100):
     return ranking_dict
 
 
+def colbertv2_retrieve_knn(file_path):
+    # prepare tsv data
+    string_df = pd.read_csv(file_path, sep='\t')
+    string_df.strings = [processing_phrases(str(s)) for s in string_df.strings]
+
+    queries = string_df[string_df.type == 'query']
+    kb = string_df[string_df.type == 'kb']
+    nearest_neighbors = retrieve_knn(kb.strings.values, queries.strings.values)
+
+    output_path = 'data/lm_vectors/colbert/nearest_neighbor_{}.p'.format(file_path.split('/')[1].split('.')[0])
+    pickle.dump(nearest_neighbors, open(output_path, 'wb'))
+    print('Saved nearest neighbors to {}'.format(output_path))
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--filename', type=str)
     args = parser.parse_args()
 
-    string_filename = args.filename
+    file_path = args.filename
 
-    # prepare tsv data
-    string_df = pd.read_csv(string_filename, sep='\t')
-    string_df.strings = [processing_phrases(str(s)) for s in string_df.strings]
-
-    queries = string_df[string_df.type == 'query']
-    kb = string_df[string_df.type == 'kb']
-
-    nearest_neighbors = retrieve_knn(kb.strings.values, queries.strings.values)
-    output_path = 'data/lm_vectors/colbert/nearest_neighbor_{}.p'.format(string_filename.split('/')[1].split('.')[0])
-    pickle.dump(nearest_neighbors, open(output_path, 'wb'))
-    print('Saved nearest neighbors to {}'.format(output_path))
+    colbertv2_retrieve_knn(file_path)
