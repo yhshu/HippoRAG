@@ -58,28 +58,34 @@ def link_node_by_dpr(hipporag: HippoRAG, query_ner_list: list, link_top_k=None):
     query_ner_embeddings = hipporag.embed_model.encode_text(query_ner_list, return_cpu=True, return_numpy=True, norm=True)
     # Get Closest Entity Nodes
     prob_vectors = np.dot(query_ner_embeddings, hipporag.kb_node_phrase_embeddings.T)  # (num_ner, dim) x (num_phrases, dim).T -> (num_ner, num_phrases)
-    all_phrase_weights, linking_score_map = link_node_by_dpr_with_vectors(hipporag, link_top_k, prob_vectors, query_ner_list)
+    all_phrase_weights, linking_score_map = link_ner_to_node(hipporag, link_top_k, hipporag.node_phrases, prob_vectors, query_ner_list)
     return all_phrase_weights, linking_score_map
 
 
-def link_node_by_dpr_with_vectors(hipporag, link_top_k, prob_vectors, query_ner_list):
-    linked_phrase_ids = []
+def link_ner_to_node(hipporag, link_top_k, candidate_phrases: list, prob_vectors, query_ner_list):
+    linked_phrases = []
     max_scores = []  # max score for each named entity
     for prob_vector in prob_vectors:
         mask = np.isnan(prob_vector)
         # phrase_id = np.argmax(prob_vector)  # the phrase with the highest similarity
-        phrase_id = np.argmax(np.ma.masked_array(prob_vector, mask))
-        linked_phrase_ids.append(phrase_id)
-        max_scores.append(prob_vector[phrase_id])
+        linked_phrase = np.argmax(np.ma.masked_array(prob_vector, mask))
+        linked_phrases.append(candidate_phrases[linked_phrase])
+        max_scores.append(prob_vector[linked_phrase])
+
     # choose link_top_k based on max_scores and get the corresponding linked_phrase_ids
     if link_top_k and isinstance(link_top_k, int):
         top_k = np.argsort(max_scores)[::-1][:link_top_k]
-        linked_phrase_ids = [linked_phrase_ids[i] for i in top_k]
+        linked_phrases = [linked_phrases[i] for i in top_k]
         max_scores = [max_scores[i] for i in top_k]
+
     # create a vector (num_phrase) with 1s at the indices of the linked phrases and 0s elsewhere
     # if node_specificity is True, it's not one-hot but a weight
     all_phrase_weights = np.zeros(len(hipporag.node_phrases))
-    for phrase_id in linked_phrase_ids:
+    for linked_phrase in linked_phrases:
+        phrase_id = hipporag.kb_node_phrase_to_id.get(linked_phrase, None)
+        if phrase_id is None:
+            hipporag.logger.error(f'Phrase {linked_phrase} not found in the KG')
+            continue
         if hipporag.node_specificity:
             if hipporag.phrase_to_num_doc[phrase_id] == 0:  # just in case the phrase is not recorded in any documents
                 weight = 1
@@ -89,8 +95,9 @@ def link_node_by_dpr_with_vectors(hipporag, link_top_k, prob_vectors, query_ner_
             all_phrase_weights[phrase_id] = weight
         else:
             all_phrase_weights[phrase_id] = 1.0
-    linking_score_map = {(query_phrase, hipporag.node_phrases[linked_phrase_id]): max_score
-                         for linked_phrase_id, max_score, query_phrase in zip(linked_phrase_ids, max_scores, query_ner_list)}
+
+    linking_score_map = {(query_phrase, linked_phrase): max_score
+                         for linked_phrase, max_score, query_phrase in zip(linked_phrases, max_scores, query_ner_list)}
     return all_phrase_weights, linking_score_map
 
 
@@ -98,12 +105,12 @@ def oracle_ner_to_node(hipporag: HippoRAG, query_ner_list, oracle_phrases, link_
     query_ner_embeddings = hipporag.embed_model.encode_text(query_ner_list, return_cpu=True, return_numpy=True, norm=True)
     phrase_embeddings = hipporag.embed_model.encode_text(oracle_phrases, return_cpu=True, return_numpy=True, norm=True)
     prob_vectors = np.dot(query_ner_embeddings, phrase_embeddings.T)  # (num_ner, dim) x (num_phrases, dim).T -> (num_ner, num_phrases)
-    all_phrase_weights, linking_score_map = link_node_by_dpr_with_vectors(hipporag, link_top_k, prob_vectors, query_ner_list)
+    all_phrase_weights, linking_score_map = link_ner_to_node(hipporag, link_top_k, oracle_phrases, prob_vectors, query_ner_list)
     return all_phrase_weights, linking_score_map
 
 
 def graph_search_with_entities(hipporag: HippoRAG, query_ner_list: list, all_phrase_weights, linking_score_map, query_doc_scores=None):
-    """
+    """a
 
     @param hipporag:
     @param query_ner_list:

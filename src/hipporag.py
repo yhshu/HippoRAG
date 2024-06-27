@@ -18,7 +18,7 @@ from src.colbertv2_indexing import colbertv2_index
 from src.langchain_util import init_langchain_model, LangChainModel
 from src.lm_wrapper.util import init_embedding_model
 from src.named_entity_extraction_parallel import named_entity_recognition
-from src.processing import processing_phrases, min_max_normalize, softmax_with_zeros
+from src.processing import processing_phrases, softmax_with_zeros
 
 os.environ['TOKENIZERS_PARALLELISM'] = 'FALSE'
 
@@ -242,7 +242,6 @@ class HippoRAG:
             all_phrase_weights, linking_score_map = oracle_ner_to_node(self, query_ner_list, oracle_phrases, link_top_k)
             doc_rank_logs, sorted_doc_ids, sorted_scores = graph_search_with_entities(self, query_ner_list, all_phrase_weights, linking_score_map, query_doc_scores)
 
-
         elif oracle_triples and linking == 'query_to_node':
             from src.linking.query_to_node import graph_search_with_entities
 
@@ -309,7 +308,13 @@ class HippoRAG:
             doc_rank_logs, sorted_doc_ids, sorted_scores = graph_search_with_entities(self, query_ner_list, all_phrase_weights, linking_score_map, query_doc_scores)
 
         elif linking == 'query_to_node' or (oracle_triples is not None and len(oracle_triples) == 0):
-            doc_rank_logs, sorted_doc_ids, sorted_scores = self.query_to_node_linking(link_top_k, query, query_doc_scores)
+            from src.linking.query_to_node import link_node_by_dpr, graph_search_with_entities
+            if 'colbertv2' in self.linking_retriever_name:
+                pass  # todo
+            else:
+                all_phrase_weights, linking_score_map = link_node_by_dpr(self, query, top_k=link_top_k)
+            doc_rank_logs, sorted_doc_ids, sorted_scores = graph_search_with_entities(self, all_phrase_weights, linking_score_map, query_doc_scores)
+            return doc_rank_logs, sorted_doc_ids, sorted_scores
 
         elif linking == 'query_to_fact':
             from src.linking.query_to_fact import link_fact_by_dpr
@@ -317,19 +322,10 @@ class HippoRAG:
                 pass
             else:  # huggingface dense retrieval
                 self.load_fact_vectors()
-                sorted_doc_ids, sorted_scores = link_fact_by_dpr(self, query, top_k=link_top_k)
+                sorted_doc_ids, sorted_scores = link_fact_by_dpr(self, query, link_top_k=link_top_k)
                 return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], None
 
         return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], doc_rank_logs
-
-    def query_to_node_linking(self, link_top_k, query, query_doc_scores):
-        from src.linking.query_to_node import link_node_by_dpr, graph_search_with_entities
-        if 'colbertv2' in self.linking_retriever_name:
-            pass  # todo
-        else:
-            all_phrase_weights, linking_score_map = link_node_by_dpr(self, query, top_k=link_top_k)
-        doc_rank_logs, sorted_doc_ids, sorted_scores = graph_search_with_entities(self, all_phrase_weights, linking_score_map, query_doc_scores)
-        return doc_rank_logs, sorted_doc_ids, sorted_scores
 
     def query_ner(self, query):
         if self.dpr_only:
