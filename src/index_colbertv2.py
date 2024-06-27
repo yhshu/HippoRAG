@@ -1,5 +1,8 @@
 import argparse
 
+from langchain.globals import set_llm_cache
+from langchain_community.cache import SQLiteCache
+
 from src.colbertv2_indexing import colbertv2_graph_indexing
 from src.colbertv2_knn import colbertv2_retrieve_knn
 from src.create_graph import create_graph
@@ -16,9 +19,9 @@ if __name__ == '__main__':
     parser.add_argument('--retriever', type=str, default='facebook/contriever')
     parser.add_argument('--num_thread', type=int, default=10)
     parser.add_argument('--syn_thresh', type=float, default=0.8)
-
     args = parser.parse_args()
 
+    set_llm_cache(SQLiteCache(database_path=".langchain.db"))
     extraction_type = 'ner'
 
     # Running Open Information Extraction

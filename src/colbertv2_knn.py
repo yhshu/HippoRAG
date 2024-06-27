@@ -57,7 +57,7 @@ def retrieve_knn(kb, queries, duplicate=True, nns=100):
     return ranking_dict
 
 
-def colbertv2_retrieve_knn(file_path):
+def colbertv2_retrieve_knn(file_path: str):
     # prepare tsv data
     string_df = pd.read_csv(file_path, sep='\t')
     string_df.strings = [processing_phrases(str(s)) for s in string_df.strings]
