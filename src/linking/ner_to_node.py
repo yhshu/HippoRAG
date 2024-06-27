@@ -4,8 +4,10 @@ from colbert.data import Queries
 from src.hipporag import HippoRAG
 from src.processing import min_max_normalize
 
+def oracle_ner_to_node():
+    pass
 
-def link_node_by_colbertv2(hipporag: HippoRAG, query_ner_list):
+def link_node_by_colbertv2(hipporag: HippoRAG, query_ner_list, link_top_k=None):
     phrase_ids = []
     max_scores = []
 
@@ -27,6 +29,12 @@ def link_node_by_colbertv2(hipporag: HippoRAG, query_ner_list):
             phrase_ids.append(phrase_id)
             max_scores.append(real_score / max_score)
 
+    # choose link_top_k based on max_scores and get the corresponding phrase_ids
+    if link_top_k and isinstance(link_top_k, int):
+        top_k = np.argsort(max_scores)[::-1][:link_top_k]
+        phrase_ids = [phrase_ids[i] for i in top_k]
+        max_scores = [max_scores[i] for i in top_k]
+
     # create a vector (num_doc) with 1s at the indices of the retrieved documents and 0s elsewhere
     top_phrase_vec = np.zeros(len(hipporag.node_phrases))
 
@@ -43,9 +51,9 @@ def link_node_by_colbertv2(hipporag: HippoRAG, query_ner_list):
     return top_phrase_vec, {(query, hipporag.node_phrases[phrase_id]): max_score for phrase_id, max_score, query in zip(phrase_ids, max_scores, query_ner_list)}
 
 
-def link_node_by_dpr(hipporag: HippoRAG, query_ner_list: list):
+def link_node_by_dpr(hipporag: HippoRAG, query_ner_list: list, link_top_k=None):
     """
-    Get the most similar phrases (as vector) in the KG given the named entities
+    Retrieve the most similar phrases (as vector) in the KG given the named entities
     :param query_ner_list:
     :return:
     """
@@ -55,12 +63,20 @@ def link_node_by_dpr(hipporag: HippoRAG, query_ner_list: list):
     prob_vectors = np.dot(query_ner_embeddings, hipporag.kb_node_phrase_embeddings.T)  # (num_ner, dim) x (num_phrases, dim).T -> (num_ner, num_phrases)
 
     linked_phrase_ids = []
-    max_scores = []
+    max_scores = []  # max score for each named entity
 
     for prob_vector in prob_vectors:
-        phrase_id = np.argmax(prob_vector)  # the phrase with the highest similarity
+        mask = np.isnan(prob_vector)
+        # phrase_id = np.argmax(prob_vector)  # the phrase with the highest similarity
+        phrase_id = np.argmax(np.ma.masked_array(prob_vector, mask))
         linked_phrase_ids.append(phrase_id)
         max_scores.append(prob_vector[phrase_id])
+
+    # choose link_top_k based on max_scores and get the corresponding linked_phrase_ids
+    if link_top_k and isinstance(link_top_k, int):
+        top_k = np.argsort(max_scores)[::-1][:link_top_k]
+        linked_phrase_ids = [linked_phrase_ids[i] for i in top_k]
+        max_scores = [max_scores[i] for i in top_k]
 
     # create a vector (num_phrase) with 1s at the indices of the linked phrases and 0s elsewhere
     # if node_specificity is True, it's not one-hot but a weight
@@ -79,10 +95,20 @@ def link_node_by_dpr(hipporag: HippoRAG, query_ner_list: list):
 
     linking_score_map = {(query_phrase, hipporag.node_phrases[linked_phrase_id]): max_score
                          for linked_phrase_id, max_score, query_phrase in zip(linked_phrase_ids, max_scores, query_ner_list)}
+
     return all_phrase_weights, linking_score_map
 
 
 def graph_search_with_entities(hipporag: HippoRAG, query_ner_list: list, all_phrase_weights, linking_score_map, query_doc_scores=None):
+    """
+
+    @param hipporag:
+    @param query_ner_list:
+    @param all_phrase_weights:
+    @param linking_score_map:
+    @param query_doc_scores: optional, for doc ensemble
+    @return:
+    """
     # Run Personalized PageRank (PPR) or other Graph Algorithm Doc Scores
     if not hipporag.dpr_only:
         if len(query_ner_list) > 0:

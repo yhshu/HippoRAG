@@ -6,10 +6,11 @@ from src.processing import softmax_with_zeros, min_max_normalize
 
 def link_node_by_dpr(hipporag: HippoRAG, query: str, top_k=10):
     """
-    Get the most similar phrases given the query
-    :param query: query text
-    :param top_k: number of top phrases to retrieve
-    :return: all_phrase_weights, linking_score_map
+    Retrieve the most similar phrases given the query
+    @param hipporag: hipporag object
+    @param query: query text
+    @param top_k: the number of top phrases to retrieve
+    @return: all_phrase_weights, linking_score_map
     """
     query_embedding = hipporag.embed_model.encode_text(query, return_cpu=True, return_numpy=True, norm=True)
 
@@ -20,9 +21,13 @@ def link_node_by_dpr(hipporag: HippoRAG, query: str, top_k=10):
     linked_phrase_scores = []
 
     for prob_vector in prob_vectors:
-        top_k_indices = np.argsort(prob_vector)[-top_k:][::-1]  # indices of top k phrases
-        linked_phrase_ids.extend(top_k_indices)
-        linked_phrase_scores.extend(prob_vector[top_k_indices])
+        non_nan_mask = ~np.isnan(prob_vector)
+        if top_k:
+            indices = np.argsort(prob_vector[non_nan_mask])[-top_k:][::-1]  # indices of top-k phrases
+        else:
+            indices = np.argsort(prob_vector[non_nan_mask])[::-1]
+        linked_phrase_ids.extend(indices)
+        linked_phrase_scores.extend(prob_vector[indices])
 
     all_phrase_weights = np.zeros_like(prob_vectors[0])
     all_phrase_weights[linked_phrase_ids] = prob_vectors[0][linked_phrase_ids]
@@ -35,6 +40,11 @@ def link_node_by_dpr(hipporag: HippoRAG, query: str, top_k=10):
                 weight = 1 / hipporag.phrase_to_num_doc[phrase_id]
 
             all_phrase_weights[phrase_id] = all_phrase_weights[phrase_id] * weight
+
+    nan_count = np.sum(np.isnan(all_phrase_weights))
+    if nan_count:
+        all_phrase_weights = np.nan_to_num(all_phrase_weights, nan=0)
+        hipporag.logger.info(f'Found {nan_count} NaNs in all_phrase_weights, replaced with 0s')
     all_phrase_weights = softmax_with_zeros(all_phrase_weights)
 
     linking_score_map = {hipporag.node_phrases[linked_phrase_id]: max_score

@@ -162,7 +162,13 @@ if __name__ == '__main__':
     with open(f'data/{args.dataset}.json') as f:
         dataset = json.load(f)
 
-    link_top_k_list = [1, 2, 3, 5, 10]
-    for link_top_k in link_top_k_list:
+    if not args.dpr_only:
+        link_top_k_list = [1, 2, 3, 5, 10]
+        if args.linking == 'ner_to_node':
+            link_top_k_list.append(None)
+        for link_top_k in link_top_k_list:
+            test_retrieve_beir(args.dataset, args.extraction_model, args.retrieval_model, args.linking_model, args.linking,
+                               args.doc_ensemble, args.dpr_only, args.chunk, args.detail, link_top_k=link_top_k, oracle_extraction=args.oracle_ie)
+    else:  # DPR only
         test_retrieve_beir(args.dataset, args.extraction_model, args.retrieval_model, args.linking_model, args.linking,
-                           args.doc_ensemble, args.dpr_only, args.chunk, args.detail, link_top_k=link_top_k, oracle_extraction=args.oracle_ie)
+                           args.doc_ensemble, args.dpr_only, args.chunk, args.detail, link_top_k=1, oracle_extraction=args.oracle_ie)

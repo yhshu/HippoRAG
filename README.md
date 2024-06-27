@@ -105,6 +105,8 @@ When preparing your corpus data, you may need to chunk each passage, as longer p
 This codebase calls LLM through [LangChain](https://www.langchain.com/), which makes it easier for HippoRAG to call different online LLM APIs or offline LLM deployments.
 See `src/langchain_util.py` to see how we set OpenAI and TogetherAI for our experiments. You could also set up your LLM choices using LangChain, e.g., [Ollama](https://python.langchain.com/v0.1/docs/integrations/chat/ollama/) supports **local** Llama, Gemma and Mistral models. 
 
+Setting LangChain cache can improve the speed and reduce the costs. We set the cache db file as  `.langchain.db`.
+
 ### Indexing
 
 Once your corpus is created, add it under the `data` directory. We are now ready to start indexing using the commands below.
