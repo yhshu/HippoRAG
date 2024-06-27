@@ -230,7 +230,18 @@ class HippoRAG:
             return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], None
 
         elif oracle_triples and linking == 'ner_to_node':
-            pass  # todo
+            from src.linking.ner_to_node import oracle_ner_to_node, graph_search_with_entities
+            query_ner_list = self.query_ner(query)
+            oracle_phrases = set()
+            for t in oracle_triples:
+                if len(t):
+                    oracle_phrases.add(t[0])
+                if len(t) >= 3:
+                    oracle_phrases.add(t[2])
+            oracle_phrases = list(oracle_phrases)
+            all_phrase_weights, linking_score_map = oracle_ner_to_node(self, query_ner_list, oracle_phrases, link_top_k)
+            doc_rank_logs, sorted_doc_ids, sorted_scores = graph_search_with_entities(self, query_ner_list, all_phrase_weights, linking_score_map, query_doc_scores)
+
 
         elif oracle_triples and linking == 'query_to_node':
             from src.linking.query_to_node import graph_search_with_entities
@@ -246,10 +257,11 @@ class HippoRAG:
             query_embedding = self.embed_model.encode_text(query, return_cpu=True, return_numpy=True, norm=True)
             # rank and get link_top_k oracle nodes given the query
             query_node_scores = np.dot(node_embeddings, query_embedding.T)  # (num_nodes, dim) x (1, dim).T = (num_nodes, 1)
+            query_node_scores = np.squeeze(query_node_scores)
             if link_top_k:
-                top_k_indices = np.argsort(query_node_scores)[-link_top_k:][::-1].tolist()[0]
+                top_k_indices = np.argsort(query_node_scores)[-link_top_k:][::-1].tolist()
             else:
-                top_k_indices = np.argsort(query_node_scores)[::-1].tolist()[0]
+                top_k_indices = np.argsort(query_node_scores)[::-1].tolist()
 
             top_k_phrases = [oracle_node_phrases[i] for i in top_k_indices]
 
@@ -257,17 +269,18 @@ class HippoRAG:
             for i, phrase in enumerate(self.node_phrases):
                 matching_index = next((index for index, top_phrase in enumerate(top_k_phrases) if phrase.lower() == top_phrase.lower()), None)
                 if matching_index is not None:
-                    all_phrase_weights[i] = query_node_scores[matching_index][0]
+                    all_phrase_weights[i] = query_node_scores[matching_index]
 
             if sum(all_phrase_weights) == 0:
                 doc_rank_logs, sorted_doc_ids, sorted_scores = self.query_to_node_linking(link_top_k, query, query_doc_scores)
             else:
                 all_phrase_weights = softmax_with_zeros(all_phrase_weights)
-                linking_score_map = {oracle_node_phrases[i]: query_node_scores[i][0] for i in top_k_indices}
+                linking_score_map = {oracle_node_phrases[i]: query_node_scores[i] for i in top_k_indices}
                 doc_rank_logs, sorted_doc_ids, sorted_scores = graph_search_with_entities(self, all_phrase_weights, linking_score_map, None)
 
         elif oracle_triples and linking == 'query_to_fact':
-            sorted_doc_ids, sorted_scores = self.oracle_query_to_fact(link_top_k, oracle_triples, query)
+            from src.linking.query_to_fact import oracle_query_to_fact
+            sorted_doc_ids, sorted_scores = oracle_query_to_fact(self, query, oracle_triples, link_top_k)
             return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], None
 
         elif linking == 'ner_to_node':

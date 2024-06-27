@@ -4,8 +4,6 @@ from colbert.data import Queries
 from src.hipporag import HippoRAG
 from src.processing import min_max_normalize
 
-def oracle_ner_to_node():
-    pass
 
 def link_node_by_colbertv2(hipporag: HippoRAG, query_ner_list, link_top_k=None):
     phrase_ids = []
@@ -58,30 +56,29 @@ def link_node_by_dpr(hipporag: HippoRAG, query_ner_list: list, link_top_k=None):
     :return:
     """
     query_ner_embeddings = hipporag.embed_model.encode_text(query_ner_list, return_cpu=True, return_numpy=True, norm=True)
-
     # Get Closest Entity Nodes
     prob_vectors = np.dot(query_ner_embeddings, hipporag.kb_node_phrase_embeddings.T)  # (num_ner, dim) x (num_phrases, dim).T -> (num_ner, num_phrases)
+    all_phrase_weights, linking_score_map = link_node_by_dpr_with_vectors(hipporag, link_top_k, prob_vectors, query_ner_list)
+    return all_phrase_weights, linking_score_map
 
+
+def link_node_by_dpr_with_vectors(hipporag, link_top_k, prob_vectors, query_ner_list):
     linked_phrase_ids = []
     max_scores = []  # max score for each named entity
-
     for prob_vector in prob_vectors:
         mask = np.isnan(prob_vector)
         # phrase_id = np.argmax(prob_vector)  # the phrase with the highest similarity
         phrase_id = np.argmax(np.ma.masked_array(prob_vector, mask))
         linked_phrase_ids.append(phrase_id)
         max_scores.append(prob_vector[phrase_id])
-
     # choose link_top_k based on max_scores and get the corresponding linked_phrase_ids
     if link_top_k and isinstance(link_top_k, int):
         top_k = np.argsort(max_scores)[::-1][:link_top_k]
         linked_phrase_ids = [linked_phrase_ids[i] for i in top_k]
         max_scores = [max_scores[i] for i in top_k]
-
     # create a vector (num_phrase) with 1s at the indices of the linked phrases and 0s elsewhere
     # if node_specificity is True, it's not one-hot but a weight
     all_phrase_weights = np.zeros(len(hipporag.node_phrases))
-
     for phrase_id in linked_phrase_ids:
         if hipporag.node_specificity:
             if hipporag.phrase_to_num_doc[phrase_id] == 0:  # just in case the phrase is not recorded in any documents
@@ -92,10 +89,16 @@ def link_node_by_dpr(hipporag: HippoRAG, query_ner_list: list, link_top_k=None):
             all_phrase_weights[phrase_id] = weight
         else:
             all_phrase_weights[phrase_id] = 1.0
-
     linking_score_map = {(query_phrase, hipporag.node_phrases[linked_phrase_id]): max_score
                          for linked_phrase_id, max_score, query_phrase in zip(linked_phrase_ids, max_scores, query_ner_list)}
+    return all_phrase_weights, linking_score_map
 
+
+def oracle_ner_to_node(hipporag: HippoRAG, query_ner_list, oracle_phrases, link_top_k=None):
+    query_ner_embeddings = hipporag.embed_model.encode_text(query_ner_list, return_cpu=True, return_numpy=True, norm=True)
+    phrase_embeddings = hipporag.embed_model.encode_text(oracle_phrases, return_cpu=True, return_numpy=True, norm=True)
+    prob_vectors = np.dot(query_ner_embeddings, phrase_embeddings.T)  # (num_ner, dim) x (num_phrases, dim).T -> (num_ner, num_phrases)
+    all_phrase_weights, linking_score_map = link_node_by_dpr_with_vectors(hipporag, link_top_k, prob_vectors, query_ner_list)
     return all_phrase_weights, linking_score_map
 
 

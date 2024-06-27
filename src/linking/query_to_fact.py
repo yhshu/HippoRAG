@@ -12,8 +12,10 @@ def oracle_query_to_fact(hipporag, query, oracle_triples, link_top_k):
     fact_embeddings = hipporag.embed_model.encode_text(oracle_triples_str, return_cpu=True, return_numpy=True, norm=True)
     # rank and get link_top_k oracle facts given the query
     query_fact_scores = np.dot(fact_embeddings, query_embedding.T)  # (num_facts, dim) x (1, dim).T = (num_facts, 1)
-    top_k_indices = np.argsort(query_fact_scores)[-link_top_k:][::-1].tolist()[0]
+    query_fact_scores = np.squeeze(query_fact_scores)
+    top_k_indices = np.argsort(query_fact_scores)[-link_top_k:][::-1].tolist()
     top_k_facts = [oracle_triples[i] for i in top_k_indices]
+
     for rank, f in enumerate(top_k_facts):
         try:
             triple_tuple = tuple([phrase.lower() for phrase in f])
@@ -22,7 +24,7 @@ def oracle_query_to_fact(hipporag, query, oracle_triples, link_top_k):
             hipporag.logger.exception(f'Fact not found in the graph: {f}, {e}')
             continue
         else:
-            fact_score = query_fact_scores[top_k_indices[rank]][0]
+            fact_score = query_fact_scores[top_k_indices[rank]]
             for doc_id_fact_id in hipporag.docs_to_facts:
                 corpus_id = doc_id_fact_id[0]
                 fact_id = doc_id_fact_id[1]
@@ -46,8 +48,8 @@ def link_fact_by_dpr(hipporag: HippoRAG, query: str, top_k=10, graph_algorithm=F
     query_embedding = hipporag.embed_model.encode_text(query, return_cpu=True, return_numpy=True, norm=True)
     # rank and get link_top_k oracle facts given the query
     query_fact_scores = np.dot(hipporag.fact_embeddings, query_embedding.T)  # (num_facts, dim) x (1, dim).T = (num_facts, 1)
-
-    top_k_indices = np.argsort(query_fact_scores)[-top_k:][::-1].tolist()[0]
+    query_fact_scores = np.squeeze(query_fact_scores)
+    top_k_indices = np.argsort(query_fact_scores)[-top_k:][::-1].tolist()
     top_k_facts = [hipporag.triplet_facts[i] for i in top_k_indices]
 
     for rank, f in enumerate(top_k_facts):
@@ -58,7 +60,7 @@ def link_fact_by_dpr(hipporag: HippoRAG, query: str, top_k=10, graph_algorithm=F
             hipporag.logger.exception(f'Fact not found in the graph: {f}, {e}')
             continue
         else:
-            fact_score = query_fact_scores[top_k_indices[rank]][0]
+            fact_score = query_fact_scores[top_k_indices[rank]]
             for doc_id_fact_id in hipporag.docs_to_facts:
                 corpus_id = doc_id_fact_id[0]
                 fact_id = doc_id_fact_id[1]
