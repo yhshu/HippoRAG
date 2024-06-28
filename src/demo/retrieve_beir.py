@@ -93,7 +93,7 @@ def test_retrieve_beir(dataset_name: str, extraction_model: str, retrieval_model
         run_dict = {'retrieved': {}, 'log': {}}  # for pytrec_eval
 
     to_update_run = False
-    for query in tqdm(dataset):
+    for i, query in tqdm(enumerate(dataset), total=len(dataset), desc='Evaluating queries'):
         query_text = query['text']
         query_id = query['id']
         if query_id in run_dict['retrieved']:
@@ -140,7 +140,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, help='dataset name and split, e.g., `sci_fact_test`, `fiqa_dev`.')
     parser.add_argument('--chunk', action='store_true')
-    parser.add_argument('--extraction_model', type=str, default='gpt-3.5-turbo')
+    parser.add_argument('--extraction_model', type=str, default='gpt-3.5-turbo-1106')
     parser.add_argument('--retrieval_model', type=str, help="Graph creating retriever name, e.g., 'facebook/contriever', 'colbertv2'")
     parser.add_argument('--linking_model', type=str, help="Node linking model name, e.g., 'facebook/contriever', 'colbertv2'")
     parser.add_argument('--linking', type=str, choices=['ner_to_node', 'query_to_node', 'query_to_fact'])

@@ -284,7 +284,8 @@ class HippoRAG:
 
         elif linking == 'ner_to_node':
             from src.linking.ner_to_node import link_node_by_dpr, link_node_by_colbertv2, graph_search_with_entities
-
+            all_phrase_weights = np.zeros(len(self.node_phrases))
+            linking_score_map = {}
             query_ner_list = self.query_ner(query)
             if 'colbertv2' in self.linking_retriever_name:
                 queries = Queries(path=None, data={0: query})
@@ -463,7 +464,7 @@ class HippoRAG:
         if os.path.isfile(graph_file_path):
             self.graph_plus = pickle.load(open(graph_file_path, 'rb'))  # (phrase1 id, phrase2 id) -> the number of occurrences
         else:
-            self.logger.exception('Graph file not found: ' + graph_file_path)
+            self.logger.error('Graph file not found: ' + graph_file_path)
 
     def get_phrases_in_doc_str(self, doc: str):
         # find doc id from self.dataset_df

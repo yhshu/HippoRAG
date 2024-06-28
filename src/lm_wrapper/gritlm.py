@@ -1,7 +1,6 @@
 # See https://github.com/ContextualAI/gritlm
 from typing import Union, List
 
-import numpy
 import numpy as np
 import torch
 from gritlm import GritLM
