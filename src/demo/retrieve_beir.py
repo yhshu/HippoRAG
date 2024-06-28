@@ -1,5 +1,6 @@
 # Note that BEIR uses https://github.com/cvangysel/pytrec_eval to evaluate the retrieval results.
 import sys
+from collections import defaultdict
 
 sys.path.append('.')
 
@@ -71,7 +72,8 @@ def detailed_log(dataset: list, run_dict, eval_res, chunk=False, threshold=None,
     return logs
 
 
-def test_retrieve_beir(dataset_name: str, extraction_model: str, retrieval_model: str, linking_model: str, linking: str, doc_ensemble: bool, dpr_only: bool, chunk: bool, detail: bool,
+def test_retrieve_beir(dataset_name: str, extraction_model: str, retrieval_model: str, linking_model: str, linking: str, doc_ensemble: bool, dpr_only: bool, chunk: bool,
+                       detail: bool,
                        link_top_k=3, oracle_extraction=False):
     doc_ensemble_str = 'doc_ensemble' if doc_ensemble else 'no_ensemble'
     extraction_str = extraction_model.replace('/', '_').replace('.', '_')
@@ -84,8 +86,9 @@ def test_retrieve_beir(dataset_name: str, extraction_model: str, retrieval_model
     dpr_only_str = '_dpr_only' if dpr_only else ''
     run_output_path = f'exp/{dataset_name}_run_{doc_ensemble_str}_{extraction_str}_{graph_creating_str}_{linking_str}{dpr_only_str}.json'
 
-    metrics = {'map', 'ndcg'}
-    evaluator = pytrec_eval.RelevanceEvaluator(qrel, metrics)
+    pytrec_metrics = {'map', 'ndcg'}
+    metrics = defaultdict(float)
+    evaluator = pytrec_eval.RelevanceEvaluator(qrel, pytrec_metrics)
     if os.path.isfile(run_output_path):
         run_dict = json.load(open(run_output_path))
         print(f'Log file found at {run_output_path}, len: {len(run_dict["retrieved"])}')
@@ -111,6 +114,27 @@ def test_retrieve_beir(dataset_name: str, extraction_model: str, retrieval_model
         run_dict['retrieved'][query_id] = {doc['idx']: score for doc, score in zip(retrieved_docs, scores)}
         run_dict['log'][query_id] = log
         to_update_run = True
+
+        if linking in ['ner_to_node', 'query_to_node', 'query_to_fact']:  # evaluate the recall of nodes from supporting documents
+            # get oracle nodes
+            if oracle_triples is None:
+                oracle_triples = []
+                for p in supporting_docs:
+                    oracle_triples += hipporag.get_facts_by_corpus_idx(hipporag.get_corpus_idx_by_passage_idx(p['idx']))[0]
+            oracle_nodes = set([t[0] for t in oracle_triples]).union(set([t[2] for t in oracle_triples]))
+
+            # get linked nodes
+            linked_nodes = set()
+            for item in log['linked_node_scores']:
+                if isinstance(item, dict):  # item: mention -> node phrase
+                    linked_nodes.add(item[1])
+                elif isinstance(item, str):
+                    linked_nodes.add(item)
+
+            # calculate recall
+            node_precision = len(oracle_nodes.intersection(set(linked_nodes))) / len(linked_nodes) if len(linked_nodes) > 0 else 0
+            metrics['node_precision'] += node_precision
+
     if to_update_run:
         with open(run_output_path, 'w') as f:
             json.dump(run_dict, f)
@@ -124,9 +148,14 @@ def test_retrieve_beir(dataset_name: str, extraction_model: str, retrieval_model
 
     # get average scores
     avg_scores = {}
-    for metric in metrics:
+    for metric in pytrec_metrics:
         avg_scores[metric] = round(sum([v[metric] for v in eval_res.values()]) / len(eval_res), 3)
     print(f'Evaluation results: {avg_scores}')
+
+    for key in metrics:
+        metrics[key] /= len(dataset) if len(dataset) > 0 else 1
+        metrics[key] = round(metrics[key], 3)
+    print(f'Metrics: {metrics}')
 
     if detail:
         logs = detailed_log(dataset, run_dict, eval_res, chunk, dpr_only=dpr_only)
@@ -140,7 +169,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, help='dataset name and split, e.g., `sci_fact_test`, `fiqa_dev`.')
     parser.add_argument('--chunk', action='store_true')
-    parser.add_argument('--extraction_model', type=str, default='gpt-3.5-turbo-1106')
+    parser.add_argument('--extraction_model', type=str, default='gpt-3.5-turbo')
     parser.add_argument('--retrieval_model', type=str, help="Graph creating retriever name, e.g., 'facebook/contriever', 'colbertv2'")
     parser.add_argument('--linking_model', type=str, help="Node linking model name, e.g., 'facebook/contriever', 'colbertv2'")
     parser.add_argument('--linking', type=str, choices=['ner_to_node', 'query_to_node', 'query_to_fact'])

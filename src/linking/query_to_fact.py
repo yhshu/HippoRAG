@@ -31,6 +31,7 @@ def link_query_to_fact(hipporag, query, candidate_triples: list, fact_embeddings
     if not graph_search:  # only fact linking, no graph search
         sorted_doc_ids = np.argsort(query_doc_scores)[::-1]
         sorted_scores = query_doc_scores[sorted_doc_ids.tolist()]
+        logs = None
     else:  # graph search
         # from retrieved fact to nodes in the fact
         all_phrase_weights = np.zeros(len(hipporag.node_phrases))
@@ -53,7 +54,7 @@ def link_query_to_fact(hipporag, query, candidate_triples: list, fact_embeddings
             # choose top ranked node in linking_score_map
             linking_score_map = dict(sorted(linking_score_map.items(), key=lambda x: x[1], reverse=True))
         logs, sorted_doc_ids, sorted_scores = graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, query_doc_scores=None)
-    return sorted_doc_ids, sorted_scores
+    return sorted_doc_ids, sorted_scores, logs
 
 
 def oracle_query_to_fact(hipporag, query, oracle_triples: list, link_top_k, graph_search=True):
