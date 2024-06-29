@@ -522,6 +522,8 @@ class HippoRAG:
         if os.path.isfile(encoded_string_path):
             self.load_node_vectors_from_string_encoding_cache(encoded_string_path)
         else:  # use another way to load node vectors
+            if self.linking_retriever_name == 'colbertv2':
+                return
             kb_node_phrase_embeddings_path = (f'data/lm_vectors/{self.linking_retriever_name_processed}_mean/'
                                               f'kb_node_phrase_embeddings_{self.corpus_name}_'
                                               f'{self.extraction_model_name_processed}_{self.graph_creating_retriever_name_processed}.p')
