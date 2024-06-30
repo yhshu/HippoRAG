@@ -7,6 +7,13 @@ from gritlm import GritLM
 
 from src.lm_wrapper import EmbeddingModelWrapper
 
+gritlm_query_instructions_for_datasets = {'scifact': 'Given a scientific claim, retrieve documents that support or refute the claim.',
+                                          'nfcorpus': 'Given a question, retrieve relevant documents that best answer the question.'}
+
+gritlm_query_instruction_for_tasks = {'ner_to_node': 'Given a phrase, retrieve synonymous or relevant phrases that best match this phrase.',
+                                      'query_to_node': 'Given a question or a claim, retrieve relevant phrases that are mentioned in the question or claim.',
+                                      'query_to_fact': 'Given a question or a claim, retrieve relevant triplet facts that matches this question or claim.', }
+
 
 def gritlm_instruction(instruction):
     return "<|user|>\n" + instruction + "\n<|embed|>\n" if instruction else "<|embed|>\n"

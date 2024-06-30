@@ -1,12 +1,13 @@
 import numpy as np
 
-from src.hipporag import HippoRAG
+from src.hipporag import HippoRAG, get_query_instruction_for_tasks
 from src.linking.query_to_node import graph_search_with_entities
 
 
-def link_query_to_fact(hipporag, query, candidate_triples: list, fact_embeddings, link_top_k, graph_search=True):
+def link_query_to_fact(hipporag: HippoRAG, query, candidate_triples: list, fact_embeddings, link_top_k, graph_search=True):
     query_doc_scores = np.zeros(hipporag.docs_to_phrases_mat.shape[0])
-    query_embedding = hipporag.embed_model.encode_text(query, return_cpu=True, return_numpy=True, norm=True)
+    query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction_for_tasks(hipporag.embed_model, 'query_to_fact'),
+                                                       return_cpu=True, return_numpy=True, norm=True)
     # rank and get link_top_k oracle facts given the query
     query_fact_scores = np.dot(fact_embeddings, query_embedding.T)  # (num_facts, dim) x (1, dim).T = (num_facts, 1)
     query_fact_scores = np.squeeze(query_fact_scores)
@@ -57,7 +58,7 @@ def link_query_to_fact(hipporag, query, candidate_triples: list, fact_embeddings
     return sorted_doc_ids, sorted_scores, logs
 
 
-def oracle_query_to_fact(hipporag, query, oracle_triples: list, link_top_k, graph_search=True):
+def oracle_query_to_fact(hipporag: HippoRAG, query: str, oracle_triples: list, link_top_k, graph_search=True):
     # using query to score facts and using facts to score documents
     oracle_triples_str = [str(t) for t in oracle_triples]
     fact_embeddings = hipporag.embed_model.encode_text(oracle_triples_str, return_cpu=True, return_numpy=True, norm=True)

@@ -130,10 +130,16 @@ def test_retrieve_beir(dataset_name: str, extraction_model: str, retrieval_model
                     linked_nodes.add(item[1])
                 elif isinstance(item, str):
                     linked_nodes.add(item)
+                if len(linked_nodes) >= link_top_k:
+                    break
 
             # calculate recall
             node_precision = len(oracle_nodes.intersection(set(linked_nodes))) / len(linked_nodes) if len(linked_nodes) > 0 else 0
+            node_recall = len(oracle_nodes.intersection(set(linked_nodes))) / len(oracle_nodes) if len(oracle_nodes) > 0 else 0
+            node_hit = True if len(oracle_nodes.intersection(set(linked_nodes))) > 0 else False
             metrics['node_precision'] += node_precision
+            metrics['node_recall'] += node_recall
+            metrics['node_hit'] += node_hit
 
     if to_update_run:
         with open(run_output_path, 'w') as f:
@@ -192,7 +198,7 @@ if __name__ == '__main__':
         dataset = json.load(f)
 
     if not args.dpr_only:
-        link_top_k_list = [1, 2, 3, 5, 10]
+        link_top_k_list = [1, 2, 3, 5, 10, 20]
         if args.linking == 'ner_to_node':
             link_top_k_list.append(None)
         for link_top_k in link_top_k_list:

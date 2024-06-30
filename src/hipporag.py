@@ -16,6 +16,8 @@ from tqdm import tqdm
 
 from src.colbertv2_indexing import colbertv2_index
 from src.langchain_util import init_langchain_model, LangChainModel
+from src.lm_wrapper import EmbeddingModelWrapper
+from src.lm_wrapper.gritlm import GritWrapper, gritlm_query_instructions_for_datasets, gritlm_query_instruction_for_tasks
 from src.lm_wrapper.util import init_embedding_model
 from src.named_entity_extraction_parallel import named_entity_recognition
 from src.processing import processing_phrases, softmax_with_zeros
@@ -23,6 +25,21 @@ from src.processing import processing_phrases, softmax_with_zeros
 os.environ['TOKENIZERS_PARALLELISM'] = 'FALSE'
 
 COLBERT_CKPT_DIR = "exp/colbertv2.0"
+
+
+def get_query_instruction_for_datasets(embedding_model: EmbeddingModelWrapper, datatset_name: str):
+    if isinstance(embedding_model, GritWrapper):
+        for key in gritlm_query_instructions_for_datasets:
+            if key in datatset_name:
+                return gritlm_query_instructions_for_datasets[key]
+        return ''
+    return None
+
+
+def get_query_instruction_for_tasks(embedding_model: EmbeddingModelWrapper, task: str):
+    if isinstance(embedding_model, GritWrapper):
+        return gritlm_query_instruction_for_tasks.get(task, '')
+    return None
 
 
 class HippoRAG:
@@ -222,7 +239,8 @@ class HippoRAG:
                 for corpus_id, rank, score in ranking.data[0]:
                     query_doc_scores[corpus_id] = score
             else:  # HuggingFace dense retrieval
-                query_embedding = self.embed_model.encode_text(query, return_cpu=True, return_numpy=True, norm=True)
+                query_embedding = self.embed_model.encode_text(query, instruction=get_query_instruction_for_datasets(self.embed_model, self.corpus_name),
+                                                               return_cpu=True, return_numpy=True, norm=True)
                 query_doc_scores = np.dot(self.doc_embedding_mat, query_embedding.T)
                 query_doc_scores = query_doc_scores.T[0]
             sorted_doc_ids = np.argsort(query_doc_scores)[::-1]
@@ -253,7 +271,8 @@ class HippoRAG:
                     oracle_node_phrases.add(t[2])
             oracle_node_phrases = list(oracle_node_phrases)
             node_embeddings = self.embed_model.encode_text(oracle_node_phrases, return_cpu=True, return_numpy=True, norm=True)
-            query_embedding = self.embed_model.encode_text(query, return_cpu=True, return_numpy=True, norm=True)
+            query_embedding = self.embed_model.encode_text(query, instruction=get_query_instruction_for_tasks(self.embed_model, 'query_to_node'),
+                                                           return_cpu=True, return_numpy=True, norm=True)
             # rank and get link_top_k oracle nodes given the query
             query_node_scores = np.dot(node_embeddings, query_embedding.T)  # (num_nodes, dim) x (1, dim).T = (num_nodes, 1)
             query_node_scores = np.squeeze(query_node_scores)
@@ -279,8 +298,8 @@ class HippoRAG:
 
         elif oracle_triples and linking == 'query_to_fact':
             from src.linking.query_to_fact import oracle_query_to_fact
-            sorted_doc_ids, sorted_scores = oracle_query_to_fact(self, query, oracle_triples, link_top_k)
-            return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], None
+            sorted_doc_ids, sorted_scores, logs = oracle_query_to_fact(self, query, oracle_triples, link_top_k)
+            return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], logs
 
         elif linking == 'ner_to_node':
             from src.linking.ner_to_node import link_node_by_dpr, link_node_by_colbertv2, graph_search_with_entities
@@ -300,7 +319,8 @@ class HippoRAG:
                         all_phrase_weights, linking_score_map = link_node_by_colbertv2(self, query_ner_list, link_top_k)
             else:  # huggingface dense retrieval
                 if self.doc_ensemble:
-                    query_embedding = self.embed_model.encode_text(query, return_cpu=True, return_numpy=True, norm=True)
+                    query_embedding = self.embed_model.encode_text(query, instruction=get_query_instruction_for_tasks(self.embed_model, 'ner_to_node'),
+                                                                   return_cpu=True, return_numpy=True, norm=True)
                     query_doc_scores = np.dot(self.doc_embedding_mat, query_embedding.T)
                     query_doc_scores = query_doc_scores.T[0]
 
