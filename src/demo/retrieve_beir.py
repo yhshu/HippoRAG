@@ -125,22 +125,25 @@ def test_retrieve_beir(dataset_name: str, extraction_model: str, retrieval_model
 
             # get linked nodes
             linked_nodes = set()
-            for item in log['linked_node_scores']:
-                assert isinstance(item, list) or isinstance(item, str)
-                if isinstance(item, list):  # item: mention -> node phrase
-                    linked_nodes.add(item[1])
-                elif isinstance(item, str):
-                    linked_nodes.add(item)
-                if link_top_k is not None and len(linked_nodes) >= link_top_k:
-                    break
+            if log is not None and len(log):
+                for item in log['linked_node_scores']:
+                    assert isinstance(item, list) or isinstance(item, str)
+                    if isinstance(item, list):  # item: mention -> node phrase
+                        linked_nodes.add(item[1])
+                    elif isinstance(item, str):
+                        linked_nodes.add(item)
+                    if link_top_k is not None and len(linked_nodes) >= link_top_k:
+                        break
 
-            # calculate recall
-            node_precision = len(oracle_nodes.intersection(set(linked_nodes))) / len(linked_nodes) if len(linked_nodes) > 0 else 0
-            node_recall = len(oracle_nodes.intersection(set(linked_nodes))) / len(oracle_nodes) if len(oracle_nodes) > 0 else 0
-            node_hit = True if len(oracle_nodes.intersection(set(linked_nodes))) > 0 else False
-            metrics['node_precision'] += node_precision
-            metrics['node_recall'] += node_recall
-            metrics['node_hit'] += node_hit
+                # calculate recall
+                node_precision = len(oracle_nodes.intersection(set(linked_nodes))) / len(linked_nodes) if len(linked_nodes) > 0 else 0
+                node_recall = len(oracle_nodes.intersection(set(linked_nodes))) / len(oracle_nodes) if len(oracle_nodes) > 0 else 0
+                node_hit = True if len(oracle_nodes.intersection(set(linked_nodes))) > 0 else False
+                metrics['node_precision'] += node_precision
+                metrics['node_recall'] += node_recall
+                metrics['node_hit'] += node_hit
+            else:
+                hipporag.logger.info(f'No linked nodes found for query {query_id}.')
 
     if to_update_run:
         with open(run_output_path, 'w') as f:

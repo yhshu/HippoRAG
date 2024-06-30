@@ -24,7 +24,7 @@ class HuggingFaceWrapper(EmbeddingModelWrapper):
                 text = [text]
             res = []
             if len(text) > 1:
-                for t in tqdm(text, total=len(text), desc=f"HF model {self.model_name} encoding"):
+                for t in tqdm(text, total=len(text), desc=f"{self.model_name} encoding"):
                     res.append(encoding_func(t, self.tokenizer, self.model, self.device))
             else:
                 res = [encoding_func(text[0], self.tokenizer, self.model, self.device)]
