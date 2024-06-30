@@ -126,11 +126,12 @@ def test_retrieve_beir(dataset_name: str, extraction_model: str, retrieval_model
             # get linked nodes
             linked_nodes = set()
             for item in log['linked_node_scores']:
-                if isinstance(item, dict):  # item: mention -> node phrase
+                assert isinstance(item, list) or isinstance(item, str)
+                if isinstance(item, list):  # item: mention -> node phrase
                     linked_nodes.add(item[1])
                 elif isinstance(item, str):
                     linked_nodes.add(item)
-                if len(linked_nodes) >= link_top_k:
+                if link_top_k is not None and len(linked_nodes) >= link_top_k:
                     break
 
             # calculate recall
@@ -198,7 +199,7 @@ if __name__ == '__main__':
         dataset = json.load(f)
 
     if not args.dpr_only:
-        link_top_k_list = [1, 2, 3, 5, 10, 20]
+        link_top_k_list = [1, 2, 3, 5, 10, 20, 30]
         if args.linking == 'ner_to_node':
             link_top_k_list.append(None)
         for link_top_k in link_top_k_list:
