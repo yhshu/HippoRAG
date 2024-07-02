@@ -72,9 +72,9 @@ def detailed_log(dataset: list, run_dict, eval_res, chunk=False, threshold=None,
     return logs
 
 
-def test_retrieve_beir(dataset_name: str, extraction_model: str, retrieval_model: str, linking_model: str, linking: str, doc_ensemble: bool, dpr_only: bool, chunk: bool,
-                       detail: bool,
-                       link_top_k=3, oracle_extraction=False):
+def run_retrieve_beir(dataset_name: str, extraction_model: str, retrieval_model: str, linking_model: str, linking: str, doc_ensemble: bool, dpr_only: bool, chunk: bool,
+                      detail: bool,
+                      link_top_k=3, oracle_extraction=False):
     doc_ensemble_str = 'doc_ensemble' if doc_ensemble else 'no_ensemble'
     extraction_str = extraction_model.replace('/', '_').replace('.', '_')
     graph_creating_str = retrieval_model.replace('/', '_').replace('.', '_')
@@ -193,8 +193,16 @@ if __name__ == '__main__':
         args.chunk = True
     # assert at most only one of them is True
     assert not (args.doc_ensemble and args.dpr_only)
-    corpus = json.load(open(f'data/{args.dataset}_corpus.json'))
-    qrel = json.load(open(f'data/{args.dataset}_qrel.json'))  # note that this is json file processed from tsv file, used for pytrec_eval
+    try:
+        corpus_path = f'data/{args.dataset}_corpus.json'
+        print('Loading corpus from ', corpus_path)
+        corpus = json.load(open(corpus_path, 'r'))
+
+        qrel_path = f'data/{args.dataset}_qrel.json'
+        print('Loading qrel from ', qrel_path)
+        qrel = json.load(open(qrel_path, 'r'))  # note that this is json file processed from tsv file, used for pytrec_eval
+    except Exception as e:
+        print(f'Error when loading files: {e}')
     hipporag = HippoRAG(args.dataset, 'openai', args.extraction_model, args.retrieval_model, doc_ensemble=args.doc_ensemble, dpr_only=args.dpr_only,
                         linking_retriever_name=args.linking_model)
 
@@ -206,8 +214,8 @@ if __name__ == '__main__':
         if args.linking == 'ner_to_node':
             link_top_k_list.append(None)
         for link_top_k in link_top_k_list:
-            test_retrieve_beir(args.dataset, args.extraction_model, args.retrieval_model, args.linking_model, args.linking,
-                               args.doc_ensemble, args.dpr_only, args.chunk, args.detail, link_top_k=link_top_k, oracle_extraction=args.oracle_ie)
+            run_retrieve_beir(args.dataset, args.extraction_model, args.retrieval_model, args.linking_model, args.linking,
+                              args.doc_ensemble, args.dpr_only, args.chunk, args.detail, link_top_k=link_top_k, oracle_extraction=args.oracle_ie)
     else:  # DPR only
-        test_retrieve_beir(args.dataset, args.extraction_model, args.retrieval_model, args.linking_model, args.linking,
-                           args.doc_ensemble, args.dpr_only, args.chunk, args.detail, link_top_k=1, oracle_extraction=args.oracle_ie)
+        run_retrieve_beir(args.dataset, args.extraction_model, args.retrieval_model, args.linking_model, args.linking,
+                          args.doc_ensemble, args.dpr_only, args.chunk, args.detail, link_top_k=1, oracle_extraction=args.oracle_ie)

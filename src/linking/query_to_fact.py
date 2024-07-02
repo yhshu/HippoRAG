@@ -2,17 +2,24 @@ import numpy as np
 
 from src.hipporag import HippoRAG, get_query_instruction_for_tasks
 from src.linking.query_to_node import graph_search_with_entities
+from src.rerank import LLMReranker
 
 
-def link_query_to_fact(hipporag: HippoRAG, query, candidate_triples: list, fact_embeddings, link_top_k, graph_search=True):
+def link_query_to_fact(hipporag: HippoRAG, query, candidate_triples: list, fact_embeddings, link_top_k, graph_search=True, rerank_model='gpt-3.5-turbo'):
     query_doc_scores = np.zeros(hipporag.docs_to_phrases_mat.shape[0])
     query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction_for_tasks(hipporag.embed_model, 'query_to_fact'),
                                                        return_cpu=True, return_numpy=True, norm=True)
     # rank and get link_top_k oracle facts given the query
     query_fact_scores = np.dot(fact_embeddings, query_embedding.T)  # (num_facts, dim) x (1, dim).T = (num_facts, 1)
     query_fact_scores = np.squeeze(query_fact_scores)
-    top_k_indices = np.argsort(query_fact_scores)[-link_top_k:][::-1].tolist()
-    top_k_facts = [candidate_triples[i] for i in top_k_indices]
+    if rerank_model is not None:
+        reranker = LLMReranker(rerank_model)
+        candidate_fact_indices = np.argsort(query_fact_scores)[-30:][::-1].tolist()
+        candidate_facts = [candidate_triples[i] for i in candidate_fact_indices]
+        top_k_indices, top_k_facts = reranker.rerank('query_to_fact', query, candidate_fact_indices, candidate_facts, link_top_k)
+    else:
+        top_k_indices = np.argsort(query_fact_scores)[-link_top_k:][::-1].tolist()
+        top_k_facts = [candidate_triples[i] for i in top_k_indices]
 
     for rank, f in enumerate(top_k_facts):
         try:

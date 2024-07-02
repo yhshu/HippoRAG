@@ -1,3 +1,6 @@
+import sys
+sys.path.append('.')
+
 import argparse
 
 from langchain.globals import set_llm_cache
