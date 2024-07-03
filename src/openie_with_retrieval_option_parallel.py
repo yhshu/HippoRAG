@@ -136,32 +136,8 @@ def extract_openie_from_triples(client, existing_json, auxiliary_file_exists, en
     return (new_json, all_entities, chatgpt_total_tokens)
 
 
-def openie_with_retrieval(dataset: str, run_ner: bool, num_passages, llm: str, model_name: str, num_processes: int):
-    corpus = json.load(open(f'data/{dataset}_corpus.json', 'r'))
-    if 'hotpotqa' in dataset:
-        keys = list(corpus.keys())
-        retrieval_corpus = [{'idx': i, 'passage': key + '\n' + ''.join(corpus[key])} for i, key in enumerate(keys)]
-    else:
-        retrieval_corpus = corpus
-        for document in retrieval_corpus:
-            document['passage'] = document['title'] + '\n' + document['text']
-
-    dataset = '_' + dataset
-    if num_passages == 'all':
-        num_passages = len(retrieval_corpus)
-    else:
-        try:
-            num_passages = int(num_passages)
-        except:
-            assert False, "Set 'num_passages' to an integer or 'all'"
-
-    flag_names = ['ner']
-    flags_present = [flag_names[i] for i, flag in enumerate([run_ner]) if flag]
-    if len(flags_present) > 0:
-        arg_str = '_'.join(flags_present) + '_' + model_name.replace('/', '_') + f'_{num_passages}'
-    else:
-        arg_str = model_name.replace('/', '_') + f'_{num_passages}'
-    print(arg_str)
+def openie_for_corpus(dataset_name: str, run_ner: bool, num_passages, llm: str, model_name: str, num_processes: int):
+    arg_str, dataset_name, flags_present, num_passages, retrieval_corpus = load_corpus(dataset_name, model_name, num_passages, run_ner)
 
     client = init_langchain_model(llm, model_name)  # LangChain model
     already_done = False
@@ -172,7 +148,7 @@ def openie_with_retrieval(dataset: str, run_ner: bool, num_passages, llm: str, m
         prev_num_passages = 0
         new_json_temp = None
 
-        for file in glob('output/openie{}_results_{}.json'.format(dataset, arg_str_regex)):
+        for file in glob('output/openie{}_results_{}.json'.format(dataset_name, arg_str_regex)):
             possible_json = json.load(open(file, 'r'))
             if prev_num_passages < len(possible_json['docs']):
                 prev_num_passages = len(possible_json['docs'])
@@ -195,7 +171,7 @@ def openie_with_retrieval(dataset: str, run_ner: bool, num_passages, llm: str, m
     # Loading files which would reduce API consumption
     aux_file_str = '_'.join(flags_present) + '*_' + model_name + f'_{num_passages}'
     aux_file_str = aux_file_str.replace('{}'.format(num_passages), '*')
-    auxiliary_files = glob('output/openie{}_results_{}.json'.format(dataset, aux_file_str))
+    auxiliary_files = glob('output/openie{}_results_{}.json'.format(dataset_name, aux_file_str))
     auxiliary_file_exists = False
     if len(auxiliary_files) > 0:
         for auxiliary_file in auxiliary_files:
@@ -243,9 +219,54 @@ def openie_with_retrieval(dataset: str, run_ner: bool, num_passages, llm: str, m
                            "num_tokens": lm_total_tokens,
                            "approx_total_tokens": approx_total_tokens,
                            }
-        output_path = 'output/openie{}_results_{}.json'.format(dataset, arg_str)
+        output_path = 'output/openie{}_results_{}.json'.format(dataset_name, arg_str)
         json.dump(extra_info_json, open(output_path, 'w'))
         print('OpenIE saved to', output_path)
+
+
+def load_corpus(dataset_name: str, model_name: str, num_passages, run_ner):
+    corpus = json.load(open(f'data/{dataset_name}_corpus.json', 'r'))
+    if 'hotpotqa' in dataset_name:
+        keys = list(corpus.keys())
+        retrieval_corpus = [{'idx': i, 'passage': key + '\n' + ''.join(corpus[key])} for i, key in enumerate(keys)]
+    else:
+        retrieval_corpus = corpus
+        for document in retrieval_corpus:
+            document['passage'] = document['title'] + '\n' + document['text']
+    dataset_name = '_' + dataset_name
+    if num_passages == 'all':
+        num_passages = len(retrieval_corpus)
+    else:
+        try:
+            num_passages = int(num_passages)
+        except:
+            assert False, "Set 'num_passages' to an integer or 'all'"
+    flag_names = ['ner']
+    flags_present = [flag_names[i] for i, flag in enumerate([run_ner]) if flag]
+    if len(flags_present) > 0:
+        arg_str = '_'.join(flags_present) + '_' + model_name.replace('/', '_') + f'_{num_passages}'
+    else:
+        arg_str = model_name.replace('/', '_') + f'_{num_passages}'
+    print(arg_str)
+    return arg_str, dataset_name, flags_present, num_passages, retrieval_corpus
+
+
+def openie_for_corpus_openai_batch(dataset_name: str, run_ner: bool, num_passages, model_name: str):
+    arg_str, dataset_name, flags_present, num_passages, retrieval_corpus = load_corpus(dataset_name, model_name, num_passages, run_ner)
+
+    # output corpus to a file to upload to OpenAI
+    corpus_jsonl_path = f'output/{arg_str}.jsonl'
+    jsonl_contents = []
+    for i, passage in enumerate(retrieval_corpus):
+        jsonl_contents.append(json.dumps({"custom_id": i, "method": "POST", "url": "/v1/chat/completions", "messages": [],
+                                          "max_tokens": 4096}))
+    with open(corpus_jsonl_path, 'w') as f:
+        f.write('\n'.join(jsonl_contents))
+
+    from openai import OpenAI
+    client = OpenAI()
+    batch_input_file = client.files.create(file=open(corpus_jsonl_path, 'rb'), purpose='batch')
+    # todo to complete
 
 
 if __name__ == '__main__':
@@ -256,6 +277,10 @@ if __name__ == '__main__':
     parser.add_argument('--llm', type=str, default='openai', help="LLM, e.g., 'openai' or 'together'")
     parser.add_argument('--model_name', type=str, default='gpt-3.5-turbo-1106', help='Specific model name')
     parser.add_argument('--num_processes', type=int, default=10)
+    parser.add_argument('--openai_batch', action='store_true', help='Use OpenAI batch API, if this is set, `num_processes`, `llm` are ignored.')
 
     args = parser.parse_args()
-    openie_with_retrieval(args.dataset, args.run_ner, args.num_passages, args.llm, args.model_name, args.num_processes)
+    if args.openai_batch:
+        openie_for_corpus_openai_batch(args.dataset, args.run_ner, args.num_passages, args.model_name)
+    else:
+        openie_for_corpus(args.dataset, args.run_ner, args.num_passages, args.llm, args.model_name, args.num_processes)

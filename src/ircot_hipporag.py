@@ -1,4 +1,8 @@
 import sys
+from collections import defaultdict
+
+from langchain.globals import set_llm_cache
+from langchain_community.cache import SQLiteCache
 
 sys.path.append('.')
 
@@ -46,7 +50,7 @@ def parse_prompt(file_path):
 
 
 def retrieve_step(query: str, corpus, top_k: int, rag: HippoRAG, dataset: str):
-    ranks, scores, logs = rag.rank_docs(query, top_k=top_k)
+    ranks, scores, logs = rag.rank_docs(query, doc_top_k=top_k)
     if dataset in ['hotpotqa', 'hotpotqa_train']:
         retrieved_passages = []
         for rank in ranks:
@@ -115,7 +119,7 @@ if __name__ == '__main__':
     parser.add_argument('--retriever', type=str, default='facebook/contriever')
     parser.add_argument('--prompt', type=str)
     parser.add_argument('--num_demo', type=int, default=1, help='the number of demo samples')
-    parser.add_argument('--max_steps', type=int)
+    parser.add_argument('--max_steps', type=int, required=True, default=1)
     parser.add_argument('--top_k', type=int, default=8, help='retrieving k documents at each step')
     parser.add_argument('--doc_ensemble', type=str, default='t')
     parser.add_argument('--dpr_only', type=str, default='f')
@@ -126,6 +130,8 @@ if __name__ == '__main__':
     parser.add_argument('--damping', type=float, default=0.1)
     parser.add_argument('--force_retry', action='store_true')
     args = parser.parse_args()
+
+    set_llm_cache(SQLiteCache(database_path=".ircot_hipporag.db"))
 
     # Please set environment variable OPENAI_API_KEY
     doc_ensemble = string_to_bool(args.doc_ensemble)
@@ -145,6 +151,7 @@ if __name__ == '__main__':
     corpus = json.load(open(f'data/{args.dataset}_corpus.json', 'r'))
     max_steps = args.max_steps
 
+    assert max_steps
     if max_steps > 1:
         if 'hotpotqa' in args.dataset:
             prompt_path = 'data/ircot_prompts/hotpotqa/gold_with_3_distractors_context_cot_qa_codex.txt'
@@ -207,6 +214,7 @@ if __name__ == '__main__':
             print(f'R@{k}: {total_recall[k] / len(results):.4f} ', end='')
         print()
 
+    metrics = defaultdict(float)
     for sample_idx, sample in tqdm(enumerate(data), total=len(data), desc='IRCoT retrieval'):  # for each sample
         if args.dataset in ['hotpotqa', '2wikimultihopqa', 'hotpotqa_train']:
             sample_id = sample['_id']
@@ -217,12 +225,12 @@ if __name__ == '__main__':
             continue
 
         query = sample['question']
-        all_logs = {}
+        logs_for_all_steps = {}
 
         retrieved_passages, scores, logs = retrieve_step(query, corpus, args.top_k, rag, args.dataset)
 
         it = 1
-        all_logs[it] = logs
+        logs_for_all_steps[it] = logs
 
         thoughts = []
         retrieved_passages_dict = {passage: score for passage, score in zip(retrieved_passages, scores)}
@@ -235,7 +243,7 @@ if __name__ == '__main__':
             it += 1
 
             new_retrieved_passages, new_scores, logs = retrieve_step(new_thought, corpus, args.top_k, rag, args.dataset)
-            all_logs[it] = logs
+            logs_for_all_steps[it] = logs
 
             for passage, score in zip(new_retrieved_passages, new_scores):
                 if passage in retrieved_passages_dict:
@@ -260,7 +268,7 @@ if __name__ == '__main__':
             retrieved_items = [passage.split('\n')[0].strip() for passage in retrieved_passages]
         else:
             gold_passages = [item for item in sample['paragraphs'] if item['is_supporting']]
-            gold_items = set([item['title'] + '\n' + item['text'] for item in gold_passages])
+            gold_items = set([item['title'] + '\n' + (item['text'] if 'text' in item else item['paragraph_text']) for item in gold_passages])
             retrieved_items = retrieved_passages
 
         # calculate metrics
@@ -275,8 +283,9 @@ if __name__ == '__main__':
 
         # record results
         phrases_in_gold_docs = []
-        for gold_item in gold_items:
-            phrases_in_gold_docs.append(rag.get_phrases_in_doc_str(gold_item))
+        for gold_passage in gold_passages:
+            passage_content = gold_passage['text'] if 'text' in gold_passage else gold_passage['paragraph_text']
+            phrases_in_gold_docs.append(rag.get_phrases_in_doc_by_str(passage_content))  # todo to check
 
         if args.dataset in ['hotpotqa', '2wikimultihopqa', 'hotpotqa_train']:
             sample['supporting_docs'] = [item for item in sample['supporting_facts']]
@@ -288,17 +297,38 @@ if __name__ == '__main__':
         sample['retrieved_scores'] = scores[:10]
         sample['nodes_in_gold_doc'] = phrases_in_gold_docs
         sample['recall'] = recall
-        first_log = all_logs[1]
-        for key in first_log.keys():
-            sample[key] = first_log[key]
+        logs_for_first_step = logs_for_all_steps[1]
+        for key in logs_for_first_step.keys():
+            sample[key] = logs_for_first_step[key]
         sample['thoughts'] = thoughts
-        results.append(sample)
 
+        # calculate node precision/recall/Hit
+        linked_nodes = set()
+        for link in logs_for_first_step['linked_node_scores']:
+            if isinstance(link, list):
+                linked_nodes.add(link[1])
+        oracle_nodes = set()
+        for passage_phrases in phrases_in_gold_docs:
+            for phrase in passage_phrases:
+                oracle_nodes.add(phrase)
+        node_precision = len(linked_nodes.intersection(oracle_nodes)) / len(linked_nodes) if len(linked_nodes) > 0 else 0.0
+        node_recall = len(linked_nodes.intersection(oracle_nodes)) / len(oracle_nodes) if len(oracle_nodes) > 0 else 0.0
+        node_hit = 1.0 if len(linked_nodes.intersection(oracle_nodes)) > 0 else 0.0
+        metrics['node_precision'] += node_precision
+        metrics['node_recall'] += node_recall
+        metrics['node_hit'] += node_hit
+
+        results.append(sample)
         if (sample_idx + 1) % 10 == 0:
             with open(output_path, 'w') as f:
                 json.dump(results, f)
 
-    # save results
+    # show metrics
+    for key in metrics.keys():
+        metrics[key] /= len(data)
+        print(round(metrics[key], 3))
+
+        # save results
     with open(output_path, 'w') as f:
         json.dump(results, f)
     print(f'Saved {len(results)} results to {output_path}')

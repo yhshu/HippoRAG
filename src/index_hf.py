@@ -9,13 +9,13 @@ from langchain_community.cache import SQLiteCache
 from src.RetrievalModule import RetrievalModule
 from src.create_graph import create_graph
 from src.named_entity_extraction_parallel import ner_parallel
-from src.openie_with_retrieval_option_parallel import openie_with_retrieval
+from src.openie_with_retrieval_option_parallel import openie_for_corpus
 
 
 def index_with_huggingface(dataset_name: str, run_ner: bool, num_passages, llm_provider: str, extractor: str, retriever: str,
                            num_thread, syn_thresh=0.8, langchain_db='.langchain.db'):
     set_llm_cache(SQLiteCache(database_path=langchain_db))
-    openie_with_retrieval(dataset_name, run_ner, num_passages, llm_provider, extractor, num_thread)
+    openie_for_corpus(dataset_name, run_ner, num_passages, llm_provider, extractor, num_thread)
     ner_parallel(dataset_name, llm_provider, extractor, num_thread)
 
     extraction_type = 'ner'

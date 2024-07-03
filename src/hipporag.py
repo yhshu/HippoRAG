@@ -214,7 +214,7 @@ class HippoRAG:
         except Exception as e:
             return -1
 
-    def rank_docs(self, query: str, doc_top_k=10, link_top_k=3, linking='query_to_node', oracle_triples=None):
+    def rank_docs(self, query: str, doc_top_k=10, link_top_k=3, linking='ner_to_node', oracle_triples=None):
         """
         Rank documents based on the query
         @param query: the input phrase
@@ -397,6 +397,7 @@ class HippoRAG:
         self.corpus = json.load(open(self.corpus_path, 'r'))
         self.dataset_df = pd.DataFrame()
         self.dataset_df['paragraph'] = [p['title'] + '\n' + p['text'] for p in self.corpus]
+        self.dataset_df['idx'] = [p['idx'] if 'idx' in p else i for i, p in enumerate(self.corpus)]
 
     def load_index_files(self):
         index_file_pattern = 'output/openie_{}_results_{}_{}_*.json'.format(self.corpus_name, self.extraction_type, self.extraction_model_name_processed)
@@ -486,14 +487,24 @@ class HippoRAG:
         else:
             self.logger.error('Graph file not found: ' + graph_file_path)
 
-    def get_phrases_in_doc_str(self, doc: str):
+    def get_phrases_in_doc_by_str(self, doc: str):
         # find doc id from self.dataset_df
         try:
-            doc_id = self.dataset_df[self.dataset_df.paragraph == doc].index[0]
+            doc_id = self.dataset_df[self.dataset_df.paragraph.str.contains(doc, na=False)].index[0]
             phrase_ids = self.docs_to_phrases_mat[[doc_id], :].nonzero()[1].tolist()
             return [self.node_phrases[phrase_id] for phrase_id in phrase_ids]
-        except:
+        except Exception as e:
+            self.logger.exception('Error in getting phrases in doc: ' + str(e))
             return []
+
+    def get_phrase_in_doc_by_idx(self, doc_idx):
+        """
+        Using `idx` column in self.dataset_df to find the row and return the corresponding `paragraph` value
+        @param doc_idx:
+        @return:
+        """
+        phrase_ids = self.docs_to_phrases_mat[[doc_idx], :].nonzero()[1].tolist()
+        return [self.node_phrases[phrase_id] for phrase_id in phrase_ids]
 
     def build_graph(self):
 

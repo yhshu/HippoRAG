@@ -200,7 +200,7 @@ if __name__ == '__main__':
     qa_few_shot_samples = None
 
     for query in queries:
-        ranks, scores, logs = hipporag.rank_docs(query, top_k=10)
+        ranks, scores, logs = hipporag.rank_docs(query, doc_top_k=10)
         retrieved_passages = [hipporag.get_passage_by_idx(rank) for rank in ranks]
 
         response = qa_read(query, retrieved_passages, qa_few_shot_samples, hipporag.qa_model)

@@ -7,7 +7,7 @@ from src.colbertv2_indexing import colbertv2_graph_indexing
 from src.colbertv2_knn import colbertv2_retrieve_knn
 from src.create_graph import create_graph
 from src.named_entity_extraction_parallel import ner_parallel
-from src.openie_with_retrieval_option_parallel import openie_with_retrieval
+from src.openie_with_retrieval_option_parallel import openie_for_corpus
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -25,7 +25,7 @@ if __name__ == '__main__':
     extraction_type = 'ner'
 
     # Running Open Information Extraction
-    openie_with_retrieval(args.dataset, args.run_ner, args.num_passages, args.llm, args.extractor, args.num_thread)
+    openie_for_corpus(args.dataset, args.run_ner, args.num_passages, args.llm, args.extractor, args.num_thread)
     ner_parallel(args.dataset, args.llm, args.extractor, args.num_thread)
 
     # Creating ColBERT Graph

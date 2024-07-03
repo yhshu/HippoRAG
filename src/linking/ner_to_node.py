@@ -69,15 +69,17 @@ def link_ner_to_node(hipporag, link_top_k, candidate_phrases: list, prob_vectors
     for prob_vector in prob_vectors:
         mask = np.isnan(prob_vector)
         # phrase_id = np.argmax(prob_vector)  # the phrase with the highest similarity
-        linked_phrase = np.argmax(np.ma.masked_array(prob_vector, mask))
-        linked_phrases.append(candidate_phrases[linked_phrase])
-        max_scores.append(prob_vector[linked_phrase])
+        linked_phrase_id = np.argmax(np.ma.masked_array(prob_vector, mask))
+        linked_phrases.append(candidate_phrases[linked_phrase_id])
+        max_scores.append(prob_vector[linked_phrase_id])
 
+    sorted_query_ner_list = query_ner_list
     # choose link_top_k based on max_scores and get the corresponding linked_phrase_ids
     if link_top_k and isinstance(link_top_k, int):
-        top_k = np.argsort(max_scores)[::-1][:link_top_k]
-        linked_phrases = [linked_phrases[i] for i in top_k]
-        max_scores = [max_scores[i] for i in top_k]
+        top_k_indices = np.argsort(max_scores)[::-1][:link_top_k]
+        linked_phrases = [linked_phrases[i] for i in top_k_indices]
+        max_scores = [max_scores[i] for i in top_k_indices]
+        sorted_query_ner_list = [query_ner_list[i] for i in top_k_indices]
 
     # create a vector (num_phrase) with 1s at the indices of the linked phrases and 0s elsewhere
     # if node_specificity is True, it's not one-hot but a weight
@@ -98,7 +100,7 @@ def link_ner_to_node(hipporag, link_top_k, candidate_phrases: list, prob_vectors
             all_phrase_weights[phrase_id] = 1.0
 
     linking_score_map = {(query_phrase, linked_phrase): max_score
-                         for linked_phrase, max_score, query_phrase in zip(linked_phrases, max_scores, query_ner_list)}
+                         for linked_phrase, max_score, query_phrase in zip(linked_phrases, max_scores, sorted_query_ner_list)}
     return all_phrase_weights, linking_score_map
 
 
