@@ -17,8 +17,12 @@ def link_query_to_fact(hipporag: HippoRAG, query, candidate_triples: list, fact_
         candidate_fact_indices = np.argsort(query_fact_scores)[-30:][::-1].tolist()
         candidate_facts = [candidate_triples[i] for i in candidate_fact_indices]
         top_k_indices, top_k_facts = reranker.rerank('query_to_fact', query, candidate_fact_indices, candidate_facts, link_top_k)
+        rerank_log = {'facts_before_rerank': candidate_facts, 'facts_after_rerank': top_k_facts}
     else:
-        top_k_indices = np.argsort(query_fact_scores)[-link_top_k:][::-1].tolist()
+        if link_top_k is not None:
+            top_k_indices = np.argsort(query_fact_scores)[-link_top_k:][::-1].tolist()
+        else:
+            top_k_indices = np.argsort(query_fact_scores)[::-1].tolist()
         top_k_facts = [candidate_triples[i] for i in top_k_indices]
 
     for rank, f in enumerate(top_k_facts):
@@ -61,7 +65,10 @@ def link_query_to_fact(hipporag: HippoRAG, query, candidate_triples: list, fact_
         if link_top_k:
             # choose top ranked node in linking_score_map
             linking_score_map = dict(sorted(linking_score_map.items(), key=lambda x: x[1], reverse=True))
-        logs, sorted_doc_ids, sorted_scores = graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, query_doc_scores=None)
+        logs, sorted_doc_ids, sorted_scores = graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, query_doc_scores=query_doc_scores)
+
+    if rerank_model_name is not None:
+        logs['rerank'] = rerank_log
     return sorted_doc_ids, sorted_scores, logs
 
 

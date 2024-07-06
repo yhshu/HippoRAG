@@ -79,8 +79,7 @@ class LLMReranker(Reranker):
 
             top_logprobs = llm_logits_cache.get(query_to_fact_prompt.to_string())
             if top_logprobs is None:
-                chat_completion = self.model.invoke(query_to_fact_prompt.to_messages(), max_tokens=1, seed=1, logprobs=True, top_logprobs=20,
-                                                    logit_bias=logit_bais)
+                chat_completion = self.model.invoke(query_to_fact_prompt.to_messages(), max_tokens=1, seed=1, logprobs=True, top_logprobs=20, logit_bias=logit_bais)
                 top_logprobs = chat_completion.response_metadata['logprobs']['content'][0]['top_logprobs']
                 llm_logits_cache.set(query_to_fact_prompt.to_string(), top_logprobs)
 

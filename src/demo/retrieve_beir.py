@@ -111,8 +111,6 @@ def run_retrieve_beir(dataset_name: str, extraction_model: str, retrieval_model:
         ranks, scores, log = hipporag.rank_docs(query_text, doc_top_k=10, link_top_k=link_top_k, linking=linking, oracle_triples=oracle_triples)
 
         retrieved_docs = [corpus[r] for r in ranks]
-        run_dict['retrieved'][query_id] = {doc['idx']: score for doc, score in zip(retrieved_docs, scores)}
-        run_dict['log'][query_id] = log
         to_update_run = True
 
         if linking in ['ner_to_node', 'query_to_node', 'query_to_fact']:  # evaluate the recall of nodes from supporting documents
@@ -126,6 +124,7 @@ def run_retrieve_beir(dataset_name: str, extraction_model: str, retrieval_model:
             # get linked nodes
             linked_nodes = set()
             if log is not None and len(log):
+                log['nodes_in_supporting_doc'] = list(oracle_nodes)
                 for item in log['linked_node_scores']:
                     assert isinstance(item, list) or isinstance(item, str)
                     if isinstance(item, list):  # item: mention -> node phrase
@@ -144,6 +143,11 @@ def run_retrieve_beir(dataset_name: str, extraction_model: str, retrieval_model:
                 metrics['node_hit'] += node_hit
             else:
                 hipporag.logger.info(f'No linked nodes found for query {query_id}.')
+
+        log['query'] = query_text
+        run_dict['retrieved'][query_id] = {doc['idx']: score for doc, score in zip(retrieved_docs, scores)}
+        run_dict['log'][query_id] = log
+    # end each query
 
     if to_update_run:
         with open(run_output_path, 'w') as f:

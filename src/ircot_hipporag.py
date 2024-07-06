@@ -1,10 +1,11 @@
 import sys
+
+sys.path.append('.')
+
 from collections import defaultdict
 
 from langchain.globals import set_llm_cache
 from langchain_community.cache import SQLiteCache
-
-sys.path.append('.')
 
 import ipdb
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -49,9 +50,9 @@ def parse_prompt(file_path):
     return parsed_data
 
 
-def retrieve_step(query: str, corpus, top_k: int, rag: HippoRAG, dataset: str):
-    ranks, scores, logs = rag.rank_docs(query, doc_top_k=top_k)
-    if dataset in ['hotpotqa', 'hotpotqa_train']:
+def retrieve_step(query: str, corpus, top_k: int, hipporag: HippoRAG, dataset_name: str, linking='ner_to_node'):
+    ranks, scores, logs = hipporag.rank_docs(query, doc_top_k=top_k, link_top_k=None, linking=linking)
+    if dataset_name in ['hotpotqa', 'hotpotqa_train']:
         retrieved_passages = []
         for rank in ranks:
             key = list(corpus.keys())[rank]
@@ -117,6 +118,8 @@ if __name__ == '__main__':
     parser.add_argument('--llm', type=str, default='openai', help="LLM, e.g., 'openai' or 'together'")
     parser.add_argument('--llm_model', type=str, default='gpt-3.5-turbo-1106', help='Specific model name')
     parser.add_argument('--retriever', type=str, default='facebook/contriever')
+    parser.add_argument('--linking', type=str, default='ner_to_node', choices=['ner_to_node', 'query_to_node', 'query_to_fact'],
+                        help='linking method for the entry point of the graph')
     parser.add_argument('--prompt', type=str)
     parser.add_argument('--num_demo', type=int, default=1, help='the number of demo samples')
     parser.add_argument('--max_steps', type=int, required=True, default=1)
@@ -144,8 +147,10 @@ if __name__ == '__main__':
     else:
         colbert_configs = {'root': f'data/lm_vectors/colbert/{args.dataset}_{args.llm_model}', 'doc_index_name': 'nbits_2', 'phrase_index_name': 'nbits_2'}
 
-    rag = HippoRAG(args.dataset, args.llm, args.llm_model, args.retriever, doc_ensemble=doc_ensemble, node_specificity=not (args.wo_node_spec), sim_threshold=args.sim_threshold,
-                   colbert_config=colbert_configs, dpr_only=dpr_only, graph_alg=args.graph_alg, damping=args.damping, recognition_threshold=args.recognition_threshold)
+    hipporag = HippoRAG(args.dataset, extraction_model=args.llm, extraction_model_name=args.llm_model, graph_creating_retriever_name=args.retriever,
+                        linking_retriever_name=args.retriever,
+                        doc_ensemble=doc_ensemble, node_specificity=not (args.wo_node_spec), sim_threshold=args.sim_threshold,
+                        colbert_config=colbert_configs, dpr_only=dpr_only, graph_alg=args.graph_alg, damping=args.damping, recognition_threshold=args.recognition_threshold)
 
     data = json.load(open(f'data/{args.dataset}.json', 'r'))
     corpus = json.load(open(f'data/{args.dataset}_corpus.json', 'r'))
@@ -172,11 +177,11 @@ if __name__ == '__main__':
         dpr_only_str = 'hipporag'
 
     if args.graph_alg == 'ppr':
-        output_path = f'output/ircot/ircot_results_{args.dataset}_{dpr_only_str}_{rag.graph_creating_retriever_name_processed}_demo_{args.num_demo}_{llm_model_name_processed}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}_sim_thresh_{args.sim_threshold}'
+        output_path = f'output/ircot/ircot_results_{args.dataset}_{dpr_only_str}_{hipporag.graph_creating_retriever_name_processed}_demo_{args.num_demo}_{llm_model_name_processed}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}_sim_thresh_{args.sim_threshold}'
         if args.damping != 0.1:
             output_path += f'_damping_{args.damping}'
     else:
-        output_path = f'output/ircot/ircot_results_{args.dataset}_{dpr_only_str}_{rag.graph_creating_retriever_name_processed}_demo_{args.num_demo}_{llm_model_name_processed}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}_{args.graph_alg}_sim_thresh_{args.sim_threshold}'
+        output_path = f'output/ircot/ircot_results_{args.dataset}_{dpr_only_str}_{hipporag.graph_creating_retriever_name_processed}_demo_{args.num_demo}_{llm_model_name_processed}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}_{args.graph_alg}_sim_thresh_{args.sim_threshold}'
 
     if args.wo_node_spec:
         output_path += 'wo_node_spec'
@@ -227,7 +232,7 @@ if __name__ == '__main__':
         query = sample['question']
         logs_for_all_steps = {}
 
-        retrieved_passages, scores, logs = retrieve_step(query, corpus, args.top_k, rag, args.dataset)
+        retrieved_passages, scores, logs = retrieve_step(query, corpus, args.top_k, hipporag, args.dataset, args.linking)
 
         it = 1
         logs_for_all_steps[it] = logs
@@ -242,7 +247,7 @@ if __name__ == '__main__':
                 break
             it += 1
 
-            new_retrieved_passages, new_scores, logs = retrieve_step(new_thought, corpus, args.top_k, rag, args.dataset)
+            new_retrieved_passages, new_scores, logs = retrieve_step(new_thought, corpus, args.top_k, hipporag, args.dataset, args.linking)
             logs_for_all_steps[it] = logs
 
             for passage, score in zip(new_retrieved_passages, new_scores):
@@ -285,7 +290,7 @@ if __name__ == '__main__':
         phrases_in_gold_docs = []
         for gold_passage in gold_passages:
             passage_content = gold_passage['text'] if 'text' in gold_passage else gold_passage['paragraph_text']
-            phrases_in_gold_docs.append(rag.get_phrases_in_doc_by_str(passage_content))  # todo to check
+            phrases_in_gold_docs.append(hipporag.get_phrases_in_doc_by_str(passage_content))  # todo to check
 
         if args.dataset in ['hotpotqa', '2wikimultihopqa', 'hotpotqa_train']:
             sample['supporting_docs'] = [item for item in sample['supporting_facts']]
@@ -326,9 +331,9 @@ if __name__ == '__main__':
     # show metrics
     for key in metrics.keys():
         metrics[key] /= len(data)
-        print(round(metrics[key], 3))
+        print(key, round(metrics[key], 3))
 
-        # save results
+    # save results
     with open(output_path, 'w') as f:
         json.dump(results, f)
     print(f'Saved {len(results)} results to {output_path}')

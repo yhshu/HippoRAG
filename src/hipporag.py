@@ -46,8 +46,8 @@ class HippoRAG:
 
     def __init__(self, corpus_name='hotpotqa', extraction_model='openai', extraction_model_name='gpt-3.5-turbo-1106',
                  graph_creating_retriever_name='facebook/contriever', extraction_type='ner', graph_type='facts_and_sim', sim_threshold=0.8, node_specificity=True,
-                 doc_ensemble=False,
-                 colbert_config=None, dpr_only=False, graph_alg='ppr', damping=0.1, recognition_threshold=0.9, corpus_path=None,
+                 doc_ensemble=False, colbert_config=None, dpr_only=False,
+                 graph_alg='ppr', damping=0.1, recognition_threshold=0.9, corpus_path=None,
                  qa_model: LangChainModel = None, linking_retriever_name=None):
         """
         @param corpus_name: Name of the dataset to use for retrieval
@@ -490,7 +490,7 @@ class HippoRAG:
     def get_phrases_in_doc_by_str(self, doc: str):
         # find doc id from self.dataset_df
         try:
-            doc_id = self.dataset_df[self.dataset_df.paragraph.str.contains(doc, na=False)].index[0]
+            doc_id = self.dataset_df[self.dataset_df.paragraph.str.contains(doc, regex=False, na=False)].index[0]
             phrase_ids = self.docs_to_phrases_mat[[doc_id], :].nonzero()[1].tolist()
             return [self.node_phrases[phrase_id] for phrase_id in phrase_ids]
         except Exception as e:

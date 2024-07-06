@@ -75,7 +75,7 @@ def link_ner_to_node(hipporag, link_top_k, candidate_phrases: list, prob_vectors
 
     sorted_query_ner_list = query_ner_list
     # choose link_top_k based on max_scores and get the corresponding linked_phrase_ids
-    if link_top_k and isinstance(link_top_k, int):
+    if link_top_k is not None and isinstance(link_top_k, int):
         top_k_indices = np.argsort(max_scores)[::-1][:link_top_k]
         linked_phrases = [linked_phrases[i] for i in top_k_indices]
         max_scores = [max_scores[i] for i in top_k_indices]
