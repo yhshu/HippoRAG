@@ -26,8 +26,8 @@ export PATH=$PATH:/path/HippoRAG/hipporag/bin
 Setup LLM API keys: TOGETHER_API_KEY is optional and set it when you want to use their open-source models (e.g., Llama-3).
 
 ```shell
-export OPENAI_API_KEY='Add your own OpenAI API key here.'
-export TOGETHER_API_KEY='Add your own TogetherAI API key here.'
+export OPENAI_API_KEY="Add your own OpenAI API key here."
+export TOGETHER_API_KEY="Add your own TogetherAI API key here."
 ```
 
 To use ColBERTv2, download the pre-trained [checkpoint](https://downloads.cs.stanford.edu/nlp/data/colbert/colbertv2/colbertv2.0.tar.gz) and put it under `exp/colbertv2.0`.
@@ -122,10 +122,11 @@ you don't have to index with both ColBERTv2 and Contriever. Choose one of them b
 DATA=sample
 LLM=gpt-3.5-turbo-1106
 SYNONYM_THRESH=0.8
-GPUS=0,1,2,3
 LLM_API=openai # LLM API provider e.g., 'openai', 'together', see 'src/langchain_util.py'
+GPUS=0
 
-bash src/setup_hipporag_colbert.sh $DATA $LLM $GPUS $SYNONYM_THRESH $LLM_API
+export CUDA_VISIBLE_DEVICES=0
+python3 index_colbertv2.py --dataset $DATA --run_ner --llm $LLM_API --extractor $LLM --syn_thresh $SYNONYM_THRESH
 ```
 
 #### Indexing with HuggingFace Retrieval Encoder for Synonymy Edges (i.e. Contriever)
@@ -135,10 +136,12 @@ DATA=sample
 HF_RETRIEVER=facebook/contriever
 LLM=gpt-3.5-turbo-1106
 SYNONYM_THRESH=0.8
-GPUS=0,1,2,3
 LLM_API=openai # LLM API provider e.g., 'openai', 'together', see 'src/langchain_util.py'
+GPUS=0
 
-bash src/setup_hipporag.sh $DATA $HF_RETRIEVER $LLM $GPUS $SYNONYM_THRESH $LLM_API
+export CUDA_VISIBLE_DEVICES=0
+python3 index_hf.py --dataset $DATA --run_ner --llm $LLM_API --extractor $LLM --retriever $HF_RETRIEVER --syn_thresh $SYNONYM_THRESH
+
 ```
 
 ### Retrieval

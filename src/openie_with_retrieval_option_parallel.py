@@ -251,24 +251,6 @@ def load_corpus(dataset_name: str, model_name: str, num_passages, run_ner):
     return arg_str, dataset_name, flags_present, num_passages, retrieval_corpus
 
 
-def openie_for_corpus_openai_batch(dataset_name: str, run_ner: bool, num_passages, model_name: str):
-    arg_str, dataset_name, flags_present, num_passages, retrieval_corpus = load_corpus(dataset_name, model_name, num_passages, run_ner)
-
-    # output corpus to a file to upload to OpenAI
-    corpus_jsonl_path = f'output/{arg_str}.jsonl'
-    jsonl_contents = []
-    for i, passage in enumerate(retrieval_corpus):
-        jsonl_contents.append(json.dumps({"custom_id": i, "method": "POST", "url": "/v1/chat/completions", "messages": [],
-                                          "max_tokens": 4096}))
-    with open(corpus_jsonl_path, 'w') as f:
-        f.write('\n'.join(jsonl_contents))
-
-    from openai import OpenAI
-    client = OpenAI()
-    batch_input_file = client.files.create(file=open(corpus_jsonl_path, 'rb'), purpose='batch')
-    # todo to complete
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str)
@@ -277,10 +259,6 @@ if __name__ == '__main__':
     parser.add_argument('--llm', type=str, default='openai', help="LLM, e.g., 'openai' or 'together'")
     parser.add_argument('--model_name', type=str, default='gpt-3.5-turbo-1106', help='Specific model name')
     parser.add_argument('--num_processes', type=int, default=10)
-    parser.add_argument('--openai_batch', action='store_true', help='Use OpenAI batch API, if this is set, `num_processes`, `llm` are ignored.')
 
     args = parser.parse_args()
-    if args.openai_batch:
-        openie_for_corpus_openai_batch(args.dataset, args.run_ner, args.num_passages, args.model_name)
-    else:
-        openie_for_corpus(args.dataset, args.run_ner, args.num_passages, args.llm, args.model_name, args.num_processes)
+    openie_for_corpus(args.dataset, args.run_ner, args.num_passages, args.llm, args.model_name, args.num_processes)

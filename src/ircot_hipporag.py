@@ -1,4 +1,5 @@
 import sys
+from typing import Union
 
 sys.path.append('.')
 
@@ -50,8 +51,8 @@ def parse_prompt(file_path):
     return parsed_data
 
 
-def retrieve_step(query: str, corpus, top_k: int, hipporag: HippoRAG, dataset_name: str, linking='ner_to_node'):
-    ranks, scores, logs = hipporag.rank_docs(query, doc_top_k=top_k, link_top_k=None, linking=linking)
+def retrieve_step(query: str, corpus, top_k: int, hipporag: HippoRAG, dataset_name: str, link_top_k: Union[None, int], linking='ner_to_node'):
+    ranks, scores, logs = hipporag.rank_docs(query, doc_top_k=top_k, link_top_k=link_top_k, linking=linking)
     if dataset_name in ['hotpotqa', 'hotpotqa_train']:
         retrieved_passages = []
         for rank in ranks:
@@ -118,12 +119,14 @@ if __name__ == '__main__':
     parser.add_argument('--llm', type=str, default='openai', help="LLM, e.g., 'openai' or 'together'")
     parser.add_argument('--llm_model', type=str, default='gpt-3.5-turbo-1106', help='Specific model name')
     parser.add_argument('--retriever', type=str, default='facebook/contriever')
+    parser.add_argument('--linking_model', type=str, default='facebook/contriever')
     parser.add_argument('--linking', type=str, default='ner_to_node', choices=['ner_to_node', 'query_to_node', 'query_to_fact'],
                         help='linking method for the entry point of the graph')
     parser.add_argument('--prompt', type=str)
     parser.add_argument('--num_demo', type=int, default=1, help='the number of demo samples')
     parser.add_argument('--max_steps', type=int, required=True, default=1)
     parser.add_argument('--top_k', type=int, default=8, help='retrieving k documents at each step')
+    parser.add_argument('--link_top_k', type=int, help='the number of linked nodes at each retrieval step')
     parser.add_argument('--doc_ensemble', type=str, default='t')
     parser.add_argument('--dpr_only', type=str, default='f')
     parser.add_argument('--graph_alg', type=str, default='ppr')
@@ -135,6 +138,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     set_llm_cache(SQLiteCache(database_path=".ircot_hipporag.db"))
+
+    # check args
+    if args.linking in ['query_to_node', 'query_to_fact']:
+        assert args.link_top_k, 'link_top_k should be provided for query_to_node or query_to_fact'
 
     # Please set environment variable OPENAI_API_KEY
     doc_ensemble = string_to_bool(args.doc_ensemble)
@@ -148,7 +155,7 @@ if __name__ == '__main__':
         colbert_configs = {'root': f'data/lm_vectors/colbert/{args.dataset}_{args.llm_model}', 'doc_index_name': 'nbits_2', 'phrase_index_name': 'nbits_2'}
 
     hipporag = HippoRAG(args.dataset, extraction_model=args.llm, extraction_model_name=args.llm_model, graph_creating_retriever_name=args.retriever,
-                        linking_retriever_name=args.retriever,
+                        linking_retriever_name=args.linking_model,
                         doc_ensemble=doc_ensemble, node_specificity=not (args.wo_node_spec), sim_threshold=args.sim_threshold,
                         colbert_config=colbert_configs, dpr_only=dpr_only, graph_alg=args.graph_alg, damping=args.damping, recognition_threshold=args.recognition_threshold)
 
@@ -176,16 +183,13 @@ if __name__ == '__main__':
     else:
         dpr_only_str = 'hipporag'
 
-    if args.graph_alg == 'ppr':
-        output_path = f'output/ircot/ircot_results_{args.dataset}_{dpr_only_str}_{hipporag.graph_creating_retriever_name_processed}_demo_{args.num_demo}_{llm_model_name_processed}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}_sim_thresh_{args.sim_threshold}'
-        if args.damping != 0.1:
-            output_path += f'_damping_{args.damping}'
-    else:
-        output_path = f'output/ircot/ircot_results_{args.dataset}_{dpr_only_str}_{hipporag.graph_creating_retriever_name_processed}_demo_{args.num_demo}_{llm_model_name_processed}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}_{args.graph_alg}_sim_thresh_{args.sim_threshold}'
+    output_path = (f'output/ircot/ircot_results_{args.dataset}_{dpr_only_str}_R_{hipporag.graph_creating_retriever_name_processed}_L_{hipporag.linking_retriever_name_processed}'
+                   f'_demo_{args.num_demo}_E_{llm_model_name_processed}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}_{args.graph_alg}_damping_{args.damping}_sim_thresh_{args.sim_threshold}')
 
     if args.wo_node_spec:
         output_path += 'wo_node_spec'
-
+    if args.link_top_k:
+        output_path += f'_LT_{args.link_top_k}'
     output_path += '.json'
 
     k_list = [1, 2, 5, 10, 15, 20, 30, 40, 50, 80, 100]
@@ -232,7 +236,7 @@ if __name__ == '__main__':
         query = sample['question']
         logs_for_all_steps = {}
 
-        retrieved_passages, scores, logs = retrieve_step(query, corpus, args.top_k, hipporag, args.dataset, args.linking)
+        retrieved_passages, scores, logs = retrieve_step(query, corpus, args.top_k, hipporag, args.dataset, args.link_top_k, args.linking)
 
         it = 1
         logs_for_all_steps[it] = logs
@@ -247,7 +251,7 @@ if __name__ == '__main__':
                 break
             it += 1
 
-            new_retrieved_passages, new_scores, logs = retrieve_step(new_thought, corpus, args.top_k, hipporag, args.dataset, args.linking)
+            new_retrieved_passages, new_scores, logs = retrieve_step(new_thought, corpus, args.top_k, hipporag, args.dataset, args.link_top_k, args.linking)
             logs_for_all_steps[it] = logs
 
             for passage, score in zip(new_retrieved_passages, new_scores):
@@ -312,6 +316,8 @@ if __name__ == '__main__':
         for link in logs_for_first_step['linked_node_scores']:
             if isinstance(link, list):
                 linked_nodes.add(link[1])
+            elif isinstance(link, str):
+                linked_nodes.add(link)
         oracle_nodes = set()
         for passage_phrases in phrases_in_gold_docs:
             for phrase in passage_phrases:

@@ -4,6 +4,7 @@ import os
 import _pickle as pickle
 from collections import defaultdict
 from glob import glob
+from typing import List, Dict
 
 import igraph as ig
 import numpy as np
@@ -261,7 +262,7 @@ class HippoRAG:
             doc_rank_logs, sorted_doc_ids, sorted_scores = graph_search_with_entities(self, query_ner_list, all_phrase_weights, linking_score_map, query_doc_scores)
 
         elif oracle_triples and linking == 'query_to_node':
-            from src.linking.query_to_node import graph_search_with_entities
+            from src.linking import graph_search_with_entities
 
             oracle_node_phrases = set()
             for t in oracle_triples:
@@ -329,7 +330,8 @@ class HippoRAG:
             doc_rank_logs, sorted_doc_ids, sorted_scores = graph_search_with_entities(self, query_ner_list, all_phrase_weights, linking_score_map, query_doc_scores)
 
         elif linking == 'query_to_node' or (oracle_triples is not None and len(oracle_triples) == 0):
-            from src.linking.query_to_node import link_node_by_dpr, graph_search_with_entities
+            from src.linking.query_to_node import link_node_by_dpr
+            from src.linking import graph_search_with_entities
             if 'colbertv2' in self.linking_retriever_name:
                 pass  # todo
             else:
@@ -451,14 +453,20 @@ class HippoRAG:
         except:
             self.logger.exception('Node pair to edge label dict not found: ' + node_pair_to_edge_label_path)
 
-        self.triplet_facts = list(self.triplet_fact_to_id_dict.keys())
-        self.triplet_facts = [self.triplet_facts[i] for i in np.argsort(list(self.triplet_fact_to_id_dict.values()))]
+        self.triplet_facts: List = list(self.triplet_fact_to_id_dict.keys())
+        self.triplet_facts: List = [self.triplet_facts[i] for i in np.argsort(list(self.triplet_fact_to_id_dict.values()))]
         self.triplet_facts_str_list = [str(fact) for fact in self.triplet_facts]
-        self.node_phrases = np.array(list(self.kb_node_phrase_to_id.keys()))[np.argsort(list(self.kb_node_phrase_to_id.values()))]
+        self.node_phrases: np.ndarray = np.array(list(self.kb_node_phrase_to_id.keys()))[np.argsort(list(self.kb_node_phrase_to_id.values()))]
 
-        self.docs_to_facts = pickle.load(open(
+        self.docs_to_facts: Dict = pickle.load(open(
             'output/{}_{}_graph_doc_to_facts_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type, self.phrase_type,
                                                                        self.extraction_type, self.version), 'rb'))  # doc id, fact id -> frequency (mostly 1)
+        self.fact_to_docs: Dict = defaultdict(set)
+        for doc_id_fact_id in self.docs_to_facts:
+            corpus_id = doc_id_fact_id[0]
+            fact_id = doc_id_fact_id[1]
+            self.fact_to_docs[fact_id].add(corpus_id)
+
         self.facts_to_phrases = pickle.load(open(
             'output/{}_{}_graph_facts_to_phrases_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type, self.phrase_type,
                                                                            self.extraction_type, self.version), 'rb'))  # fact id, phrase id -> frequency (mostly 1)
