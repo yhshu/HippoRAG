@@ -116,8 +116,7 @@ class RankGPT(Reranker):
     https://arxiv.org/pdf/2304.09542
     """
 
-    def rerank(self, task: str, query, candidate_indices, candidate_items, top_k=None):
-
+    def rerank(self, task: str, query, candidate_indices, candidate_items, top_k=None, window_size=4, step_size=2):
         def parse_numbers(s):
             try:
                 numbers = re.findall(r'\[(\d+)\]', s)
@@ -125,30 +124,49 @@ class RankGPT(Reranker):
                 return numbers
             except Exception as e:
                 print('parse_numbers exception', e)
-                return [i for i in range(len(candidate_items))]
+                return [i for i in range(len(window_items))]
 
         if task == 'query_to_fact':
             assert len(candidate_indices) == len(candidate_items)
-            messages = [
-                SystemMessage("You are RankGPT, an intelligent assistant that can rank facts based on their relevancy to the query."),
-                HumanMessage(f"I will provide you with {len(candidate_items)} facts, each indicated by number indicated by number identifier []. "
-                             f"Rank them based on their relevance to query: {query}"),
-                AIMessage("Okay, please provide the facts"),
-            ]
-            for i, item in enumerate(candidate_items):
-                messages.append(HumanMessage(f"[{i}] {item}"))
-                messages.append(AIMessage(f"Received fact [{i}]"))
 
-            messages.append(HumanMessage(f"Search Query: {query}\nRank the {len(candidate_items)} facts above based on their relevance to the search query. "
-                                         "The facts should be listed in descending order using identifiers, "
-                                         "and the most relevant facts should be listed first, and the output format should be [] > [], e.g., [1] > [2]. "
-                                         "Only respond the ranking results, do not say any word or explain."))
-            completion = self.model.invoke(messages)
-            content = completion.content
-            # parse content to get a ordered list of indices []
-            indices = parse_numbers(content)
+            # Initialize the result list with the original order
+            result_indices = list(range(len(candidate_items)))
 
-            # reorder candidates based on indices
-            sorted_candidate_indices = [candidate_indices[i] for i in indices]
-            sorted_candidate_items = [candidate_items[i] for i in indices]
+            # Process the passages in reverse order using sliding windows
+            for start in range(len(candidate_items) - window_size, -1, -step_size):
+                end = start + window_size
+                window_items = candidate_items[start:end]
+                window_indices = list(range(start, end))
+
+                messages = [
+                    SystemMessage("You are RankGPT, an intelligent assistant that can rank facts based on their relevancy to the query."),
+                    HumanMessage(f"I will provide you with {len(window_items)} facts, each indicated by number identifier []. "
+                                 f"Rank them based on their relevance to query: {query}"),
+                    AIMessage("Okay, please provide the facts"),
+                ]
+
+                for i, item in enumerate(window_items):
+                    messages.append(HumanMessage(f"[{i}] {item}"))
+                    messages.append(AIMessage(f"Received fact [{i}]"))
+
+                messages.append(HumanMessage(f"Search Query: {query}\nRank the {len(window_items)} facts above based on their relevance to the search query. "
+                                             "The facts should be listed in descending order using identifiers, "
+                                             "and the most relevant facts should be listed first, and the output format should be [] > [], e.g., [1] > [2]. "
+                                             "Only respond the ranking results, do not say any word or explain."))
+
+                completion = self.model.invoke(messages)
+                content = completion.content
+                local_indices = parse_numbers(content)
+
+                # Update the result list based on the local ranking
+                global_indices = [window_indices[i] for i in local_indices]
+                for i, global_index in enumerate(global_indices):
+                    if global_index in result_indices:
+                        result_indices.remove(global_index)
+                    result_indices.insert(i, global_index)
+
+            # Reorder candidates based on the final ranking
+            sorted_candidate_indices = [candidate_indices[i] for i in result_indices]
+            sorted_candidate_items = [candidate_items[i] for i in result_indices]
+
             return sorted_candidate_indices[:top_k], sorted_candidate_items[:top_k]

@@ -225,6 +225,7 @@ def openie_for_corpus(dataset_name: str, run_ner: bool, num_passages, llm: str, 
 
 
 def load_corpus(dataset_name: str, model_name: str, num_passages, run_ner):
+    model_name_processed = model_name.replace('/', '_')
     corpus = json.load(open(f'data/{dataset_name}_corpus.json', 'r'))
     if 'hotpotqa' in dataset_name:
         keys = list(corpus.keys())
@@ -244,9 +245,9 @@ def load_corpus(dataset_name: str, model_name: str, num_passages, run_ner):
     flag_names = ['ner']
     flags_present = [flag_names[i] for i, flag in enumerate([run_ner]) if flag]
     if len(flags_present) > 0:
-        arg_str = '_'.join(flags_present) + '_' + model_name.replace('/', '_') + f'_{num_passages}'
+        arg_str = '_'.join(flags_present) + '_' + model_name_processed + f'_{num_passages}'
     else:
-        arg_str = model_name.replace('/', '_') + f'_{num_passages}'
+        arg_str = model_name_processed + f'_{num_passages}'
     print(arg_str)
     return arg_str, dataset_name, flags_present, num_passages, retrieval_corpus
 

@@ -2,7 +2,7 @@ import numpy as np
 
 from src.hipporag import HippoRAG, get_query_instruction_for_tasks
 from src.linking import graph_search_with_entities
-from src.rerank import RankGPT
+from src.rerank import RankGPT, LLMLogitsReranker
 
 
 def link_query_to_fact(hipporag: HippoRAG, query, candidate_triples: list, fact_embeddings, link_top_k, graph_search=True, rerank_model_name='gpt-3.5-turbo'):
