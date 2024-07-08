@@ -1,7 +1,8 @@
 import sys
+sys.path.append('.')
+
 from concurrent.futures import ThreadPoolExecutor
 
-sys.path.append('.')
 
 from langchain_community.chat_models import ChatOllama
 
@@ -58,7 +59,7 @@ def named_entity_recognition(passage: str, client, max_retry=5):
                 named_entities = response_content['named_entities']
             done = True
         except Exception as e:
-            print('Passage NER exception', e)
+            print('Passage NER exception:', e)
         num_try += 1
 
     return named_entities, total_tokens
@@ -96,16 +97,16 @@ def openie_post_ner_extract(passage: str, entities: list, client):
 
 
 def extract_openie_from_triples(client, existing_json, auxiliary_file_exists, ents_by_doc, corpus_json):
-    new_json = []
+    extractions = []
     all_entities = []
     chatgpt_total_tokens = 0
 
-    for i, r in tqdm(corpus_json, total=len(corpus_json), desc='Extracting OpenIE triples'):
+    for i, sample in tqdm(corpus_json, total=len(corpus_json), desc='Extracting OpenIE triples'):
 
-        passage = r['passage']
+        passage = sample['passage']
 
         if i < len(existing_json):
-            new_json.append(existing_json[i])
+            extractions.append(existing_json[i])
         else:
             if auxiliary_file_exists:
                 doc_entities = ents_by_doc[i]
@@ -121,19 +122,20 @@ def extract_openie_from_triples(client, existing_json, auxiliary_file_exists, en
 
             chatgpt_total_tokens += total_tokens
 
-            r['extracted_entities'] = doc_entities
+            sample['extracted_entities'] = doc_entities
 
             try:
-                r['extracted_triples'] = eval(triples)["triples"]
-                r['extracted_triples'] = deduplicate_triples(r['extracted_triples'])
+                sample['extracted_triples'] = eval(triples)["triples"]
+                sample['extracted_triples'] = deduplicate_triples(sample['extracted_triples'])
             except Exception as e:
                 print('extracting OpenIE from triples exception', e)
                 print(triples)
-                r['extracted_triples'] = []
+                sample['extracted_triples'] = []
 
-            new_json.append(r)
+            extractions.append(sample)
+            all_entities.extend(doc_entities)
 
-    return (new_json, all_entities, chatgpt_total_tokens)
+    return (extractions, all_entities, chatgpt_total_tokens)
 
 
 def openie_for_corpus(dataset_name: str, run_ner: bool, num_passages, llm: str, model_name: str, num_processes: int):
@@ -146,19 +148,19 @@ def openie_for_corpus(dataset_name: str, run_ner: bool, num_passages, llm: str, 
         arg_str_regex = arg_str.replace(str(num_passages), '*')
 
         prev_num_passages = 0
-        new_json_temp = None
+        extraction_json_temp = None
 
         for file in glob('output/openie{}_results_{}.json'.format(dataset_name, arg_str_regex)):
             possible_json = json.load(open(file, 'r'))
             if prev_num_passages < len(possible_json['docs']):
                 prev_num_passages = len(possible_json['docs'])
-                new_json_temp = possible_json
+                extraction_json_temp = possible_json
 
-        existing_json = new_json_temp['docs']
-        if 'ents_by_doc' in new_json_temp:
-            ents_by_doc = new_json_temp['ents_by_doc']
-        elif 'non_dedup_ents_by_doc' in new_json_temp:
-            ents_by_doc = new_json_temp['non_dedup_ents_by_doc']
+        existing_json = extraction_json_temp['docs']
+        if 'ents_by_doc' in extraction_json_temp:
+            ents_by_doc = extraction_json_temp['ents_by_doc']
+        elif 'non_dedup_ents_by_doc' in extraction_json_temp:
+            ents_by_doc = extraction_json_temp['non_dedup_ents_by_doc']
         else:
             ents_by_doc = []
 
@@ -196,12 +198,12 @@ def openie_for_corpus(dataset_name: str, run_ner: bool, num_passages, llm: str, 
     else:
         outputs = [extract_openie_from_triples(client, existing_json, auxiliary_file_exists, ents_by_doc, corpus_json) for corpus_json in func_args]
 
-    new_json = []
+    extraction_by_doc = []
     all_entities = []
     lm_total_tokens = 0
 
     for output in outputs:
-        new_json.extend(output[0])
+        extraction_by_doc.extend(output[0])
         all_entities.extend(output[1])
         lm_total_tokens += output[2]
 
@@ -212,7 +214,7 @@ def openie_for_corpus(dataset_name: str, run_ner: bool, num_passages, llm: str, 
         # Current Cost
         approx_total_tokens = (len(retrieval_corpus) / num_passages) * lm_total_tokens
 
-        extra_info_json = {"docs": new_json,
+        extra_info_json = {"docs": extraction_by_doc,
                            "ents_by_doc": ents_by_doc,
                            "avg_ent_chars": avg_ent_chars,
                            "avg_ent_words": avg_ent_words,

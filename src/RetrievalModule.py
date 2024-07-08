@@ -55,8 +55,10 @@ class RetrievalModule:
                 self.plm = AutoModel.load_from_checkpoint(retriever_name)
             else:
                 self.plm = AutoModel.from_pretrained(retriever_name)
-        except:
-            assert False, print('{} is an invalid retriever name. Check Documentation.'.format(retriever_name))
+        except Exception as e:
+            print(e)
+            print('{} is an invalid retriever name. Check Documentation.'.format(retriever_name))
+            assert False
 
         # If not pre-computed, create vectors
         self.retrieval_name_dir = VECTOR_DIR + '/' + self.retriever_name.replace('/', '_').replace('.', '') + '_' + pool_method
@@ -311,6 +313,7 @@ class RetrievalModule:
 
                 gpu_index = faiss.index_cpu_to_gpu_multiple_py(gpu_resources, index)
             else:
+                print('No GPU is available. Running on CPU. Please check CUDA_VISIBLE_DEVICES if you have any GPU.')
                 gpu_resources = faiss.StandardGpuResources()
                 gpu_index = faiss.index_cpu_to_gpu(gpu_resources, 0, index)
 

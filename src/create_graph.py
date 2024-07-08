@@ -20,9 +20,9 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
     version = 'v3'
     inter_triple_weight = 1.0
     similarity_max = 1.0
-    possible_files = glob('output/openie_{}_results_{}_{}_*.json'.format(dataset, extraction_type, extraction_model))
+    possible_files = glob(f'output/openie_{dataset}_results_{extraction_type}_{extraction_model}_*.json')
     max_samples = np.max([int(file.split('{}_'.format(extraction_model))[1].split('.json')[0]) for file in possible_files])
-    extracted_file = json.load(open('output/openie_{}_results_{}_{}_{}.json'.format(dataset, extraction_type, extraction_model, max_samples), 'r'))
+    extracted_file = json.load(open(f'output/openie_{dataset}_results_{extraction_type}_{extraction_model}_{max_samples}.json', 'r'))
 
     extracted_triples = extracted_file['docs']
     if not extraction_model.startswith('gpt-3.5-turbo'):
