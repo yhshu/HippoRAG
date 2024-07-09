@@ -149,10 +149,11 @@ if __name__ == '__main__':
 
     client = init_langchain_model(args.llm, args.llm_model)
     llm_model_name_processed = args.llm_model.replace('/', '_').replace('.', '_')
-    if args.llm_model.startswith('gpt-3.5-turbo'):  # Default OpenIE system
-        colbert_configs = {'root': f'data/lm_vectors/colbert/{args.dataset}', 'doc_index_name': 'nbits_2', 'phrase_index_name': 'nbits_2'}
-    else:
-        colbert_configs = {'root': f'data/lm_vectors/colbert/{args.dataset}_{args.llm_model}', 'doc_index_name': 'nbits_2', 'phrase_index_name': 'nbits_2'}
+    # if args.llm_model == 'gpt-3.5-turbo-1106':  # Default OpenIE system
+    #     colbert_configs = {'root': f'data/lm_vectors/colbert/{args.dataset}', 'doc_index_name': 'nbits_2', 'phrase_index_name': 'nbits_2'}
+    # else:
+    #     colbert_configs = {'root': f'data/lm_vectors/colbert/{args.dataset}_{llm_model_name_processed}', 'doc_index_name': 'nbits_2', 'phrase_index_name': 'nbits_2'}
+    colbert_configs = {'root': f'data/lm_vectors/colbert/{args.dataset}', 'doc_index_name': 'nbits_2', 'phrase_index_name': 'nbits_2'}
 
     hipporag = HippoRAG(args.dataset, extraction_model=args.llm, extraction_model_name=args.llm_model, graph_creating_retriever_name=args.retriever,
                         linking_retriever_name=args.linking_model,
