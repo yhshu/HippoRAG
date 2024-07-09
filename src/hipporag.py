@@ -18,7 +18,8 @@ from tqdm import tqdm
 from src.colbertv2_indexing import colbertv2_index
 from src.langchain_util import init_langchain_model, LangChainModel
 from src.lm_wrapper import EmbeddingModelWrapper
-from src.lm_wrapper.gritlm import GritWrapper, gritlm_query_instructions_for_datasets, gritlm_query_instruction_for_tasks
+from src.lm_wrapper.gritlm import GritWrapper, gritlm_query_instructions_for_datasets, \
+    gritlm_query_instruction_for_tasks
 from src.lm_wrapper.util import init_embedding_model
 from src.named_entity_extraction_parallel import named_entity_recognition
 from src.processing import processing_phrases, softmax_with_zeros
@@ -46,7 +47,8 @@ def get_query_instruction_for_tasks(embedding_model: EmbeddingModelWrapper, task
 class HippoRAG:
 
     def __init__(self, corpus_name='hotpotqa', extraction_model='openai', extraction_model_name='gpt-3.5-turbo-1106',
-                 graph_creating_retriever_name='facebook/contriever', extraction_type='ner', graph_type='facts_and_sim', sim_threshold=0.8, node_specificity=True,
+                 graph_creating_retriever_name='facebook/contriever', extraction_type='ner', graph_type='facts_and_sim',
+                 sim_threshold=0.8, node_specificity=True,
                  doc_ensemble=False, colbert_config=None, dpr_only=False,
                  graph_alg='ppr', damping=0.1, recognition_threshold=0.9, corpus_path=None,
                  qa_model: LangChainModel = None, linking_retriever_name=None):
@@ -101,7 +103,8 @@ class HippoRAG:
         self.logger = logging.getLogger(__name__)
 
         try:
-            self.named_entity_cache = pd.read_csv('output/{}_queries.named_entity_output.tsv'.format(self.corpus_name), sep='\t')
+            self.named_entity_cache = pd.read_csv('output/{}_queries.named_entity_output.tsv'.format(self.corpus_name),
+                                                  sep='\t')
         except Exception as e:
             self.named_entity_cache = pd.DataFrame([], columns=['query', 'triples'])
 
@@ -109,7 +112,8 @@ class HippoRAG:
             self.named_entity_cache = {row['query']: eval(row['triples']) for i, row in
                                        self.named_entity_cache.iterrows()}
         elif 'question' in self.named_entity_cache:
-            self.named_entity_cache = {row['question']: eval(row['triples']) for i, row in self.named_entity_cache.iterrows()}
+            self.named_entity_cache = {row['question']: eval(row['triples']) for i, row in
+                                       self.named_entity_cache.iterrows()}
 
         self.embed_model = init_embedding_model(self.linking_retriever_name)
         self.dpr_only = dpr_only
@@ -127,22 +131,27 @@ class HippoRAG:
             self.load_node_vectors()
         self.load_corpus()
         self.fact_embeddings = None
+        self.doc_embedding_mat = None
 
         if (doc_ensemble or dpr_only) and self.linking_retriever_name not in ['colbertv2', 'bm25']:
             # Loading Doc Embeddings
-            self.get_dpr_doc_embedding()
+            self.load_dpr_doc_embeddings()
 
         if self.linking_retriever_name == 'colbertv2':
             if self.dpr_only is False or self.doc_ensemble:
-                colbertv2_index(self.node_phrases.tolist(), self.corpus_name, 'phrase', self.colbert_config['phrase_index_name'], overwrite='reuse')
+                colbertv2_index(self.node_phrases.tolist(), self.corpus_name, 'phrase',
+                                self.colbert_config['phrase_index_name'], overwrite='reuse')
                 with Run().context(RunConfig(nranks=1, experiment="phrase", root=self.colbert_config['root'])):
                     config = ColBERTConfig(root=self.colbert_config['root'], )
-                    self.phrase_searcher = Searcher(index=self.colbert_config['phrase_index_name'], config=config, verbose=0)
+                    self.phrase_searcher = Searcher(index=self.colbert_config['phrase_index_name'], config=config,
+                                                    verbose=0)
             if self.doc_ensemble or dpr_only:
-                colbertv2_index(self.dataset_df['paragraph'].tolist(), self.corpus_name, 'corpus', self.colbert_config['doc_index_name'], overwrite='reuse')
+                colbertv2_index(self.dataset_df['paragraph'].tolist(), self.corpus_name, 'corpus',
+                                self.colbert_config['doc_index_name'], overwrite='reuse')
                 with Run().context(RunConfig(nranks=1, experiment="corpus", root=self.colbert_config['root'])):
                     config = ColBERTConfig(root=self.colbert_config['root'], )
-                    self.corpus_searcher = Searcher(index=self.colbert_config['doc_index_name'], config=config, verbose=0)
+                    self.corpus_searcher = Searcher(index=self.colbert_config['doc_index_name'], config=config,
+                                                    verbose=0)
 
         self.statistics = {}
         self.ensembling_debug = []
@@ -240,7 +249,8 @@ class HippoRAG:
                 for corpus_id, rank, score in ranking.data[0]:
                     query_doc_scores[corpus_id] = score
             else:  # HuggingFace dense retrieval
-                query_embedding = self.embed_model.encode_text(query, instruction=get_query_instruction_for_datasets(self.embed_model, self.corpus_name),
+                query_embedding = self.embed_model.encode_text(query, instruction=get_query_instruction_for_datasets(
+                    self.embed_model, self.corpus_name),
                                                                return_cpu=True, return_numpy=True, norm=True)
                 query_doc_scores = np.dot(self.doc_embedding_mat, query_embedding.T)
                 query_doc_scores = query_doc_scores.T[0]
@@ -259,7 +269,10 @@ class HippoRAG:
                     oracle_phrases.add(t[2])
             oracle_phrases = list(oracle_phrases)
             all_phrase_weights, linking_score_map = oracle_ner_to_node(self, query_ner_list, oracle_phrases, link_top_k)
-            doc_rank_logs, sorted_doc_ids, sorted_scores = graph_search_with_entities(self, query_ner_list, all_phrase_weights, linking_score_map, query_doc_scores)
+            doc_rank_logs, sorted_doc_ids, sorted_scores = graph_search_with_entities(self, query_ner_list,
+                                                                                      all_phrase_weights,
+                                                                                      linking_score_map,
+                                                                                      query_doc_scores)
 
         elif oracle_triples and linking == 'query_to_node':
             from src.linking import graph_search_with_entities
@@ -271,11 +284,15 @@ class HippoRAG:
                 if len(t) >= 3:
                     oracle_node_phrases.add(t[2])
             oracle_node_phrases = list(oracle_node_phrases)
-            node_embeddings = self.embed_model.encode_text(oracle_node_phrases, return_cpu=True, return_numpy=True, norm=True)
-            query_embedding = self.embed_model.encode_text(query, instruction=get_query_instruction_for_tasks(self.embed_model, 'query_to_node'),
+            node_embeddings = self.embed_model.encode_text(oracle_node_phrases, return_cpu=True, return_numpy=True,
+                                                           norm=True)
+            query_embedding = self.embed_model.encode_text(query,
+                                                           instruction=get_query_instruction_for_tasks(self.embed_model,
+                                                                                                       'query_to_node'),
                                                            return_cpu=True, return_numpy=True, norm=True)
             # rank and get link_top_k oracle nodes given the query
-            query_node_scores = np.dot(node_embeddings, query_embedding.T)  # (num_nodes, dim) x (1, dim).T = (num_nodes, 1)
+            query_node_scores = np.dot(node_embeddings,
+                                       query_embedding.T)  # (num_nodes, dim) x (1, dim).T = (num_nodes, 1)
             query_node_scores = np.squeeze(query_node_scores)
             if link_top_k:
                 top_k_indices = np.argsort(query_node_scores)[-link_top_k:][::-1].tolist()
@@ -286,16 +303,20 @@ class HippoRAG:
 
             all_phrase_weights = np.zeros(len(self.node_phrases))
             for i, phrase in enumerate(self.node_phrases):
-                matching_index = next((index for index, top_phrase in enumerate(top_k_phrases) if phrase.lower() == top_phrase.lower()), None)
+                matching_index = next(
+                    (index for index, top_phrase in enumerate(top_k_phrases) if phrase.lower() == top_phrase.lower()),
+                    None)
                 if matching_index is not None:
                     all_phrase_weights[i] = query_node_scores[matching_index]
 
             if sum(all_phrase_weights) == 0:
-                doc_rank_logs, sorted_doc_ids, sorted_scores = self.query_to_node_linking(link_top_k, query, query_doc_scores)
+                doc_rank_logs, sorted_doc_ids, sorted_scores = self.query_to_node_linking(link_top_k, query,
+                                                                                          query_doc_scores)
             else:
                 all_phrase_weights = softmax_with_zeros(all_phrase_weights)
                 linking_score_map = {oracle_node_phrases[i]: query_node_scores[i] for i in top_k_indices}
-                doc_rank_logs, sorted_doc_ids, sorted_scores = graph_search_with_entities(self, all_phrase_weights, linking_score_map, None)
+                doc_rank_logs, sorted_doc_ids, sorted_scores = graph_search_with_entities(self, all_phrase_weights,
+                                                                                          linking_score_map, None)
 
         elif oracle_triples and linking == 'query_to_fact':
             from src.linking.query_to_fact import oracle_query_to_fact
@@ -320,14 +341,18 @@ class HippoRAG:
                         all_phrase_weights, linking_score_map = link_node_by_colbertv2(self, query_ner_list, link_top_k)
             else:  # huggingface dense retrieval
                 if self.doc_ensemble:
-                    query_embedding = self.embed_model.encode_text(query, instruction=get_query_instruction_for_tasks(self.embed_model, 'ner_to_node'),
+                    query_embedding = self.embed_model.encode_text(query, instruction=get_query_instruction_for_tasks(
+                        self.embed_model, 'ner_to_node'),
                                                                    return_cpu=True, return_numpy=True, norm=True)
                     query_doc_scores = np.dot(self.doc_embedding_mat, query_embedding.T)
                     query_doc_scores = query_doc_scores.T[0]
 
                 if len(query_ner_list) > 0:  # if no entities are found, assign uniform probability to documents
                     all_phrase_weights, linking_score_map = link_node_by_dpr(self, query_ner_list, link_top_k)
-            doc_rank_logs, sorted_doc_ids, sorted_scores = graph_search_with_entities(self, query_ner_list, all_phrase_weights, linking_score_map, query_doc_scores)
+            doc_rank_logs, sorted_doc_ids, sorted_scores = graph_search_with_entities(self, query_ner_list,
+                                                                                      all_phrase_weights,
+                                                                                      linking_score_map,
+                                                                                      query_doc_scores)
 
         elif linking == 'query_to_node' or (oracle_triples is not None and len(oracle_triples) == 0):
             from src.linking.query_to_node import link_node_by_dpr
@@ -336,7 +361,9 @@ class HippoRAG:
                 pass  # todo
             else:
                 all_phrase_weights, linking_score_map = link_node_by_dpr(self, query, top_k=link_top_k)
-            doc_rank_logs, sorted_doc_ids, sorted_scores = graph_search_with_entities(self, all_phrase_weights, linking_score_map, query_doc_scores)
+            doc_rank_logs, sorted_doc_ids, sorted_scores = graph_search_with_entities(self, all_phrase_weights,
+                                                                                      linking_score_map,
+                                                                                      query_doc_scores)
             return sorted_doc_ids, sorted_scores, doc_rank_logs
 
         elif linking == 'query_to_fact':
@@ -347,6 +374,14 @@ class HippoRAG:
                 self.load_fact_vectors()
                 sorted_doc_ids, sorted_scores, log = link_fact_by_dpr(self, query, link_top_k=link_top_k)
                 return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], log
+
+        elif linking == 'query_to_passage':
+            from src.linking.query_to_passage import linking_by_passage
+            if 'colbertv2' in self.linking_retriever_name:
+                pass
+            else:
+                self.load_dpr_doc_embeddings()
+                sorted_doc_ids, sorted_scores, log = linking_by_passage(self, query, link_top_k=link_top_k)
 
         return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], doc_rank_logs
 
@@ -402,15 +437,19 @@ class HippoRAG:
         self.dataset_df['idx'] = [p['idx'] if 'idx' in p else i for i, p in enumerate(self.corpus)]
 
     def load_index_files(self):
-        index_file_pattern = 'output/openie_{}_results_{}_{}_*.json'.format(self.corpus_name, self.extraction_type, self.extraction_model_name_processed)
+        index_file_pattern = 'output/openie_{}_results_{}_{}_*.json'.format(self.corpus_name, self.extraction_type,
+                                                                            self.extraction_model_name_processed)
         possible_files = glob(index_file_pattern)
         if len(possible_files) == 0:
-            self.logger.critical(f'No extraction files found: {index_file_pattern} ; please check if working directory is correct or if the extraction has been done.')
+            self.logger.critical(
+                f'No extraction files found: {index_file_pattern} ; please check if working directory is correct or if the extraction has been done.')
             return
         max_samples = np.max(
-            [int(file.split('{}_'.format(self.extraction_model_name_processed))[1].split('.json')[0]) for file in possible_files])
+            [int(file.split('{}_'.format(self.extraction_model_name_processed))[1].split('.json')[0]) for file in
+             possible_files])
         extracted_file = json.load(open(
-            'output/openie_{}_results_{}_{}_{}.json'.format(self.corpus_name, self.extraction_type, self.extraction_model_name_processed, max_samples),
+            'output/openie_{}_results_{}_{}_{}.json'.format(self.corpus_name, self.extraction_type,
+                                                            self.extraction_model_name_processed, max_samples),
             'r'))
 
         self.extracted_triples = extracted_file['docs']
@@ -438,10 +477,15 @@ class HippoRAG:
         if not self.extraction_model_name.startswith('gpt-3.5-turbo'):
             self.extraction_type = self.extraction_type + '_' + self.extraction_model_name_processed
         self.kb_node_phrase_to_id = pickle.load(open(
-            'output/{}_{}_graph_phrase_dict_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type, self.phrase_type,
-                                                                      self.extraction_type, self.version), 'rb'))  # node phrase string -> phrase id
-        triplet_fact_to_id_path = 'output/{}_{}_graph_fact_dict_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type, self.phrase_type,
-                                                                                          self.extraction_type, self.version)
+            'output/{}_{}_graph_phrase_dict_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type,
+                                                                      self.phrase_type,
+                                                                      self.extraction_type, self.version),
+            'rb'))  # node phrase string -> phrase id
+        triplet_fact_to_id_path = 'output/{}_{}_graph_fact_dict_{}_{}.{}.subset.p'.format(self.corpus_name,
+                                                                                          self.graph_type,
+                                                                                          self.phrase_type,
+                                                                                          self.extraction_type,
+                                                                                          self.version)
         self.triplet_fact_to_id_dict = pickle.load(open(triplet_fact_to_id_path, 'rb'))  # fact string -> fact id
         self.triplet_id_to_fact_dict = {v: k for k, v in self.triplet_fact_to_id_dict.items()}
 
@@ -454,13 +498,17 @@ class HippoRAG:
             self.logger.exception('Node pair to edge label dict not found: ' + node_pair_to_edge_label_path)
 
         self.triplet_facts: List = list(self.triplet_fact_to_id_dict.keys())
-        self.triplet_facts: List = [self.triplet_facts[i] for i in np.argsort(list(self.triplet_fact_to_id_dict.values()))]
+        self.triplet_facts: List = [self.triplet_facts[i] for i in
+                                    np.argsort(list(self.triplet_fact_to_id_dict.values()))]
         self.triplet_facts_str_list = [str(fact) for fact in self.triplet_facts]
-        self.node_phrases: np.ndarray = np.array(list(self.kb_node_phrase_to_id.keys()))[np.argsort(list(self.kb_node_phrase_to_id.values()))]
+        self.node_phrases: np.ndarray = np.array(list(self.kb_node_phrase_to_id.keys()))[
+            np.argsort(list(self.kb_node_phrase_to_id.values()))]
 
         self.docs_to_facts: Dict = pickle.load(open(
-            'output/{}_{}_graph_doc_to_facts_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type, self.phrase_type,
-                                                                       self.extraction_type, self.version), 'rb'))  # doc id, fact id -> frequency (mostly 1)
+            'output/{}_{}_graph_doc_to_facts_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type,
+                                                                       self.phrase_type,
+                                                                       self.extraction_type, self.version),
+            'rb'))  # doc id, fact id -> frequency (mostly 1)
         self.fact_to_docs: Dict = defaultdict(set)
         for doc_id_fact_id in self.docs_to_facts:
             corpus_id = doc_id_fact_id[0]
@@ -468,16 +516,20 @@ class HippoRAG:
             self.fact_to_docs[fact_id].add(corpus_id)
 
         self.facts_to_phrases = pickle.load(open(
-            'output/{}_{}_graph_facts_to_phrases_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type, self.phrase_type,
-                                                                           self.extraction_type, self.version), 'rb'))  # fact id, phrase id -> frequency (mostly 1)
+            'output/{}_{}_graph_facts_to_phrases_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type,
+                                                                           self.phrase_type,
+                                                                           self.extraction_type, self.version),
+            'rb'))  # fact id, phrase id -> frequency (mostly 1)
 
         self.docs_to_facts_mat = pickle.load(
             open(
-                'output/{}_{}_graph_doc_to_facts_csr_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type, self.phrase_type,
+                'output/{}_{}_graph_doc_to_facts_csr_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type,
+                                                                               self.phrase_type,
                                                                                self.extraction_type, self.version),
                 'rb'))  # (num docs, num facts)
         self.facts_to_phrases_mat = pickle.load(open(
-            'output/{}_{}_graph_facts_to_phrases_csr_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type, self.phrase_type,
+            'output/{}_{}_graph_facts_to_phrases_csr_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type,
+                                                                               self.phrase_type,
                                                                                self.extraction_type, self.version),
             'rb'))  # (num facts, num phrases)
 
@@ -485,13 +537,16 @@ class HippoRAG:
         self.docs_to_phrases_mat[self.docs_to_phrases_mat.nonzero()] = 1
         self.phrase_to_num_doc = self.docs_to_phrases_mat.sum(0).T
 
-        graph_file_path = 'output/{}_{}_graph_mean_{}_thresh_{}_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type,
-                                                                                          str(self.sim_threshold), self.phrase_type,
+        graph_file_path = 'output/{}_{}_graph_mean_{}_thresh_{}_{}_{}.{}.subset.p'.format(self.corpus_name,
+                                                                                          self.graph_type,
+                                                                                          str(self.sim_threshold),
+                                                                                          self.phrase_type,
                                                                                           self.extraction_type,
                                                                                           self.graph_creating_retriever_name_processed,
                                                                                           self.version)
         if os.path.isfile(graph_file_path):
-            self.graph_plus = pickle.load(open(graph_file_path, 'rb'))  # (phrase1 id, phrase2 id) -> the number of occurrences
+            self.graph_plus = pickle.load(
+                open(graph_file_path, 'rb'))  # (phrase1 id, phrase2 id) -> the number of occurrences
         else:
             self.logger.error('Graph file not found: ' + graph_file_path)
 
@@ -550,14 +605,18 @@ class HippoRAG:
                                 f'{self.extraction_model_name_processed}_{self.graph_creating_retriever_name_processed}.p')
         if os.path.isfile(fact_embeddings_path):
             self.fact_embeddings = pickle.load(open(fact_embeddings_path, 'rb'))
-            self.logger.info('Loaded fact embeddings from: ' + fact_embeddings_path + ', shape: ' + str(self.fact_embeddings.shape))
+            self.logger.info(
+                'Loaded fact embeddings from: ' + fact_embeddings_path + ', shape: ' + str(self.fact_embeddings.shape))
         else:
-            self.fact_embeddings = self.embed_model.encode_text(self.triplet_facts_str_list, return_cpu=True, return_numpy=True, norm=True)
+            self.fact_embeddings = self.embed_model.encode_text(self.triplet_facts_str_list, return_cpu=True,
+                                                                return_numpy=True, norm=True)
             pickle.dump(self.fact_embeddings, open(fact_embeddings_path, 'wb'))
-            self.logger.info('Saved fact embeddings to: ' + fact_embeddings_path + ', shape: ' + str(self.fact_embeddings.shape))
+            self.logger.info(
+                'Saved fact embeddings to: ' + fact_embeddings_path + ', shape: ' + str(self.fact_embeddings.shape))
 
     def load_node_vectors(self):
-        encoded_string_path = 'data/lm_vectors/{}_mean/encoded_strings.txt'.format(self.linking_retriever_name_processed)
+        encoded_string_path = 'data/lm_vectors/{}_mean/encoded_strings.txt'.format(
+            self.linking_retriever_name_processed)
         if os.path.isfile(encoded_string_path):
             self.load_node_vectors_from_string_encoding_cache(encoded_string_path)
         else:  # use another way to load node vectors
@@ -570,11 +629,18 @@ class HippoRAG:
                 self.kb_node_phrase_embeddings = pickle.load(open(kb_node_phrase_embeddings_path, 'rb'))
                 if len(self.kb_node_phrase_embeddings.shape) == 3:
                     self.kb_node_phrase_embeddings = np.squeeze(self.kb_node_phrase_embeddings, axis=1)
-                self.logger.info('Loaded phrase embeddings from: ' + kb_node_phrase_embeddings_path + ', shape: ' + str(self.kb_node_phrase_embeddings.shape))
+                self.logger.info('Loaded phrase embeddings from: ' + kb_node_phrase_embeddings_path + ', shape: ' + str(
+                    self.kb_node_phrase_embeddings.shape))
             else:
-                self.kb_node_phrase_embeddings = self.embed_model.encode_text(self.node_phrases.tolist(), return_cpu=True, return_numpy=True, norm=True)
+                self.kb_node_phrase_embeddings = self.embed_model.encode_text(self.node_phrases.tolist(),
+                                                                              return_cpu=True, return_numpy=True,
+                                                                              norm=True)
+                dir = os.path.dirname(kb_node_phrase_embeddings_path)
+                if not os.path.exists(dir):
+                    os.makedirs(dir)
                 pickle.dump(self.kb_node_phrase_embeddings, open(kb_node_phrase_embeddings_path, 'wb'))
-                self.logger.info('Saved phrase embeddings to: ' + kb_node_phrase_embeddings_path + ', shape: ' + str(self.kb_node_phrase_embeddings.shape))
+                self.logger.info('Saved phrase embeddings to: ' + kb_node_phrase_embeddings_path + ', shape: ' + str(
+                    self.kb_node_phrase_embeddings.shape))
 
     def load_node_vectors_from_string_encoding_cache(self, string_file_path):
         self.logger.info('Loading node vectors from: ' + string_file_path)
@@ -602,14 +668,18 @@ class HippoRAG:
         self.kb_node_phrase_embeddings = self.kb_node_phrase_embeddings.cpu().numpy()
         self.logger.info('{} phrases did not have vectors.'.format(num_non_vector_phrases))
 
-    def get_dpr_doc_embedding(self):
-        cache_filename = 'data/lm_vectors/{}_mean/{}_doc_embeddings.p'.format(self.linking_retriever_name_processed, self.corpus_name)
+    def load_dpr_doc_embeddings(self):
+        if self.doc_embedding_mat is not None:
+            return
+        cache_filename = 'data/lm_vectors/{}_mean/{}_doc_embeddings.p'.format(self.linking_retriever_name_processed,
+                                                                              self.corpus_name)
         if os.path.exists(cache_filename):
             self.doc_embedding_mat = pickle.load(open(cache_filename, 'rb'))
             self.logger.info(f'Loaded doc embeddings from {cache_filename}, shape: {self.doc_embedding_mat.shape}')
         else:
             self.doc_embeddings = []
-            self.doc_embedding_mat = self.embed_model.encode_text(self.dataset_df['paragraph'].tolist(), return_cpu=True, return_numpy=True, norm=True)
+            self.doc_embedding_mat = self.embed_model.encode_text(self.dataset_df['paragraph'].tolist(),
+                                                                  return_cpu=True, return_numpy=True, norm=True)
             pickle.dump(self.doc_embedding_mat, open(cache_filename, 'wb'))
             self.logger.info(f'Saved doc embeddings to {cache_filename}, shape: {self.doc_embedding_mat.shape}')
 

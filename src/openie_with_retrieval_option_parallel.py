@@ -36,22 +36,22 @@ def named_entity_recognition(passage: str, client, max_retry=5):
     while not done and num_try < max_retry:
         try:
             if isinstance(client, ChatOpenAI):  # JSON mode
-                chat_completion = client.invoke(ner_messages.to_messages(), temperature=0, response_format={"type": "json_object"})
-                if chat_completion.response_metadata['finish_reason'] == 'length':
-                    response_content = fix_broken_generated_json(chat_completion.content)
+                completion = client.invoke(ner_messages.to_messages(), temperature=0, response_format={"type": "json_object"})
+                if completion.response_metadata['finish_reason'] == 'length':
+                    response_content = fix_broken_generated_json(completion.content)
                 else:
-                    response_content = chat_completion.content
+                    response_content = completion.content
                 response_content = eval(response_content)
-                total_tokens += chat_completion.response_metadata['token_usage']['total_tokens']
+                total_tokens += completion.response_metadata['token_usage']['total_tokens']
             elif isinstance(client, ChatOllama):
                 response_content = client.invoke(ner_messages.to_messages())
                 response_content = extract_json_dict(response_content)
                 total_tokens += len(response_content.split())
             else:  # no JSON mode
-                chat_completion = client.invoke(ner_messages.to_messages(), temperature=0)
-                response_content = chat_completion.content
+                completion = client.invoke(ner_messages.to_messages(), temperature=0)
+                response_content = completion.content
                 response_content = extract_json_dict(response_content)
-                total_tokens += chat_completion.response_metadata['token_usage']['total_tokens']
+                total_tokens += completion.response_metadata['token_usage']['total_tokens']
 
             if 'named_entities' not in response_content:
                 named_entities = []
@@ -258,9 +258,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str)
     parser.add_argument('--run_ner', action='store_true')
-    parser.add_argument('--num_passages', type=str, default='10')
+    parser.add_argument('--num_passages', type=str, default='all')
     parser.add_argument('--llm', type=str, default='openai', help="LLM, e.g., 'openai' or 'together'")
-    parser.add_argument('--model_name', type=str, default='gpt-3.5-turbo-1106', help='Specific model name')
+    parser.add_argument('--model_name', type=str, default='gpt-3.5-turbo', help='Specific model name')
     parser.add_argument('--num_processes', type=int, default=10)
 
     args = parser.parse_args()
