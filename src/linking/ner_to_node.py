@@ -141,8 +141,8 @@ def graph_search_with_entities(hipporag: HippoRAG, query_ner_list: list, all_phr
             else:
                 assert False, f'Graph Algorithm {hipporag.graph_alg} Not Implemented'
 
-            fact_prob = hipporag.facts_to_phrases_mat.dot(ppr_phrase_probs)
-            ppr_doc_prob = hipporag.docs_to_facts_mat.dot(fact_prob)
+            fact_prob = hipporag.triples_to_phrases_mat.dot(ppr_phrase_probs)
+            ppr_doc_prob = hipporag.docs_to_triples_mat.dot(fact_prob)
             ppr_doc_prob = min_max_normalize(ppr_doc_prob)
         else:  # dpr_only or no entities found
             ppr_doc_prob = np.ones(len(hipporag.extracted_triples)) / len(hipporag.extracted_triples)
@@ -206,4 +206,4 @@ def graph_search_with_entities(hipporag: HippoRAG, query_ner_list: list, all_phr
     else:
         logs = {}
 
-    return logs, sorted_doc_ids, sorted_scores
+    return sorted_doc_ids, sorted_scores, logs

@@ -26,8 +26,8 @@ def graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, 
         else:
             assert False, f'Graph Algorithm {hipporag.graph_alg} Not Implemented'
 
-        fact_prob = hipporag.facts_to_phrases_mat.dot(ppr_phrase_probs)
-        ppr_doc_prob = hipporag.docs_to_facts_mat.dot(fact_prob)
+        fact_prob = hipporag.triples_to_phrases_mat.dot(ppr_phrase_probs)
+        ppr_doc_prob = hipporag.docs_to_triples_mat.dot(fact_prob)
         ppr_doc_prob = min_max_normalize(ppr_doc_prob)
     # Combine Query-Doc and PPR Scores
     if hipporag.doc_ensemble or hipporag.dpr_only:
@@ -83,4 +83,4 @@ def graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, 
                 'top_ranked_nodes': top_ranked_nodes, 'nodes_in_retrieved_doc': nodes_in_retrieved_doc}
     else:
         logs = {}
-    return logs, sorted_doc_ids, sorted_scores
+    return sorted_doc_ids, sorted_scores, logs

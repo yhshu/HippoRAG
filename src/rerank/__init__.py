@@ -1,26 +1,12 @@
 import os
 import re
 
+from langchain.globals import set_llm_cache
+from langchain_community.cache import SQLiteCache
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate
 
 from src.langchain_util import init_langchain_model
-
-
-class Reranker:
-    def __init__(self, model_name):
-        self.model_name = model_name
-        if model_name.startswith('gpt'):
-            llm_provider = 'openai'
-            self.model = init_langchain_model(llm_provider, model_name)
-            llm_logits_cache.set_model_name(model_name)
-
-    def rerank(self, task: str, query, candidate_indices, candidate_items, top_k=None):
-        pass
-
-
-def format_candidates(candidates: list):
-    return '\n'.join([f'{chr(97 + i)}. {candidate}' for i, candidate in enumerate(candidates)])
 
 
 class LLMLogitsCache:
@@ -54,7 +40,26 @@ class LLMLogitsCache:
 llm_logits_cache = LLMLogitsCache()
 
 
+def format_candidates(candidates: list):
+    return '\n'.join([f'{chr(97 + i)}. {candidate}' for i, candidate in enumerate(candidates)])
+
+
+class Reranker:
+    def __init__(self, model_name):
+        self.model_name = model_name
+        if model_name.startswith('gpt'):
+            llm_provider = 'openai'
+            self.model = init_langchain_model(llm_provider, model_name)
+
+    def rerank(self, task: str, query, candidate_indices, candidate_items, top_k=None):
+        pass
+
+
 class LLMLogitsReranker(Reranker):
+
+    def __init__(self, model_name):
+        super().__init__(model_name)
+        llm_logits_cache.set_model_name(model_name)
 
     def rerank(self, task, query, candidate_indices, candidate_items, top_k=None):
         if task == 'query_to_fact':
@@ -116,6 +121,10 @@ class RankGPT(Reranker):
     https://arxiv.org/pdf/2304.09542
     """
 
+    def __init__(self, model_name):
+        super().__init__(model_name)
+        set_llm_cache(SQLiteCache(database_path=f".llm_{model_name}_rerank.db"))
+
     def rerank(self, task: str, query, candidate_indices, candidate_items, top_k=None, window_size=4, step_size=2):
         def parse_numbers(s):
             try:
@@ -138,21 +147,7 @@ class RankGPT(Reranker):
                 window_items = candidate_items[start:end]
                 window_indices = list(range(start, end))
 
-                messages = [
-                    SystemMessage("You are RankGPT, an intelligent assistant that can rank facts based on their relevancy to the query."),
-                    HumanMessage(f"I will provide you with {len(window_items)} facts, each indicated by number identifier []. "
-                                 f"Rank them based on their relevance to query: {query}"),
-                    AIMessage("Okay, please provide the facts"),
-                ]
-
-                for i, item in enumerate(window_items):
-                    messages.append(HumanMessage(f"[{i}] {item}"))
-                    messages.append(AIMessage(f"Received fact [{i}]"))
-
-                messages.append(HumanMessage(f"Search Query: {query}\nRank the {len(window_items)} facts above based on their relevance to the search query. "
-                                             "The facts should be listed in descending order using identifiers, "
-                                             "and the most relevant facts should be listed first, and the output format should be [] > [], e.g., [1] > [2]. "
-                                             "Only respond the ranking results, do not say any word or explain."))
+                messages = self.write_rerank_prompt(query, window_items)
 
                 completion = self.model.invoke(messages)
                 content = completion.content
@@ -170,3 +165,19 @@ class RankGPT(Reranker):
             sorted_candidate_items = [candidate_items[i] for i in result_indices]
 
             return sorted_candidate_indices[:top_k], sorted_candidate_items[:top_k]
+
+    def write_rerank_prompt(self, query, window_items):
+        messages = [
+            SystemMessage("You are RankGPT, an intelligent assistant that can rank facts based on their relevancy to the query."),
+            HumanMessage(f"I will provide you with {len(window_items)} facts, each indicated by number identifier []. "
+                         f"Rank them based on their relevance to query: {query}"),
+            AIMessage("Okay, please provide the facts"),
+        ]
+        for i, item in enumerate(window_items):
+            messages.append(HumanMessage(f"[{i}] {item}"))
+            messages.append(AIMessage(f"Received fact [{i}]"))
+        messages.append(HumanMessage(f"Search Query: {query}\nRank the {len(window_items)} facts above based on their relevance to the search query. "
+                                     "The facts should be listed in descending order using identifiers, "
+                                     "and the most relevant facts should be listed first, and the output format should be [] > [], e.g., [1] > [2]. "
+                                     "Only respond the ranking results, do not say any word or explain."))
+        return messages

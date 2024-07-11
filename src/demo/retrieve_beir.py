@@ -2,6 +2,9 @@
 import sys
 from collections import defaultdict
 
+from langchain.globals import set_llm_cache
+from langchain_community.cache import SQLiteCache
+
 sys.path.append('.')
 
 from src.data_process.util import merge_chunk_scores, merge_chunks
@@ -96,16 +99,16 @@ def run_retrieve_beir(dataset_name: str, extraction_model: str, retrieval_model:
         run_dict = {'retrieved': {}, 'log': {}}  # for pytrec_eval
 
     to_update_run = False
-    for i, query in tqdm(enumerate(dataset), total=len(dataset), desc='Evaluating queries'):
-        query_text = query['text']
-        query_id = query['id']
+    for i, sample in tqdm(enumerate(dataset), total=len(dataset), desc='Evaluating queries'):
+        query_text = sample['text']
+        query_id = sample['id']
         if query_id in run_dict['retrieved']:
             continue
-        supporting_docs = query['paragraphs']
+        supporting_docs = sample['paragraphs']
         if oracle_extraction:
             oracle_triples = []
             for p in supporting_docs:
-                oracle_triples += hipporag.get_facts_by_corpus_idx(hipporag.get_corpus_idx_by_passage_idx(p['idx']))[0]
+                oracle_triples += hipporag.get_triples_by_corpus_idx(hipporag.get_corpus_idx_by_passage_idx(p['idx']))[0]
         else:
             oracle_triples = None
         ranks, scores, log = hipporag.rank_docs(query_text, doc_top_k=10, link_top_k=link_top_k, linking=linking, oracle_triples=oracle_triples)
@@ -113,12 +116,12 @@ def run_retrieve_beir(dataset_name: str, extraction_model: str, retrieval_model:
         retrieved_docs = [corpus[r] for r in ranks]
         to_update_run = True
 
-        if linking in ['ner_to_node', 'query_to_node', 'query_to_fact']:  # evaluate the recall of nodes from supporting documents
+        if linking in ['ner_to_node', 'query_to_node', 'query_to_fact', 'query_to_passage']:  # evaluate the recall of nodes from supporting documents
             # get oracle nodes
             if oracle_triples is None:
                 oracle_triples = []
                 for p in supporting_docs:
-                    oracle_triples += hipporag.get_facts_by_corpus_idx(hipporag.get_corpus_idx_by_passage_idx(p['idx']))[0]
+                    oracle_triples += hipporag.get_triples_by_corpus_idx(hipporag.get_corpus_idx_by_passage_idx(p['idx']))[0]
             oracle_nodes = set([t[0] for t in oracle_triples]).union(set([t[2] for t in oracle_triples]))
 
             # get linked nodes
@@ -191,6 +194,7 @@ if __name__ == '__main__':
     parser.add_argument('--dpr_only', action='store_true')
     parser.add_argument('--detail', action='store_true')
     parser.add_argument('--oracle_ie', action='store_true')
+    parser.add_argument('--num', help='the number of samples to evaluate')
     args = parser.parse_args()
 
     if args.chunk is False and 'chunk' in args.dataset:
@@ -207,14 +211,19 @@ if __name__ == '__main__':
         qrel = json.load(open(qrel_path, 'r'))  # note that this is json file processed from tsv file, used for pytrec_eval
     except Exception as e:
         print(f'Error when loading files: {e}')
-    hipporag = HippoRAG(args.dataset, 'openai', args.extraction_model, args.retrieval_model, doc_ensemble=args.doc_ensemble, dpr_only=args.dpr_only,
-                        linking_retriever_name=args.linking_model)
-
+        exit(1)
     with open(f'data/{args.dataset}.json') as f:
         dataset = json.load(f)
 
+    if args.num:
+        dataset = dataset[:min(int(args.num), len(dataset))]
+        qrel = {key: qrel[key] for i, key in enumerate(qrel) if i < min(int(args.num), len(dataset))}
+
+    hipporag = HippoRAG(args.dataset, 'openai', args.extraction_model, args.retrieval_model, doc_ensemble=args.doc_ensemble, dpr_only=args.dpr_only,
+                        linking_retriever_name=args.linking_model)
+
     if not args.dpr_only:
-        link_top_k_list = [1, 2, 3, 5, 10, 20, 30]
+        link_top_k_list = [3, 5, 10, 20, 30]
         if args.linking == 'ner_to_node':
             link_top_k_list.append(None)
         for link_top_k in link_top_k_list:
