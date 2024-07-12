@@ -18,8 +18,7 @@ from tqdm import tqdm
 from src.colbertv2_indexing import colbertv2_index
 from src.langchain_util import init_langchain_model, LangChainModel
 from src.lm_wrapper import EmbeddingModelWrapper
-from src.lm_wrapper.gritlm import GritWrapper, gritlm_query_instructions_for_datasets, \
-    gritlm_query_instruction_for_tasks
+from src.lm_wrapper.gritlm import GritWrapper
 from src.lm_wrapper.util import init_embedding_model
 from src.named_entity_extraction_parallel import named_entity_recognition
 from src.processing import processing_phrases, softmax_with_zeros
@@ -38,18 +37,26 @@ class SpecificLoggerFilter(logging.Filter):
         return record.name == self.name
 
 
-def get_query_instruction_for_datasets(embedding_model: EmbeddingModelWrapper, datatset_name: str):
+def get_query_instruction(embedding_model: EmbeddingModelWrapper, task: str, dataset_name: str):
     if isinstance(embedding_model, GritWrapper):
-        for key in gritlm_query_instructions_for_datasets:
-            if key in datatset_name:
-                return gritlm_query_instructions_for_datasets[key]
-        return ''
-    return None
-
-
-def get_query_instruction_for_tasks(embedding_model: EmbeddingModelWrapper, task: str):
-    if isinstance(embedding_model, GritWrapper):
-        return gritlm_query_instruction_for_tasks.get(task, '')
+        if task == 'ner_to_node':
+            return 'Given a phrase, retrieve synonymous or relevant phrases that best match this phrase.'
+        elif task == 'query_to_node':
+            if 'scifact' in dataset_name.lower():
+                return 'Given a claim, retrieve relevant phrases that are mentioned in this claim.'
+            return 'Given a question, retrieve relevant phrases that are mentioned in this question.'
+        elif task == 'query_to_fact':
+            if 'scifact' in dataset_name.lower():
+                return 'Given a claim, retrieve relevant triplet facts that support or refute the claim.'
+            return 'Given a question, retrieve relevant triplet facts that matches this question.'
+        elif task is None or task == 'query_to_passage':
+            if 'scifact' in dataset_name.lower():
+                return 'Given a scientific claim, retrieve documents that support or refute the claim.'
+            else:
+                return 'Given a question, retrieve relevant documents that best answer the question.'
+        else:
+            print('Task instruction not found for {}'.format(task))
+            return ''
     return None
 
 
@@ -263,7 +270,7 @@ class HippoRAG:
                 for corpus_id, rank, score in ranking.data[0]:
                     query_doc_scores[corpus_id] = score
             else:  # HuggingFace dense retrieval
-                query_embedding = self.embed_model.encode_text(query, instruction=get_query_instruction_for_datasets(self.embed_model, self.corpus_name),
+                query_embedding = self.embed_model.encode_text(query, instruction=get_query_instruction(self.embed_model, 'query_to_passage', self.corpus_name),
                                                                return_cpu=True, return_numpy=True, norm=True)
                 query_doc_scores = np.dot(self.doc_embedding_mat, query_embedding.T)
                 query_doc_scores = query_doc_scores.T[0]
@@ -295,7 +302,7 @@ class HippoRAG:
                     oracle_node_phrases.add(t[2])
             oracle_node_phrases = list(oracle_node_phrases)
             node_embeddings = self.embed_model.encode_text(oracle_node_phrases, return_cpu=True, return_numpy=True, norm=True)
-            query_embedding = self.embed_model.encode_text(query, instruction=get_query_instruction_for_tasks(self.embed_model, 'query_to_node'),
+            query_embedding = self.embed_model.encode_text(query, instruction=get_query_instruction(self.embed_model, 'query_to_node', self.corpus_name),
                                                            return_cpu=True, return_numpy=True, norm=True)
             # rank and get link_top_k oracle nodes given the query
             query_node_scores = np.dot(node_embeddings,
@@ -346,8 +353,7 @@ class HippoRAG:
                         all_phrase_weights, linking_score_map = link_node_by_colbertv2(self, query_ner_list, link_top_k)
             else:  # huggingface dense retrieval
                 if self.doc_ensemble:
-                    query_embedding = self.embed_model.encode_text(query, instruction=get_query_instruction_for_tasks(
-                        self.embed_model, 'ner_to_node'),
+                    query_embedding = self.embed_model.encode_text(query, instruction=get_query_instruction(self.embed_model, 'ner_to_node', self.corpus_name),
                                                                    return_cpu=True, return_numpy=True, norm=True)
                     query_doc_scores = np.dot(self.doc_embedding_mat, query_embedding.T)
                     query_doc_scores = query_doc_scores.T[0]

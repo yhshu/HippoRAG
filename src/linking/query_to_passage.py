@@ -3,12 +3,12 @@ from typing import Union
 import numpy as np
 from nltk import sent_tokenize
 
-from src.hipporag import HippoRAG, get_query_instruction_for_datasets, get_query_instruction_for_tasks
+from src.hipporag import HippoRAG, get_query_instruction
 from src.linking.query_to_fact import graph_search_with_fact_entities
 
 
 def linking_by_passage(hipporag: HippoRAG, query: str, link_top_k: Union[None, int], rerank_model_name=None):
-    query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction_for_datasets(hipporag.embed_model, hipporag.corpus_name),
+    query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction(hipporag.embed_model, 'query_to_passage', hipporag.corpus_name),
                                                        return_cpu=True, return_numpy=True, norm=True)
     query_doc_scores = np.dot(hipporag.doc_embedding_mat, query_embedding.T)
     query_doc_scores = query_doc_scores.T[0]
@@ -24,12 +24,11 @@ def linking_by_passage(hipporag: HippoRAG, query: str, link_top_k: Union[None, i
         docs.append(doc)
         triples, triple_ids = hipporag.get_triples_by_corpus_idx(doc_id)
         facts.extend(triples)
-        for t  in triples:
+        for t in triples:
             triple_to_doc_id[t] = doc_id
 
-
     fact_embeddings = hipporag.embed_model.encode_text([str(item) for item in facts], return_cpu=True, return_numpy=True, norm=True)
-    query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction_for_tasks(hipporag.embed_model, 'query_to_fact'),
+    query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction(hipporag.embed_model, 'query_to_fact', hipporag.corpus_name),
                                                        return_cpu=True, return_numpy=True, norm=True)
 
     query_fact_scores = np.dot(fact_embeddings, query_embedding.T)
@@ -47,7 +46,7 @@ def linking_by_passage(hipporag: HippoRAG, query: str, link_top_k: Union[None, i
         for f in candidate_facts:
             doc_id = triple_to_doc_id[f]
             doc_title = hipporag.corpus[doc_id]['title']
-            sentences = sent_tokenize( hipporag.corpus[doc_id]['text'])
+            sentences = sent_tokenize(hipporag.corpus[doc_id]['text'])
             sentence_embeddings = hipporag.embed_model.encode_text(sentences, return_cpu=True, return_numpy=True, norm=True)
             fact_embedding = hipporag.embed_model.encode_text(str(f), instruction='Given a triplet fact, retrieve its most relevant sentence in a passage.',
                                                               return_cpu=True, return_numpy=True, norm=True)

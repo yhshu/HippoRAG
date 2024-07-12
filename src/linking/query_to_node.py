@@ -1,6 +1,6 @@
 import numpy as np
 
-from src.hipporag import HippoRAG, get_query_instruction_for_tasks
+from src.hipporag import HippoRAG, get_query_instruction
 from src.processing import softmax_with_zeros
 
 
@@ -12,7 +12,7 @@ def link_node_by_dpr(hipporag: HippoRAG, query: str, top_k=10):
     @param top_k: the number of top phrases to retrieve
     @return: all_phrase_weights, linking_score_map
     """
-    query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction_for_tasks(hipporag.embed_model, 'query_to_node'),
+    query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction(hipporag.embed_model, 'query_to_node', hipporag.corpus_name),
                                                        return_cpu=True, return_numpy=True, norm=True)
 
     # Get Closest Entity Nodes

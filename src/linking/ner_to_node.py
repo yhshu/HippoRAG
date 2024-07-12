@@ -1,7 +1,7 @@
 import numpy as np
 from colbert.data import Queries
 
-from src.hipporag import HippoRAG, get_query_instruction_for_tasks
+from src.hipporag import HippoRAG, get_query_instruction
 from src.processing import min_max_normalize
 
 
@@ -55,7 +55,7 @@ def link_node_by_dpr(hipporag: HippoRAG, query_ner_list: list, link_top_k=None):
     :param query_ner_list:
     :return:
     """
-    query_ner_embeddings = hipporag.embed_model.encode_text(query_ner_list, get_query_instruction_for_tasks(hipporag.embed_model, 'ner_to_node'),
+    query_ner_embeddings = hipporag.embed_model.encode_text(query_ner_list, get_query_instruction(hipporag.embed_model, 'ner_to_node', hipporag.corpus_name),
                                                             return_cpu=True, return_numpy=True, norm=True)
     # Get Closest Entity Nodes
     prob_vectors = np.dot(query_ner_embeddings, hipporag.kb_node_phrase_embeddings.T)  # (num_ner, dim) x (num_phrases, dim).T -> (num_ner, num_phrases)
@@ -105,7 +105,7 @@ def link_ner_to_node(hipporag, link_top_k, candidate_phrases: list, prob_vectors
 
 
 def oracle_ner_to_node(hipporag: HippoRAG, query_ner_list, oracle_phrases, link_top_k=None):
-    query_ner_embeddings = hipporag.embed_model.encode_text(query_ner_list, instruction=get_query_instruction_for_tasks(hipporag.embed_model, 'ner_to_node'),
+    query_ner_embeddings = hipporag.embed_model.encode_text(query_ner_list, instruction=get_query_instruction(hipporag.embed_model, 'ner_to_node', hipporag.corpus_name),
                                                             return_cpu=True, return_numpy=True, norm=True)
     phrase_embeddings = hipporag.embed_model.encode_text(oracle_phrases, return_cpu=True, return_numpy=True, norm=True)
     prob_vectors = np.dot(query_ner_embeddings, phrase_embeddings.T)  # (num_ner, dim) x (num_phrases, dim).T -> (num_ner, num_phrases)

@@ -1,12 +1,12 @@
 import numpy as np
 
-from src.hipporag import HippoRAG, get_query_instruction_for_tasks
+from src.hipporag import HippoRAG, get_query_instruction
 from src.linking import graph_search_with_entities
 
 
 def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, fact_embeddings, link_top_k, graph_search=True, rerank_model_name=None):
     query_doc_scores = np.zeros(hipporag.docs_to_phrases_mat.shape[0])
-    query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction_for_tasks(hipporag.embed_model, 'query_to_fact'),
+    query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction(hipporag.embed_model, 'query_to_fact', hipporag.corpus_name),
                                                        return_cpu=True, return_numpy=True, norm=True)
     # rank and get link_top_k oracle facts given the query
     query_fact_scores = np.dot(fact_embeddings, query_embedding.T)  # (num_facts, dim) x (1, dim).T = (num_facts, 1)
@@ -53,9 +53,21 @@ def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, 
     return sorted_doc_ids, sorted_scores, logs
 
 
-def graph_search_with_fact_entities(hipporag: HippoRAG, link_top_k, query_doc_scores, query_fact_scores, top_k_facts, top_k_fact_indices):
+def graph_search_with_fact_entities(hipporag: HippoRAG, link_top_k: int, query_doc_scores, query_fact_scores, top_k_facts, top_k_fact_indices):
+    """
+
+    @param hipporag:
+    @param link_top_k:
+    @param query_doc_scores: Used for DPR or doc ensemble
+    @param query_fact_scores: query-fact scores
+    @param top_k_facts:
+    @param top_k_fact_indices:
+    @return:
+    """
     all_phrase_weights = np.zeros(len(hipporag.node_phrases))
     linking_score_map = {}
+    phrase_scores = {}  # store all fact scores for each phrase
+
     for rank, f in enumerate(top_k_facts):
         subject_phrase = f[0].lower()
         predicate_phrase = f[1].lower()
@@ -63,15 +75,31 @@ def graph_search_with_fact_entities(hipporag: HippoRAG, link_top_k, query_doc_sc
         fact_score = query_fact_scores[top_k_fact_indices[rank]]
         for phrase in [subject_phrase, object_phrase]:
             phrase_id = hipporag.kb_node_phrase_to_id.get(phrase, None)
-            if phrase_id:
+            if phrase_id is not None:
                 all_phrase_weights[phrase_id] = 1.0
                 if hipporag.node_specificity and hipporag.phrase_to_num_doc[phrase_id] != 0:
                     all_phrase_weights[phrase_id] = 1 / hipporag.phrase_to_num_doc[phrase_id]
-        linking_score_map[subject_phrase] = fact_score
-        linking_score_map[object_phrase] = fact_score
+            if phrase not in phrase_scores:
+                phrase_scores[phrase] = []
+            phrase_scores[phrase].append(fact_score)
+
+    # calculate average fact score for each phrase
+    for phrase, scores in phrase_scores.items():
+        linking_score_map[phrase] = float(np.mean(scores))
+
     if link_top_k:
-        # choose top ranked node in linking_score_map
+        # choose top ranked nodes in linking_score_map
         linking_score_map = dict(sorted(linking_score_map.items(), key=lambda x: x[1], reverse=True)[:link_top_k])
+
+        # only keep the top_k phrases in all_phrase_weights
+        top_k_phrases = set(linking_score_map.keys())
+        for phrase in hipporag.kb_node_phrase_to_id.keys():
+            if phrase not in top_k_phrases:
+                phrase_id = hipporag.kb_node_phrase_to_id.get(phrase, None)
+                if phrase_id is not None:
+                    all_phrase_weights[phrase_id] = 0.0
+        assert np.count_nonzero(all_phrase_weights) == len(linking_score_map.keys())
+
     assert sum(all_phrase_weights) > 0, f'No phrases found in the graph for the given facts: {top_k_facts}'
     sorted_doc_ids, sorted_scores, logs = graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, query_doc_scores=query_doc_scores)
     return sorted_doc_ids, sorted_scores, logs

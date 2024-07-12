@@ -120,7 +120,7 @@ if __name__ == '__main__':
     parser.add_argument('--llm_model', type=str, default='gpt-3.5-turbo-1106', help='Specific model name')
     parser.add_argument('--retriever', type=str, default='facebook/contriever')
     parser.add_argument('--linking_model', type=str, default='facebook/contriever')
-    parser.add_argument('--linking', type=str, default='ner_to_node', choices=['ner_to_node', 'query_to_node', 'query_to_fact'],
+    parser.add_argument('--linking', type=str, default='ner_to_node', choices=['ner_to_node', 'query_to_node', 'query_to_fact', 'query_to_passage'],
                         help='linking method for the entry point of the graph')
     parser.add_argument('--prompt', type=str)
     parser.add_argument('--num_demo', type=int, default=1, help='the number of demo samples')
@@ -140,7 +140,7 @@ if __name__ == '__main__':
     set_llm_cache(SQLiteCache(database_path=".ircot_hipporag.db"))
 
     # check args
-    if args.linking in ['query_to_node', 'query_to_fact']:
+    if args.linking in ['query_to_node', 'query_to_fact', 'query_to_passage']:
         assert args.link_top_k, 'link_top_k should be provided for query_to_node or query_to_fact'
 
     # Please set environment variable OPENAI_API_KEY
@@ -293,9 +293,10 @@ if __name__ == '__main__':
 
         # record results
         phrases_in_gold_docs = []
-        for gold_passage in gold_passages:
-            passage_content = gold_passage['text'] if 'text' in gold_passage else gold_passage['paragraph_text']
-            phrases_in_gold_docs.append(hipporag.get_phrases_in_doc_by_str(passage_content))  # todo to check
+        if not hipporag.dpr_only:
+            for gold_passage in gold_passages:
+                passage_content = gold_passage['text'] if 'text' in gold_passage else gold_passage['paragraph_text']
+                phrases_in_gold_docs.append(hipporag.get_phrases_in_doc_by_str(passage_content))
 
         if args.dataset in ['hotpotqa', '2wikimultihopqa', 'hotpotqa_train']:
             sample['supporting_docs'] = [item for item in sample['supporting_facts']]
@@ -307,28 +308,31 @@ if __name__ == '__main__':
         sample['retrieved_scores'] = scores[:10]
         sample['nodes_in_gold_doc'] = phrases_in_gold_docs
         sample['recall'] = recall
+
         logs_for_first_step = logs_for_all_steps[1]
-        for key in logs_for_first_step.keys():
-            sample[key] = logs_for_first_step[key]
+        if logs_for_first_step is not None:
+            for key in logs_for_first_step.keys():
+                sample[key] = logs_for_first_step[key]
         sample['thoughts'] = thoughts
 
         # calculate node precision/recall/Hit
         linked_nodes = set()
-        for link in logs_for_first_step['linked_node_scores']:
-            if isinstance(link, list):
-                linked_nodes.add(link[1])
-            elif isinstance(link, str):
-                linked_nodes.add(link)
-        oracle_nodes = set()
-        for passage_phrases in phrases_in_gold_docs:
-            for phrase in passage_phrases:
-                oracle_nodes.add(phrase)
-        node_precision = len(linked_nodes.intersection(oracle_nodes)) / len(linked_nodes) if len(linked_nodes) > 0 else 0.0
-        node_recall = len(linked_nodes.intersection(oracle_nodes)) / len(oracle_nodes) if len(oracle_nodes) > 0 else 0.0
-        node_hit = 1.0 if len(linked_nodes.intersection(oracle_nodes)) > 0 else 0.0
-        metrics['node_precision'] += node_precision
-        metrics['node_recall'] += node_recall
-        metrics['node_hit'] += node_hit
+        if logs_for_first_step is not None:
+            for link in logs_for_first_step['linked_node_scores']:
+                if isinstance(link, list):
+                    linked_nodes.add(link[1])
+                elif isinstance(link, str):
+                    linked_nodes.add(link)
+            oracle_nodes = set()
+            for passage_phrases in phrases_in_gold_docs:
+                for phrase in passage_phrases:
+                    oracle_nodes.add(phrase)
+            node_precision = len(linked_nodes.intersection(oracle_nodes)) / len(linked_nodes) if len(linked_nodes) > 0 else 0.0
+            node_recall = len(linked_nodes.intersection(oracle_nodes)) / len(oracle_nodes) if len(oracle_nodes) > 0 else 0.0
+            node_hit = 1.0 if len(linked_nodes.intersection(oracle_nodes)) > 0 else 0.0
+            metrics['node_precision'] += node_precision
+            metrics['node_recall'] += node_recall
+            metrics['node_hit'] += node_hit
 
         results.append(sample)
         if (sample_idx + 1) % 10 == 0:

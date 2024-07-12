@@ -99,7 +99,7 @@ def run_retrieve_beir(dataset_name: str, extraction_model: str, retrieval_model:
         run_dict = {'retrieved': {}, 'log': {}}  # for pytrec_eval
 
     to_update_run = False
-    for i, sample in tqdm(enumerate(dataset), total=len(dataset), desc='Evaluating queries'):
+    for i, sample in tqdm(enumerate(dataset), total=len(dataset), desc='Evaluating samples'):
         query_text = sample['text']
         query_id = sample['id']
         if query_id in run_dict['retrieved']:
