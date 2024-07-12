@@ -193,8 +193,8 @@ if __name__ == '__main__':
         output_path += f'_LT_{args.link_top_k}'
     output_path += '.json'
 
-    k_list = [1, 2, 5, 10, 15, 20, 30, 40, 50, 80, 100]
-    total_recall = {k: 0 for k in k_list}
+    k_list = [1, 2, 5, 10, 20]
+    metrics_sum = defaultdict(float)  # the sum of metrics for all samples
 
     force_retry = args.force_retry
 
@@ -211,7 +211,12 @@ if __name__ == '__main__':
                 processed_ids = {sample['id'] for sample in results}
 
             for sample in results:
-                total_recall = {k: total_recall[k] + sample['recall'][str(k)] for k in k_list}
+                for k in k_list:
+                    metrics_sum[f"recall_{k}"] += sample['recall'][str(k)]
+                    metrics_sum[f"all_recall_{k}"] += sample['all_recall'][str(k)]
+                metrics_sum["node_precision"] += sample['node_precision']
+                metrics_sum["node_recall"] += sample['node_recall']
+                metrics_sum["node_hit"] += sample['node_hit']
         except Exception as e:
             print(e)
             print('Results file maybe empty, cannot be loaded.')
@@ -220,11 +225,10 @@ if __name__ == '__main__':
 
     print(f'Loaded {len(results)} results from {output_path}')
     if len(results) > 0:
-        for k in k_list:
-            print(f'R@{k}: {total_recall[k] / len(results):.4f} ', end='')
+        for key in metrics_sum.keys():
+            print(key, round(metrics_sum[key] / len(results), 4))
         print()
 
-    metrics = defaultdict(float)
     for sample_idx, sample in tqdm(enumerate(data), total=len(data), desc='IRCoT retrieval'):  # for each sample
         if args.dataset in ['hotpotqa', '2wikimultihopqa', 'hotpotqa_train']:
             sample_id = sample['_id']
@@ -281,16 +285,6 @@ if __name__ == '__main__':
             gold_items = set([item['title'] + '\n' + (item['text'] if 'text' in item else item['paragraph_text']) for item in gold_passages])
             retrieved_items = retrieved_passages
 
-        # calculate metrics
-        recall = dict()
-        print(f'idx: {sample_idx + 1} ', end='')
-        for k in k_list:
-            recall[k] = round(sum(1 for t in gold_items if t in retrieved_items[:k]) / len(gold_items), 4)
-            total_recall[k] += recall[k]
-            print(f'R@{k}: {total_recall[k] / (sample_idx + 1):.4f} ', end='')
-        print()
-        print('[ITERATION]', it, '[PASSAGE]', len(retrieved_passages), '[THOUGHT]', thoughts)
-
         # record results
         phrases_in_gold_docs = []
         if not hipporag.dpr_only:
@@ -307,7 +301,6 @@ if __name__ == '__main__':
         sample['retrieved'] = retrieved_passages[:10]
         sample['retrieved_scores'] = scores[:10]
         sample['nodes_in_gold_doc'] = phrases_in_gold_docs
-        sample['recall'] = recall
 
         logs_for_first_step = logs_for_all_steps[1]
         if logs_for_first_step is not None:
@@ -330,9 +323,33 @@ if __name__ == '__main__':
             node_precision = len(linked_nodes.intersection(oracle_nodes)) / len(linked_nodes) if len(linked_nodes) > 0 else 0.0
             node_recall = len(linked_nodes.intersection(oracle_nodes)) / len(oracle_nodes) if len(oracle_nodes) > 0 else 0.0
             node_hit = 1.0 if len(linked_nodes.intersection(oracle_nodes)) > 0 else 0.0
-            metrics['node_precision'] += node_precision
-            metrics['node_recall'] += node_recall
-            metrics['node_hit'] += node_hit
+            sample['node_precision'] = node_precision
+            sample['node_recall'] = node_recall
+            sample['node_hit'] = node_hit
+            metrics_sum['node_precision'] += node_precision
+            metrics_sum['node_recall'] += node_recall
+            metrics_sum['node_hit'] += node_hit
+
+        # calculate passage retrieval recall
+        recall = dict()
+        print(f'idx: {sample_idx + 1} ', end='')
+        for k in k_list:
+            recall[k] = round(sum(1 for t in gold_items if t in retrieved_items[:k]) / len(gold_items), 4)
+            metrics_sum[f"recall_{k}"] += recall[k]
+
+        # calculate all-recall: whether all gold items are retrieved
+        all_recall = dict()
+        for k in k_list:
+            all_recall = 1 if all(t in retrieved_items[:k] for t in gold_items) else 0
+            metrics_sum[f'all_recall_{k}'] += all_recall
+
+        sample['recall'] = recall
+        sample['all_recall'] = all_recall
+
+        for key in sorted(metrics_sum.keys(), key=lambda x: (len(x), x)):
+            print(f'{key} {metrics_sum[key] / (sample_idx + 1):.4f} ', end='')
+        print()
+        print('[ITERATION]', it, '[PASSAGE]', len(retrieved_passages), '[THOUGHT]', thoughts)
 
         results.append(sample)
         if (sample_idx + 1) % 10 == 0:
@@ -340,9 +357,9 @@ if __name__ == '__main__':
                 json.dump(results, f)
 
     # show metrics
-    for key in metrics.keys():
-        metrics[key] /= len(data)
-        print(key, round(metrics[key], 3))
+    for key in sorted(metrics_sum.keys(), key=lambda x: (len(x), x)):
+        metrics_sum[key] /= len(data)
+        print(key, round(metrics_sum[key], 3))
 
     # save results
     with open(output_path, 'w') as f:
