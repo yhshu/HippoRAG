@@ -7,7 +7,7 @@ from src.hipporag import HippoRAG, get_query_instruction
 from src.linking.query_to_fact import graph_search_with_fact_entities
 
 
-def linking_by_passage(hipporag: HippoRAG, query: str, link_top_k: Union[None, int], rerank_model_name=None):
+def linking_by_passage(hipporag: HippoRAG, query: str, link_top_k: Union[None, int]):
     query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction(hipporag.embed_model, 'query_to_passage', hipporag.corpus_name),
                                                        return_cpu=True, return_numpy=True, norm=True)
     query_doc_scores = np.dot(hipporag.doc_embedding_mat, query_embedding.T)
@@ -27,51 +27,35 @@ def linking_by_passage(hipporag: HippoRAG, query: str, link_top_k: Union[None, i
         for t in triples:
             triple_to_doc_id[t] = doc_id
 
-    fact_embeddings = hipporag.embed_model.encode_text([str(item) for item in facts], return_cpu=True, return_numpy=True, norm=True)
+    # add contexts to candidate_facts
+    candidate_facts_with_contexts = []
+    for f in facts:
+        doc_id = triple_to_doc_id[f]
+        doc_title = hipporag.corpus[doc_id]['title']
+        doc_text = hipporag.corpus[doc_id]['text']
+        # sentences = sent_tokenize(doc_text)
+        # sentence_embeddings = hipporag.embed_model.encode_text(sentences, return_cpu=True, return_numpy=True, norm=True)
+        # fact_embedding = hipporag.embed_model.encode_text(str(f), instruction='Given a triplet fact, retrieve its most relevant sentence in a passage.',
+        #                                                   return_cpu=True, return_numpy=True, norm=True)
+        # fact_sentence_scores = np.dot(sentence_embeddings, fact_embedding.T)
+        # fact_sentence_scores = np.squeeze(fact_sentence_scores)
+        # # get the top-1 sentence
+        # top_sentence_idx = np.argmax(fact_sentence_scores)
+        # relevant_sentence = sentences[top_sentence_idx]
+        candidate_facts_with_contexts.append(f"Fact: {f}\nFrom Passage: {doc_title}\nSource: {doc_text}")
+
+    fact_embeddings = hipporag.embed_model.encode_text(candidate_facts_with_contexts, return_cpu=True, return_numpy=True, norm=True)
     query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction(hipporag.embed_model, 'query_to_fact', hipporag.corpus_name),
                                                        return_cpu=True, return_numpy=True, norm=True)
 
     query_fact_scores = np.dot(fact_embeddings, query_embedding.T)
     query_fact_scores = np.squeeze(query_fact_scores)
-    if rerank_model_name is not None:
-        # from src.rerank import LLMLogitsReranker
-        # reranker = LLMLogitsReranker(rerank_model_name)
-        from src.rerank import RankGPT
-        reranker = RankGPT(rerank_model_name)
-        candidate_fact_indices = np.argsort(query_fact_scores)[::-1].tolist()
-        candidate_facts = [facts[i] for i in candidate_fact_indices]
 
-        # add contexts to candidate_facts
-        candidate_facts_with_contexts = []
-        for f in candidate_facts:
-            doc_id = triple_to_doc_id[f]
-            doc_title = hipporag.corpus[doc_id]['title']
-            sentences = sent_tokenize(hipporag.corpus[doc_id]['text'])
-            sentence_embeddings = hipporag.embed_model.encode_text(sentences, return_cpu=True, return_numpy=True, norm=True)
-            fact_embedding = hipporag.embed_model.encode_text(str(f), instruction='Given a triplet fact, retrieve its most relevant sentence in a passage.',
-                                                              return_cpu=True, return_numpy=True, norm=True)
-            fact_sentence_scores = np.dot(sentence_embeddings, fact_embedding.T)
-            fact_sentence_scores = np.squeeze(fact_sentence_scores)
-            # get the top-1 sentence
-            top_sentence_idx = np.argmax(fact_sentence_scores)
-            relevant_sentence = sentences[top_sentence_idx]
-            candidate_facts_with_contexts.append(f"Fact: {f}\nFrom Passage: {doc_title}\nSource: {relevant_sentence}")
-
-        # rerank
-        top_k_fact_indicies, top_k_facts = reranker.rerank('query_to_fact', query, candidate_fact_indices, candidate_facts_with_contexts, link_top_k)
-
-        # remove contexts from top_k_facts
-        top_k_facts = [facts[i] for i in top_k_fact_indicies]
-
-        rerank_log = {'facts_before_rerank': candidate_facts, 'facts_after_rerank': top_k_facts}
+    if link_top_k is not None:
+        top_k_fact_indicies = np.argsort(query_fact_scores)[-link_top_k:][::-1].tolist()
     else:
-        if link_top_k is not None:
-            top_k_fact_indicies = np.argsort(query_fact_scores)[-link_top_k:][::-1].tolist()
-        else:
-            top_k_fact_indicies = np.argsort(query_fact_scores)[::-1].tolist()
-        top_k_facts = [facts[i] for i in top_k_fact_indicies]
+        top_k_fact_indicies = np.argsort(query_fact_scores)[::-1].tolist()
+    top_k_facts = [facts[i] for i in top_k_fact_indicies]
 
     sorted_doc_ids, sorted_doc_scores, logs = graph_search_with_fact_entities(hipporag, link_top_k, query_doc_scores, query_fact_scores, top_k_facts, top_k_fact_indicies)
-    if rerank_model_name is not None:
-        logs['rerank'] = rerank_log
     return sorted_doc_ids, sorted_doc_scores, logs
