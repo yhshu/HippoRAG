@@ -11,7 +11,7 @@ from src.openie_with_retrieval_option_parallel import openie_for_corpus
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str, help='dataset name and split, e.g., `sci_fact_test`, `fiqa_dev`.')
+    parser.add_argument('--dataset', type=str, help='dataset name and split, e.g., `scifact_test`, `fiqa_dev`.')
     parser.add_argument('--run_ner', action='store_true')
     parser.add_argument('--num_passages', type=str, default='all')
     parser.add_argument('--llm', type=str, default='openai', help="LLM, e.g., 'openai' or 'together'")

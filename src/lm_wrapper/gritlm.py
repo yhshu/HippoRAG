@@ -22,7 +22,7 @@ class GritWrapper(EmbeddingModelWrapper):
         """
         self.model = GritLM(model_name, torch_dtype='auto', **kwargs)
 
-    def encode_list(self, texts: list, instruction: str, batch_size=96):
+    def encode_list(self, texts: list, instruction: str, batch_size=80):
         return self.model.encode(texts, instruction=gritlm_instruction(instruction), batch_size=batch_size)
 
     def encode_text(self, text: Union[str, List], instruction: str = '', norm=True, return_numpy=False, return_cpu=False):

@@ -214,6 +214,7 @@ if __name__ == '__main__':
                 for k in k_list:
                     metrics_sum[f"recall_{k}"] += sample['recall'][str(k)]
                     metrics_sum[f"all_recall_{k}"] += sample['all_recall'][str(k)]
+                    metrics_sum[f"any_recall_{k}"] += sample['any_recall'][str(k)]
                 metrics_sum["node_precision"] += sample['node_precision']
                 metrics_sum["node_recall"] += sample['node_recall']
                 metrics_sum["node_hit"] += sample['node_hit']
@@ -341,7 +342,9 @@ if __name__ == '__main__':
         all_recall = dict()
         for k in k_list:
             all_recall = 1 if all(t in retrieved_items[:k] for t in gold_items) else 0
+            any_recall = 1 if any(t in retrieved_items[:k] for t in gold_items) else 0
             metrics_sum[f'all_recall_{k}'] += all_recall
+            metrics_sum[f'any_recall_{k}'] += any_recall
 
         sample['recall'] = recall
         sample['all_recall'] = all_recall

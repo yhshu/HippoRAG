@@ -224,7 +224,7 @@ class RetrievalModule:
                 if length > max_pad_size:
                     max_pad_size = length
 
-                if max_pad_size * len(text_batch) > 50000 or num_strings_proc == len(strs_to_encode):
+                if max_pad_size * len(text_batch) > 10000 or num_strings_proc == len(strs_to_encode):
 
                     text_batch = list(text_batch)
                     encoding = tokenizer(text_batch, return_tensors='pt', padding=True, truncation=True,

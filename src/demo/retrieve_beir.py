@@ -184,7 +184,7 @@ def run_retrieve_beir(dataset_name: str, extraction_model: str, retrieval_model:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str, help='dataset name and split, e.g., `sci_fact_test`, `fiqa_dev`.')
+    parser.add_argument('--dataset', type=str, help='dataset name and split, e.g., `scifact_test`, `fiqa_dev`.')
     parser.add_argument('--chunk', action='store_true')
     parser.add_argument('--extraction_model', type=str, default='gpt-3.5-turbo')
     parser.add_argument('--retrieval_model', type=str, help="Graph creating retriever name, e.g., 'facebook/contriever', 'colbertv2'")
