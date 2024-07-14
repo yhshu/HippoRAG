@@ -47,7 +47,6 @@ def named_entity_recognition_for_corpus_openai_batch(dataset_name: str, num_pass
     print("Go to https://platform.openai.com/storage/files/ or use OpenAI file API to get the output file ID after the batch job is done.")
 
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str)

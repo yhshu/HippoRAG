@@ -1,5 +1,9 @@
 import sys
 
+from gritlm import GritLM
+
+from src.lm_wrapper.gritlm import GritWrapper
+
 sys.path.append('.')
 import _pickle as pickle
 import argparse
@@ -44,17 +48,22 @@ class RetrievalModule:
         """
 
         self.retriever_name = retriever_name
-
         self.retrieval_name_dir = None
+        self.pool_method = pool_method
 
         # Search for pickle file
         print('No Pre-Computed Vectors. Confirming PLM Model.')
 
         try:
-            if 'ckpt' in retriever_name:
-                self.plm = AutoModel.load_from_checkpoint(retriever_name)
+            if 'GritLM' in retriever_name:
+                self.plm = GritWrapper(retriever_name)
+                self.encode_strings_func = self.encode_strings_gritlm
             else:
-                self.plm = AutoModel.from_pretrained(retriever_name)
+                if 'ckpt' in retriever_name:
+                    self.plm = AutoModel.load_from_checkpoint(retriever_name)
+                else:
+                    self.plm = AutoModel.from_pretrained(retriever_name)
+                self.encode_strings_func = self.encode_strings
         except Exception as e:
             print(e)
             print('{} is an invalid retriever name. Check Documentation.'.format(retriever_name))
@@ -83,7 +92,7 @@ class RetrievalModule:
         # Encode Missing Strings
         if len(missing_strings):
             print('Encoding {} Missing Strings'.format(len(missing_strings)))
-            new_vectors, new_strings, = self.encode_strings(missing_strings, pool_method)
+            new_vectors, new_strings, = self.encode_strings_func(missing_strings)
 
             precomp_strings = list(precomp_strings)
             precomp_vectors = list(precomp_vectors)
@@ -139,7 +148,7 @@ class RetrievalModule:
     def load_precomp_strings(self, retrieval_name_dir):
         filename = retrieval_name_dir + '/encoded_strings.txt'
 
-        if not (os.path.exists(filename)):
+        if not (os.path.exists(filename)):  # No precomputed data
             return []
 
         with open(filename, 'r') as f:
@@ -154,7 +163,7 @@ class RetrievalModule:
         print('Loading PLM Vectors.')
         files = glob(retrieval_name_dir + '/vecs_*.p')
 
-        if len(files) == 0:
+        if len(files) == 0:  # No precomputed vectors
             return vectors
 
         for i in tqdm(range(len(files))):
@@ -195,7 +204,12 @@ class RetrievalModule:
 
         return vector_dict
 
-    def encode_strings(self, strs_to_encode, pool_method):
+    def encode_strings_gritlm(self, strs_to_encode):
+        all_embeddings = self.plm.encode_text(strs_to_encode, instruction='Given a phrase, retrieve phrases that are synonymous with it.',
+                                              return_numpy=True, return_cpu=True, norm=True)
+        return all_embeddings, strs_to_encode
+
+    def encode_strings(self, strs_to_encode):
         self.plm.to('cuda')
         tokenizer = AutoTokenizer.from_pretrained(self.retriever_name)
 
@@ -224,7 +238,7 @@ class RetrievalModule:
                 if length > max_pad_size:
                     max_pad_size = length
 
-                if max_pad_size * len(text_batch) > 10000 or num_strings_proc == len(strs_to_encode):
+                if max_pad_size * len(text_batch) > 50000 or num_strings_proc == len(strs_to_encode):
 
                     text_batch = list(text_batch)
                     encoding = tokenizer(text_batch, return_tensors='pt', padding=True, truncation=True,
@@ -237,10 +251,10 @@ class RetrievalModule:
 
                     outputs = self.plm(input_ids, attention_mask=attention_mask)
 
-                    if pool_method == 'cls':
+                    if self.pool_method == 'cls':
                         embeddings = outputs[0][:, 0, :]
 
-                    elif pool_method == 'mean':
+                    elif self.pool_method == 'mean':
                         embeddings = mean_pooling(outputs[0], attention_mask)
 
                     all_cls.append(embeddings.cpu().numpy())
