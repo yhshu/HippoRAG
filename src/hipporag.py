@@ -49,6 +49,10 @@ def get_query_instruction(embedding_model: EmbeddingModelWrapper, task: str, dat
             if 'scifact' in dataset_name.lower():
                 return 'Given a claim, retrieve relevant triplet facts that support or refute the claim.'
             return 'Given a question, retrieve relevant triplet facts that matches this question.'
+        elif task == 'query_to_sentence':
+            if 'scifact' in dataset_name.lower():
+                return 'Given a claim, retrieve relevant sentences that support or refute the claim.'
+            return 'Given a question, retrieve relevant sentences that best answer the question.'
         elif task is None or task == 'query_to_passage':
             if 'scifact' in dataset_name.lower():
                 return 'Given a scientific claim, retrieve documents that support or refute the claim.'
@@ -382,12 +386,12 @@ class HippoRAG:
                 return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], log
 
         elif linking == 'query_to_passage':
-            from src.linking.query_to_passage import linking_by_passage
+            from src.linking.query_to_passage import linking_by_passage_fact
             if 'colbertv2' in self.linking_retriever_name:
                 pass
             else:
                 self.load_dpr_doc_embeddings()
-                sorted_doc_ids, sorted_scores, doc_rank_logs = linking_by_passage(self, query, link_top_k=link_top_k)
+                sorted_doc_ids, sorted_scores, doc_rank_logs = linking_by_passage_fact(self, query, link_top_k=link_top_k)
 
         return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], doc_rank_logs
 
