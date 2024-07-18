@@ -82,7 +82,7 @@ def run_ner_on_texts(client, texts):
     return ner_output, total_cost
 
 
-def ner_parallel(dataset: str, llm: str, model_name: str, num_processes):
+def query_ner_parallel(dataset: str, llm: str, model_name: str, num_processes):
     client = init_langchain_model(llm, model_name)  # LangChain model
     output_file = 'output/{}_queries.named_entity_output.tsv'.format(dataset)
     try:
@@ -149,4 +149,4 @@ if __name__ == '__main__':
     dataset = args.dataset
     model_name = args.model_name
 
-    ner_parallel(args.dataset, args.llm, args.model_name, args.num_processes)
+    query_ner_parallel(args.dataset, args.llm, args.model_name, args.num_processes)

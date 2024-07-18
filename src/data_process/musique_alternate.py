@@ -4,10 +4,16 @@ import re
 
 import pandas as pd
 import spacy
+from langchain.globals import set_llm_cache
+from langchain_community.cache import SQLiteCache
+from langchain_core.messages import HumanMessage
+from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate
 from tqdm import tqdm
 
 import random
 import string
+
+from src.langchain_util import init_langchain_model
 
 
 def random_char_replacement(name, num_replacements=2):
@@ -86,6 +92,55 @@ def perturb_entity_set(entities):
 
         mapping[entity] = perturbed_entity
 
+    # sort keys by length and alphabetically
+    mapping = {k: v for k, v in sorted(mapping.items(), key=lambda item: (len(item[0]), item[0]))}
+    return mapping
+
+
+alternation_prompt = """Given a multi-hop QA dataset containing various entities such as person, organization, work of art, product, event, and law, your task is to replace the existing names with new, preferably fictitious, names. Follow these guidelines:
+
+- For persons, maintain the same gender and nationality as the original names.
+- For organizations, maintain the type (e.g., company, university).
+- If the name is possessive, ensure the new name is also possessive.
+- If you believe the entity type is not clear, you can insert or replace a few characters based on the original name, and avoid make up trivial new names like `XYZ`.
+
+Use JSON mode to respond a new name without any explanation, e.g.,
+Original name: Mike 
+{"name": "Bob"}
+
+Original name: "{original_name}"\n"""
+
+
+def llm_alternating_name(name: str):
+    messages = ChatPromptTemplate.from_messages([HumanMessage(alternation_prompt.replace("{original_name}", name))]).format_prompt()
+    completion = client.invoke(messages.to_messages(), temperature=0.5, response_format={"type": "json_object"}, max_tokens=96)
+    try:
+        content = json.loads(completion.content)['name']
+    except:
+        print('Error when parsing response:', completion.content)
+        content = name
+    return content
+
+
+def alternate_entity_set(entities):
+    entities = [e for e in entities if not is_number(e)]  # remove numbers from entities
+    entities = sorted(entities, key=lambda x: len(x))  # sort entities by length, shortest first
+
+    mapping = {}
+
+    for e in tqdm(entities, desc='Alternating entities', total=len(entities)):
+        if len(e) <= 2:
+            continue
+        done = False
+        for m in mapping:
+            if m in e:
+                e = e.replace(m, mapping[m])
+                done = True
+        if not done:
+            mapping[e] = llm_alternating_name(e)
+
+    # sort keys by length, longest first
+    mapping = {k: v for k, v in sorted(mapping.items(), key=lambda item: (len(item[0]), item[0]), reverse=True)}
     return mapping
 
 
@@ -103,16 +158,20 @@ def is_number(s):
     return False
 
 
-def replace_phrases(text, mapping):
-    # Sort the mapping keys by length in descending order to handle longer phrases first
-    sorted_keys = sorted(mapping.keys(), key=len, reverse=True)
+def replace_phrases(text: str, mapping: dict):
+    """
+
+    @param text:
+    @param mapping: keys are sorted by length and alphabetically
+    @return:
+    """
 
     def replace_match(match):
         matched_text = match.group(0)
         return mapping.get(matched_text, matched_text)
 
     # Create a regex pattern that matches any of the keys in the mapping
-    pattern = re.compile(r'\b(' + '|'.join(re.escape(key) for key in sorted_keys) + r')\b')
+    pattern = re.compile(r'\b(' + '|'.join(re.escape(key) for key in mapping.keys()) + r')\b')
 
     # Replace matched phrases using the replace_match function
     replaced_text = pattern.sub(replace_match, text)
@@ -121,10 +180,13 @@ def replace_phrases(text, mapping):
 
 
 if __name__ == '__main__':
-    paser = argparse.ArgumentParser()
-    args = paser.parse_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dataset', type=str, default='musique_gpt_alternate')
+    args = parser.parse_args()
 
     random.seed(1)
+    client = init_langchain_model('openai', 'gpt-4o-mini')
+    set_llm_cache(SQLiteCache(database_path=".langchain.db"))
 
     musique_samples = json.load(open('data/musique.json'))
     musique_corpus = json.load(open('data/musique_corpus.json'))
@@ -140,7 +202,7 @@ if __name__ == '__main__':
         doc = nlp(query)
         if doc.ents is None or len(doc.ents) == 0:
             print(f"No entitiy found in query by Spacy: {query}")
-            print(f"NER by GPT-3.5: {named_entities}")
+            print(f"NER by LLM: {named_entities}")
             print()
         for ent in doc.ents:
             if ent.label_ not in entity_types:
@@ -185,7 +247,10 @@ if __name__ == '__main__':
 
     # perturb the entities
     print('Collected entities:', len(all_entities))
-    entity_mapping = perturb_entity_set(all_entities)
+    entity_mapping = alternate_entity_set(all_entities)
+
+    with open(f'data/{args.dataset}_mapping.json', 'w') as f:
+        json.dump(entity_mapping, f, indent=4)
 
     # modify the corpus and queries
     num_modified_passages = 0
@@ -224,7 +289,7 @@ if __name__ == '__main__':
     print('Modified corpus len:', len(new_corpus), '#modified_passage:', num_modified_passages, '#modified_queries:', num_modified_queries)
 
     # save corpus and queries
-    with open('data/musique_alternate_corpus.json', 'w') as f:
+    with open(f'data/{args.dataset}_corpus.json', 'w') as f:
         json.dump(new_corpus, f, indent=4)
-    with open('data/musique_alternate.json', 'w') as f:
+    with open(f'data/{args.dataset}.json', 'w') as f:
         json.dump(new_dataset, f, indent=4)

@@ -11,7 +11,7 @@ def named_entity_recognition_for_corpus_openai_batch(dataset_name: str, num_pass
                                                                                        num_passages, True)
 
     # output corpus to a file to upload to OpenAI
-    corpus_jsonl_path = f'output/openai_batch_submission_{arg_str}.jsonl'
+    corpus_jsonl_path = f'output/openai_batch_submission_ner_{dataset_name[1:]}_{model_name}.jsonl'
     jsonl_contents = []
     total_tokens = 0
     for i, passage in enumerate(retrieval_corpus):
@@ -28,13 +28,14 @@ def named_entity_recognition_for_corpus_openai_batch(dataset_name: str, num_pass
                       "max_tokens": max_tokens, "response_format": {"type": "json_object"}}}))
 
     print("Total prompt tokens:", total_tokens)
-    print("Approximate price for prompt tokens if $0.25 / 1M tokens:", 0.25 * total_tokens / 1e6)
-    print("Approximate price for prompt tokens if $2.50 / 1M tokens:", 2.5 * total_tokens / 1e6)
+    print("Approximate costs for prompt tokens using GPT-4o-mini Batch API:", round(0.075 * total_tokens / 1e6, 3))
+    print("Approximate costs for prompt tokens using GPT-3.5-turbo-0125 Batch API", round(0.25 * total_tokens / 1e6, 3))
+    print("Approximate costs for prompt tokens using GPT-4o Batch API:", round(2.5 * total_tokens / 1e6, 3))
 
     # Save to the batch file
     with open(corpus_jsonl_path, 'w') as f:
         f.write('\n'.join(jsonl_contents))
-        print("Batch file saved to", corpus_jsonl_path)
+    print("Batch file saved to", corpus_jsonl_path, 'len: ', len(jsonl_contents))
 
     # Call OpenAI Batch API
     from openai import OpenAI

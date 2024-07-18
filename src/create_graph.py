@@ -22,7 +22,8 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
     similarity_max = 1.0
     possible_files = glob(f'output/openie_{dataset}_results_{extraction_type}_{extraction_model}_*.json')
     max_samples = np.max([int(file.split('{}_'.format(extraction_model))[1].split('.json')[0]) for file in possible_files])
-    extracted_file = json.load(open(f'output/openie_{dataset}_results_{extraction_type}_{extraction_model}_{max_samples}.json', 'r'))
+    extracted_file_path = f'output/openie_{dataset}_results_{extraction_type}_{extraction_model}_{max_samples}.json'
+    extracted_file = json.load(open(extracted_file_path, 'r'))
 
     extracted_triples = extracted_file['docs']
     if not extraction_model.startswith('gpt-3.5-turbo'):
@@ -175,7 +176,8 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
 
         json.dump(passage_json, open('output/{}_{}_graph_passage_chatgpt_openIE.{}_{}.{}.subset.json'.format(dataset, graph_type, phrase_type, extraction_type, version), 'w'))
         json.dump(node_json, open('output/{}_{}_graph_nodes_chatgpt_openIE.{}_{}.{}.subset.json'.format(dataset, graph_type, phrase_type, extraction_type, version), 'w'))
-        json.dump(fact_json_list, open('output/{}_{}_graph_clean_facts_chatgpt_openIE.{}_{}.{}.subset.json'.format(dataset, graph_type, phrase_type, extraction_type, version), 'w'))
+        json.dump(fact_json_list,
+                  open('output/{}_{}_graph_clean_facts_chatgpt_openIE.{}_{}.{}.subset.json'.format(dataset, graph_type, phrase_type, extraction_type, version), 'w'))
 
         pickle.dump(kb_phrase_dict, open('output/{}_{}_graph_phrase_dict_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, version), 'wb'))
         pickle.dump(triplet_fact_to_id_dict, open('output/{}_{}_graph_fact_dict_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, version), 'wb'))
@@ -314,7 +316,8 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
             graph_plus = graph
 
         pickle.dump(relations,
-                    open('output/{}_{}_graph_relation_dict_{}_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, processed_retriever_name, version), 'wb'))
+                    open('output/{}_{}_graph_relation_dict_{}_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, processed_retriever_name, version),
+                         'wb'))
 
         print('Saving Graph')
 

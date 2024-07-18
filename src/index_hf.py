@@ -7,18 +7,20 @@ sys.path.append('.')
 
 import argparse
 
-
 from src.RetrievalModule import RetrievalModule
 from src.create_graph import create_graph
-from src.named_entity_extraction_parallel import ner_parallel
+from src.named_entity_extraction_parallel import query_ner_parallel
 from src.openie_with_retrieval_option_parallel import openie_for_corpus
 
 
 def index_with_huggingface(dataset_name: str, run_ner: bool, num_passages, llm_provider: str, extractor: str, retriever: str,
-                           num_thread, syn_thresh=0.8, langchain_db='.langchain.db'):
+                           num_thread, syn_thresh=0.8, langchain_db='.langchain.db', skip_openie=False):
     # set_llm_cache(SQLiteCache(database_path=langchain_db))
-    openie_for_corpus(dataset_name, run_ner, num_passages, llm_provider, extractor, num_thread)
-    ner_parallel(dataset_name, llm_provider, extractor, num_thread)
+    if skip_openie is False:
+        openie_for_corpus(dataset_name, run_ner, num_passages, llm_provider, extractor, num_thread)
+    else:
+        print('Skipping OpenIE')
+    query_ner_parallel(dataset_name, llm_provider, extractor, num_thread)
 
     extraction_type = 'ner'
     processed_extractor_name = extractor.replace('/', '_')
@@ -34,6 +36,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, help='dataset name and split, e.g., `scifact_test`, `fiqa_dev`.')
     parser.add_argument('--run_ner', action='store_true')
+    parser.add_argument('--skip_openie', action='store_true')
     parser.add_argument('--num_passages', type=str, default='all')
     parser.add_argument('--llm', type=str, default='openai', help="LLM, e.g., 'openai' or 'together'")
     parser.add_argument('--extractor', type=str, default='gpt-3.5-turbo', help='Specific model name')
@@ -42,4 +45,5 @@ if __name__ == '__main__':
     parser.add_argument('--syn_thresh', type=float, default=0.8)
 
     args = parser.parse_args()
-    index_with_huggingface(args.dataset, args.run_ner, args.num_passages, args.llm, args.extractor, args.retriever, args.num_thread, args.syn_thresh)
+    index_with_huggingface(args.dataset, args.run_ner, args.num_passages, args.llm, args.extractor, args.retriever, args.num_thread, args.syn_thresh,
+                           skip_openie=args.skip_openie)

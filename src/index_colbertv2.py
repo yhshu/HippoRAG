@@ -6,7 +6,7 @@ from langchain_community.cache import SQLiteCache
 from src.colbertv2_indexing import colbertv2_graph_indexing
 from src.colbertv2_knn import colbertv2_retrieve_knn
 from src.create_graph import create_graph
-from src.named_entity_extraction_parallel import ner_parallel
+from src.named_entity_extraction_parallel import query_ner_parallel
 from src.openie_with_retrieval_option_parallel import openie_for_corpus
 
 if __name__ == '__main__':
@@ -26,7 +26,7 @@ if __name__ == '__main__':
 
     # Running Open Information Extraction
     openie_for_corpus(args.dataset, args.run_ner, args.num_passages, args.llm, args.extractor, args.num_thread)
-    ner_parallel(args.dataset, args.llm, args.extractor, args.num_thread)
+    query_ner_parallel(args.dataset, args.llm, args.extractor, args.num_thread)
 
     # Creating ColBERT Graph
     create_graph(args.dataset, extraction_type, args.extractor, args.retriever, args.syn_thresh, False, True)
