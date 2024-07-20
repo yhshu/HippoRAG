@@ -39,7 +39,7 @@ if __name__ == '__main__':
     parser.add_argument('--skip_openie', action='store_true')
     parser.add_argument('--num_passages', type=str, default='all')
     parser.add_argument('--llm', type=str, default='openai', help="LLM, e.g., 'openai' or 'together'")
-    parser.add_argument('--extractor', type=str, default='gpt-3.5-turbo', help='Specific model name')
+    parser.add_argument('--extractor', type=str, default='gpt-4o-mini', help='Specific model name')
     parser.add_argument('--retriever', type=str, default='facebook/contriever')
     parser.add_argument('--num_thread', type=int, default=10)
     parser.add_argument('--syn_thresh', type=float, default=0.8)

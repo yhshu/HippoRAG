@@ -252,7 +252,7 @@ if __name__ == '__main__':
     with open(f'data/{args.dataset}_mapping.json', 'w') as f:
         json.dump(entity_mapping, f, indent=4)
 
-    # modify the corpus and queries
+    # modify the corpus
     num_modified_passages = 0
     num_modified_queries = 0
     new_corpus = []
@@ -270,17 +270,25 @@ if __name__ == '__main__':
 
         new_corpus.append({'idx': passage['idx'] if 'idx' in passage else idx, 'title': new_title, 'text': new_text})
 
+    # modify the dataset
     new_dataset = []
     for sample in musique_samples:
+        # modify query
         query = sample['question']
         new_query = replace_phrases(query, entity_mapping)
         if new_query != query:
             num_modified_queries += 1
         sample['question'] = new_query
+
+        # modify answer
         sample['answer'] = replace_phrases(sample['answer'], entity_mapping)
+
+        # modify passages
         for p in sample['paragraphs']:
             p['title'] = replace_phrases(p['title'], entity_mapping)
             p['paragraph_text'] = replace_phrases(p['paragraph_text'], entity_mapping)
+
+        # modify question decomposition
         for d in sample['question_decomposition']:
             d['answer'] = replace_phrases(d['answer'], entity_mapping)
             d['question'] = replace_phrases(d['question'], entity_mapping)
