@@ -19,7 +19,7 @@ def fix_broken_triple_json(input_str):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str)
-    parser.add_argument('--model_name', type=str, default='gpt-3.5-turbo')
+    parser.add_argument('--model_name', type=str, default='gpt-4o-mini', help='Specific model name')
     parser.add_argument('--file_id', type=str, help="OpenAI file ID to retrieve", required=True)
     parser.add_argument('--num_passages', type=str, default='all')
     args = parser.parse_args()
@@ -60,6 +60,9 @@ if __name__ == '__main__':
         entities = set()
         triples = []
         for e in extraction:
+            if len(e) == 0:
+                print('Triple empty')
+                continue
             if isinstance(e, list) and isinstance(e[0], str):
                 if len(e) and isinstance(e[0], str):
                     entities.add(e[0])

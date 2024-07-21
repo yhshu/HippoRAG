@@ -52,7 +52,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str)
     parser.add_argument('--num_passages', type=str, default='all')
-    parser.add_argument('--model_name', type=str, default='gpt-3.5-turbo', help='Specific model name')
+    parser.add_argument('--model_name', type=str, default='gpt-4o-mini', help='Specific model name')
     args = parser.parse_args()
 
     named_entity_recognition_for_corpus_openai_batch(args.dataset, args.num_passages, args.model_name)

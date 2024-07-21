@@ -1,8 +1,5 @@
 import sys
 
-from langchain.globals import set_llm_cache
-from langchain_community.cache import SQLiteCache
-
 sys.path.append('.')
 
 import argparse
