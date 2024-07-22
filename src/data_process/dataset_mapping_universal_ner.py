@@ -26,7 +26,8 @@ stop_words = set(stopwords.words('english'))
 
 
 def is_english_common_word(word):
-    return word in english_words or word in stop_words or word.lower() in stop_words
+    return word in non_proper_words
+
 
 
 def replace_dataset_and_corpus(corpus, dataset, all_entities, dataset_name):
@@ -90,6 +91,30 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str)
     args = parser.parse_args()
+
+    import nltk
+    from nltk.corpus import wordnet as wn
+
+    # Ensure the required resources are downloaded
+    nltk.download('wordnet')
+
+    # Fetch all synsets
+    all_synsets = list(wn.all_synsets())
+
+    # Initialize a set to store non-proper words
+    non_proper_words = set()
+
+    # Filter out proper nouns
+    for synset in all_synsets:
+        # Get the lemma names for each synset
+        for lemma in synset.lemmas():
+            # Check if the lemma is not a proper noun (proper nouns are tagged with 'propn')
+            if synset.pos() != 'n' or ' ' not in lemma.name() and not lemma.name().istitle():
+                non_proper_words.add(lemma.name().lower())
+
+    # Convert the set to a sorted list
+    non_proper_words = sorted(non_proper_words)
+    non_proper_words.extend(stop_words)
 
     all_entities = json.load(open(f'data/universal_ner_{args.dataset}_Universal-NER_UniNER-7B-all_entities.json'))
     dataset = json.load(open(f'data/{args.dataset}.json'))

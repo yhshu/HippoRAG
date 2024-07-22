@@ -339,15 +339,20 @@ if __name__ == '__main__':
             metrics_sum[f"recall_{k}"] += recall[k]
 
         # calculate all-recall: whether all gold items are retrieved
-        all_recall = dict()
+        all_recall_dict = dict()
+        any_recall_dict = dict()
         for k in k_list:
             all_recall = 1 if all(t in retrieved_items[:k] for t in gold_items) else 0
             any_recall = 1 if any(t in retrieved_items[:k] for t in gold_items) else 0
             metrics_sum[f'all_recall_{k}'] += all_recall
             metrics_sum[f'any_recall_{k}'] += any_recall
+            if k in [1, 2, 5, 10]:
+                all_recall_dict[str(k)] = all_recall
+                any_recall_dict[str(k)] = any_recall
 
         sample['recall'] = recall
-        sample['all_recall'] = all_recall
+        sample['all_recall'] = all_recall_dict
+        sample['any_recall'] = any_recall_dict
 
         for key in sorted(metrics_sum.keys(), key=lambda x: (len(x), x)):
             print(f'{key} {metrics_sum[key] / (sample_idx + 1):.4f} ', end='')
