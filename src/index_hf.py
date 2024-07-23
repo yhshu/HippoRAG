@@ -23,9 +23,9 @@ def index_with_huggingface(dataset_name: str, run_ner: bool, num_passages, llm_p
     processed_extractor_name = extractor.replace('/', '_')
 
     create_graph(dataset_name, extraction_type, processed_extractor_name, retriever, syn_thresh, False, True)
-    retrieval_module = RetrievalModule(retriever, 'output/query_to_kb.tsv', 'mean')
-    retrieval_module = RetrievalModule(retriever, 'output/kb_to_kb.tsv', 'mean')
-    retrieval_module = RetrievalModule(retriever, 'output/rel_kb_to_kb.tsv', 'mean')
+    RetrievalModule(retriever, 'output/query_to_kb.tsv', 'mean')
+    RetrievalModule(retriever, 'output/kb_to_kb.tsv', 'mean')
+    RetrievalModule(retriever, 'output/rel_kb_to_kb.tsv', 'mean')
     create_graph(dataset_name, extraction_type, processed_extractor_name, retriever, syn_thresh, True, True)
 
 

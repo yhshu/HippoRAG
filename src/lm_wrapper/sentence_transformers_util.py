@@ -6,18 +6,18 @@ from src.lm_wrapper import EmbeddingModelWrapper
 
 class SentenceTransformersWrapper(EmbeddingModelWrapper):
 
-    def __init__(self, model_name):
+    def __init__(self, model_name, max_seq_length=1024):
         super().__init__()
         self.model_name = model_name
         self.model = SentenceTransformer(model_name, trust_remote_code=True)
         if model_name.startswith("Alibaba-NLP/gte-Qwen2"):
-            self.model.max_seq_length = 8192
+            self.model.max_seq_length = max_seq_length
 
-    def encode_text(self, text, instruction=None, norm=True, return_cpu=True, return_numpy=True):
+    def encode_text(self, text, instruction=None, norm=True, return_cpu=True, return_numpy=True, batch_size=32):
         if isinstance(text, str):
             text = [text]
         if self.model_name.startswith("Alibaba-NLP/gte-Qwen2"):
-            return self.model.encode(text, prompt_name=instruction)
+            return self.model.encode(text, prompt_name=instruction, batch_size=batch_size)
 
 
 if __name__ == '__main__':
