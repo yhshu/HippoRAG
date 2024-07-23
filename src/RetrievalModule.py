@@ -3,6 +3,7 @@ import sys
 from gritlm import GritLM
 
 from src.lm_wrapper.gritlm import GritWrapper
+from src.lm_wrapper.sentence_transformers_util import SentenceTransformersWrapper
 
 sys.path.append('.')
 import _pickle as pickle
@@ -57,7 +58,10 @@ class RetrievalModule:
         try:
             if 'GritLM' in retriever_name:
                 self.plm = GritWrapper(retriever_name)
-                self.encode_strings_func = self.encode_strings_gritlm
+                self.encode_strings_func = self.encode_strings_wrapper
+            elif 'Qwen' in retriever_name:
+                self.plm = SentenceTransformersWrapper(retriever_name)
+                self.encode_strings_func = self.encode_strings_wrapper
             else:
                 if 'ckpt' in retriever_name:
                     self.plm = AutoModel.load_from_checkpoint(retriever_name)
@@ -66,7 +70,7 @@ class RetrievalModule:
                 self.encode_strings_func = self.encode_strings
         except Exception as e:
             print(e)
-            print('{} is an invalid retriever name. Check Documentation.'.format(retriever_name))
+            print('Loading {} failed. Please make sure it is a valid model name and then check other issues.'.format(retriever_name))
             assert False
 
         # If not pre-computed, create vectors
@@ -204,9 +208,8 @@ class RetrievalModule:
 
         return vector_dict
 
-    def encode_strings_gritlm(self, strs_to_encode):
-        all_embeddings = self.plm.encode_text(strs_to_encode, instruction='Given a phrase, retrieve phrases that are synonymous with it.',
-                                              return_numpy=True, return_cpu=True, norm=True)
+    def encode_strings_wrapper(self, strs_to_encode):
+        all_embeddings = self.plm.encode_text(strs_to_encode, return_numpy=True, return_cpu=True, norm=True)
         return all_embeddings, strs_to_encode
 
     def encode_strings(self, strs_to_encode):

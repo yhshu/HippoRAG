@@ -19,6 +19,7 @@ from src.colbertv2_indexing import colbertv2_index
 from src.langchain_util import init_langchain_model, LangChainModel
 from src.lm_wrapper import EmbeddingModelWrapper
 from src.lm_wrapper.gritlm import GritWrapper
+from src.lm_wrapper.sentence_transformers_util import SentenceTransformersWrapper
 from src.lm_wrapper.util import init_embedding_model
 from src.named_entity_extraction_parallel import named_entity_recognition
 from src.processing import processing_phrases, softmax_with_zeros
@@ -37,7 +38,7 @@ class SpecificLoggerFilter(logging.Filter):
         return record.name == self.name
 
 
-def get_query_instruction(embedding_model: EmbeddingModelWrapper, task: str, dataset_name: str):
+def get_query_instruction(embedding_model: EmbeddingModelWrapper, task=None, dataset_name=None):
     if isinstance(embedding_model, GritWrapper):
         if task == 'ner_to_node':
             return 'Given a phrase, retrieve synonymous or relevant phrases that best match this phrase.'
@@ -61,6 +62,9 @@ def get_query_instruction(embedding_model: EmbeddingModelWrapper, task: str, dat
         else:
             print('Task instruction not found for {}'.format(task))
             return ''
+    elif isinstance(embedding_model, SentenceTransformersWrapper):
+        if embedding_model.model_name.startswith('Alibaba-NLP/gte-Qwen'):
+            return 'query'
     return None
 
 
@@ -667,6 +671,8 @@ class HippoRAG:
         else:
             self.doc_embeddings = []
             self.doc_embedding_mat = self.embed_model.encode_text(self.dataset_df['paragraph'].tolist(), return_cpu=True, return_numpy=True, norm=True)
+            if not os.path.isdir('data/lm_vectors/{}_mean/'.format(self.linking_retriever_name_processed)):
+                os.makedirs('data/lm_vectors/{}_mean/'.format(self.linking_retriever_name_processed))
             pickle.dump(self.doc_embedding_mat, open(cache_filename, 'wb'))
             self.logger.info(f'Saved doc embeddings to {cache_filename}, shape: {self.doc_embedding_mat.shape}')
 
