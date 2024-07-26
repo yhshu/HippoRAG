@@ -167,30 +167,16 @@ if __name__ == '__main__':
         args.num_doc = 0
 
     if args.num_doc == 0:
-        if args.dataset == 'hotpotqa':
-            prompt_path = 'data/ircot_prompts/hotpotqa/no_context_cot_qa_codex.txt'
-            data = json.load(open('data/hotpotqa.json', 'r'))
-        elif args.dataset == 'musique':
-            prompt_path = 'data/ircot_prompts/musique/no_context_cot_qa_codex.txt'
-            data = json.load(open('data/musique.json', 'r'))
-        elif args.dataset == '2wikimultihopqa':
-            prompt_path = 'data/ircot_prompts/2wikimultihopqa/no_context_cot_qa_codex.txt'
-            data = json.load(open('data/2wikimultihopqa.json', 'r'))
+        prompt_path = f'data/ircot_prompts/{args.dataset}/no_context_cot_qa_codex.txt'
+        data = json.load(open(f'data/{args.dataset}.json', 'r'))
         demos = parse_prompt(prompt_path, False)
     else:
         if os.path.isfile(output_path):  # resume from previous results
             data = json.load(open(output_path, 'r'))
             for key in total_metrics.keys():
                 total_metrics[key] = sum([sample[key] for sample in data if key in sample])
-        if args.dataset == 'hotpotqa':
-            prompt_path = 'data/ircot_prompts/hotpotqa/gold_with_3_distractors_context_cot_qa_codex.txt'
-            corpus = json.load(open('data/hotpotqa_corpus.json', 'r'))
-        elif args.dataset == 'musique':
-            prompt_path = 'data/ircot_prompts/musique/gold_with_3_distractors_context_cot_qa_codex.txt'
-            corpus = json.load(open('data/musique_corpus.json', 'r'))
-        elif args.dataset == '2wikimultihopqa':
-            prompt_path = 'data/ircot_prompts/2wikimultihopqa/gold_with_3_distractors_context_cot_qa_codex.txt'
-            corpus = json.load(open('data/2wikimultihopqa_corpus.json', 'r'))
+        prompt_path = f'data/ircot_prompts/{args.dataset}/gold_with_3_distractors_context_cot_qa_codex.txt'
+        corpus = json.load(open(f'data/{args.dataset}_corpus.json', 'r'))
         demos = parse_prompt(prompt_path)
 
     # processed id set
