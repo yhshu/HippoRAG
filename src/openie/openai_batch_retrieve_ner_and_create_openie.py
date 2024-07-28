@@ -73,4 +73,4 @@ if __name__ == '__main__':
                                       completion_window='24h',
                                       metadata={'description': f"HippoRAG OpenIE for {args.dataset}, len: {len(jsonl_contents)}"})
     print(batch_obj)
-    print("Go to https://platform.openai.com/storage/files/ or use OpenAI file API to get the output file ID after the batch job is done.")
+    print("Go to https://platform.openai.com/batches/ or use OpenAI file API to get the output file ID after the batch job is done.")

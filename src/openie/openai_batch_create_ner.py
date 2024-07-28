@@ -1,3 +1,7 @@
+import sys
+
+sys.path.append('.')
+
 import argparse
 import json
 
@@ -14,16 +18,17 @@ def named_entity_recognition_for_corpus_openai_batch(dataset_name: str, num_pass
     corpus_jsonl_path = f'output/openai_batch_submission_ner_{dataset_name[1:]}_{model_name}.jsonl'
     jsonl_contents = []
     total_tokens = 0
-    for i, passage in enumerate(retrieval_corpus):
+    for idx, passage in enumerate(retrieval_corpus):
         ner_messages = [{'role': 'system', 'content': ner_instruction},
                         {'role': 'user', 'content': ner_input_one_shot},
                         {'role': 'assistant', 'content': ner_output_one_shot},
                         {'role': 'user', 'content': f"Paragraph:```\n{passage['passage']}\n```"}]
         total_tokens += num_tokens_by_tiktoken(str(ner_messages))
+        idx = passage['idx'] if 'idx' in passage else idx
 
         # custom_id must be string
         jsonl_contents.append(json.dumps(
-            {"custom_id": str(passage['idx']), "method": "POST", "url": "/v1/chat/completions",
+            {"custom_id": str(idx), "method": "POST", "url": "/v1/chat/completions",
              "body": {"model": model_name, "messages": ner_messages,
                       "max_tokens": max_tokens, "response_format": {"type": "json_object"}}}))
 
@@ -45,7 +50,7 @@ def named_entity_recognition_for_corpus_openai_batch(dataset_name: str, num_pass
                                       completion_window='24h',
                                       metadata={'description': f"HippoRAG OpenIE for {dataset_name}, len: {len(jsonl_contents)}"})
     print(batch_obj)
-    print("Go to https://platform.openai.com/storage/files/ or use OpenAI file API to get the output file ID after the batch job is done.")
+    print("Go to https://platform.openai.com/batches/ or use OpenAI file API to get the output file ID after the batch job is done.")
 
 
 if __name__ == '__main__':

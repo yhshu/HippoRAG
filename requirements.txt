@@ -139,6 +139,7 @@ langchain
 langchain-openai==0.1.14
 langchain-together
 langchain_community
+llama-cpp-python
 pytrec_eval
 gritlm
 charset-normalizer==3.3.2

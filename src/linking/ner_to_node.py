@@ -34,7 +34,7 @@ def link_node_by_colbertv2(hipporag: HippoRAG, query_ner_list, link_top_k=None):
         max_scores = [max_scores[i] for i in top_k]
 
     # create a vector (num_doc) with 1s at the indices of the retrieved documents and 0s elsewhere
-    top_phrase_vec = np.zeros(len(hipporag.node_phrases))
+    all_phrase_weights = np.zeros(len(hipporag.node_phrases))
 
     for phrase_id in phrase_ids:
         if hipporag.node_specificity:
@@ -42,11 +42,11 @@ def link_node_by_colbertv2(hipporag: HippoRAG, query_ner_list, link_top_k=None):
                 weight = 1
             else:
                 weight = 1 / hipporag.phrase_to_num_doc[phrase_id]
-            top_phrase_vec[phrase_id] = weight
+            all_phrase_weights[phrase_id] = weight
         else:
-            top_phrase_vec[phrase_id] = 1.0
+            all_phrase_weights[phrase_id] = 1.0
 
-    return top_phrase_vec, {(query, hipporag.node_phrases[phrase_id]): max_score for phrase_id, max_score, query in zip(phrase_ids, max_scores, query_ner_list)}
+    return all_phrase_weights, {(query, hipporag.node_phrases[phrase_id]): max_score for phrase_id, max_score, query in zip(phrase_ids, max_scores, query_ner_list)}
 
 
 def link_node_by_dpr(hipporag: HippoRAG, query_ner_list: list, link_top_k=None):
