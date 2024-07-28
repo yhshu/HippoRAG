@@ -27,6 +27,6 @@ def link_by_passage_node(hipporag: HippoRAG, query: str, link_top_k: Union[None,
     top_doc_idx = np.argsort(query_doc_scores)[-10:][::-1].tolist()
     for doc_idx in top_doc_idx:
         phrases = hipporag.get_phrase_in_doc_by_idx(doc_idx)
-        pass
+        pass # todo
 
     generate_nodes(hipporag.client)
