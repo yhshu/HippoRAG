@@ -120,8 +120,7 @@ if __name__ == '__main__':
     parser.add_argument('--llm_model', type=str, default='gpt-3.5-turbo-1106', help='Specific model name')
     parser.add_argument('--retriever', type=str, default='facebook/contriever')
     parser.add_argument('--linking_model', type=str, default='facebook/contriever')
-    parser.add_argument('--linking', type=str, default='ner_to_node', choices=['ner_to_node', 'query_to_node', 'query_to_fact', 'query_to_passage'],
-                        help='linking method for the entry point of the graph')
+    parser.add_argument('--linking', type=str, default='ner_to_node', help='linking method for the entry point of the graph')
     parser.add_argument('--prompt', type=str)
     parser.add_argument('--num_demo', type=int, default=1, help='the number of demo samples')
     parser.add_argument('--max_steps', type=int, required=True, default=1)

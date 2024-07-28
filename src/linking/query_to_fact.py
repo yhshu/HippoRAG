@@ -1,3 +1,5 @@
+from typing import Union
+
 import numpy as np
 
 from src.hipporag import HippoRAG, get_query_instruction
@@ -18,7 +20,7 @@ def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, 
         # reranker = RankGPT(rerank_model_name)
         candidate_fact_indices = np.argsort(query_fact_scores)[-30:][::-1].tolist()
         candidate_facts = [candidate_triples[i] for i in candidate_fact_indices]
-        top_k_fact_indicies, top_k_facts = reranker.rerank('query_to_fact', query, candidate_fact_indices, candidate_facts, link_top_k)
+        top_k_fact_indicies, top_k_facts, top_k_scores = reranker.rerank('fact_reranking', query, candidate_facts, candidate_fact_indices, link_top_k)
         rerank_log = {'facts_before_rerank': candidate_facts, 'facts_after_rerank': top_k_facts}
     else:
         if link_top_k is not None:
@@ -88,21 +90,25 @@ def graph_search_with_fact_entities(hipporag: HippoRAG, link_top_k: int, query_d
         linking_score_map[phrase] = float(np.mean(scores))
 
     if link_top_k:
-        # choose top ranked nodes in linking_score_map
-        linking_score_map = dict(sorted(linking_score_map.items(), key=lambda x: x[1], reverse=True)[:link_top_k])
-
-        # only keep the top_k phrases in all_phrase_weights
-        top_k_phrases = set(linking_score_map.keys())
-        for phrase in hipporag.kb_node_phrase_to_id.keys():
-            if phrase not in top_k_phrases:
-                phrase_id = hipporag.kb_node_phrase_to_id.get(phrase, None)
-                if phrase_id is not None:
-                    all_phrase_weights[phrase_id] = 0.0
-        assert np.count_nonzero(all_phrase_weights) == len(linking_score_map.keys())
+        all_phrase_weights, linking_score_map = get_top_k_weights(hipporag, link_top_k, all_phrase_weights, linking_score_map)
 
     assert sum(all_phrase_weights) > 0, f'No phrases found in the graph for the given facts: {top_k_facts}'
     sorted_doc_ids, sorted_scores, logs = graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, query_doc_scores=query_doc_scores)
     return sorted_doc_ids, sorted_scores, logs
+
+
+def get_top_k_weights(hipporag, link_top_k, all_phrase_weights, linking_score_map):
+    # choose top ranked nodes in linking_score_map
+    linking_score_map = dict(sorted(linking_score_map.items(), key=lambda x: x[1], reverse=True)[:link_top_k])
+    # only keep the top_k phrases in all_phrase_weights
+    top_k_phrases = set(linking_score_map.keys())
+    for phrase in hipporag.kb_node_phrase_to_id.keys():
+        if phrase not in top_k_phrases:
+            phrase_id = hipporag.kb_node_phrase_to_id.get(phrase, None)
+            if phrase_id is not None:
+                all_phrase_weights[phrase_id] = 0.0
+    assert np.count_nonzero(all_phrase_weights) == len(linking_score_map.keys())
+    return all_phrase_weights, linking_score_map
 
 
 def oracle_query_to_fact(hipporag: HippoRAG, query: str, oracle_triples: list, link_top_k, graph_search=True):

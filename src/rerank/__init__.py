@@ -61,9 +61,11 @@ class LLMLogitsReranker(Reranker):
         super().__init__(model_name)
         llm_logits_cache.set_model_name(model_name)
 
-    def rerank(self, task, query, candidate_indices, candidate_items, top_k=None):
-        if task == 'query_to_fact':
-            query_to_fact_prompt_template = ChatPromptTemplate.from_messages(
+    def rerank(self, task, query, candidate_items, candidate_indices=None, passage='', top_k=None):
+        if candidate_indices is None:
+            candidate_indices = list(range(len(candidate_items)))
+        if task == 'fact_reranking':
+            prompt_template = ChatPromptTemplate.from_messages(
                 [
                     SystemMessage(
                         "Given the following query and candidate facts, choose the most relevant fact based on the query. "
@@ -79,41 +81,62 @@ class LLMLogitsReranker(Reranker):
                     HumanMessagePromptTemplate.from_template("Query: {query}\nCandidate facts: \n{candidate_items}\nChoice: ")
                 ]
             )
-            query_to_fact_prompt = query_to_fact_prompt_template.format_prompt(query=query, candidate_items=format_candidates(candidate_items[:26]))
-            logit_bais = {token_id: 100 for token_id in range(64, 64 + 26)}  # 'a' to 'z' tokens
-            logit_bais.update({6: -100, 7: -100, 8: -100, 9: -100, 12: -100, 13: -100, 220: -100, 334: -100, 4155: -100, 12488: -100})
-
-            top_logprobs = llm_logits_cache.get(query_to_fact_prompt.to_string())
-            if top_logprobs is None:
-                completion = self.model.invoke(query_to_fact_prompt.to_messages(), max_tokens=1, seed=1, logprobs=True, top_logprobs=20, logit_bias=logit_bais)
-                top_logprobs = completion.response_metadata['logprobs']['content'][0]['top_logprobs']
-                llm_logits_cache.set(query_to_fact_prompt.to_string(), top_logprobs)
-
-            top_logprobs = top_logprobs[:len(candidate_items)]
-            top_scores = {}  # {candidate_item: score}
-            for top_log in top_logprobs:
-                try:
-                    top_scores[candidate_items[ord(top_log['token'].lower().strip("-().*' ")[0]) - 97]] = top_log['logprob']
-                except Exception as e:
-                    print('score_pairs_chat exception', e, 'TopLogprob token:', top_log['token'])
-                    continue
-
-            # connect candidate_indices and candidate_items
-            assert len(candidate_indices) == len(candidate_items)
-            candidate_indices_and_items = list(zip(candidate_indices, candidate_items))
-
-            # reorder candidate_indices based on top_scores
-            scored_candidates = [candidate_indices_and_items[i] for i in range(0, len(candidate_indices_and_items)) if candidate_indices_and_items[i][1] in top_scores]
-            sorted_scored_indices_and_items = sorted(scored_candidates, key=lambda x: top_scores[x[1]], reverse=True)
-
-            # split candidate_indices and candidate_items
-            sorted_candidate_indices, sorted_candidate_items = zip(*sorted_scored_indices_and_items)
-
-            # return top_k indices and items
-            return sorted_candidate_indices[:top_k], sorted_candidate_items[:top_k]
-
+            formatted_prompt = prompt_template.format_prompt(query=query, candidate_items=format_candidates(candidate_items[:26]))
+        elif task == 'passage_fact_reranking':
+            prompt_template = ChatPromptTemplate.from_messages(
+                [
+                    SystemMessage(
+                        "Given the following query, a passage and candidate facts extracted from this passage, choose the most relevant fact based on the query. "
+                        "The passage is potentially relevant to the query, so some of these facts may be relevant to the query. "
+                        "Please choose an option by **giving a single latter **, e.g., `a`. "
+                        "Here is an example."),
+                    HumanMessage(
+                        "Query: 'What is the capital of France?'\n"
+                        "Passage: 'France is a country in Europe. The capital of France is Paris.'\n"
+                        "Candidate facts: \n"
+                        "a. ('France', 'capital', 'Berlin')\n"
+                        "b. ('France', 'capital', 'Paris')\n"
+                        "c. ('France', 'language', 'French')\nChoice: "),
+                    AIMessage("b"),
+                    HumanMessagePromptTemplate.from_template("Query: {query}\nPassage: {passage}\nCandidate facts: \n{candidate_items}\nChoice: ")
+                ]
+            )
+            formatted_prompt = prompt_template.format_prompt(query=query, passage=passage, candidate_items=format_candidates(candidate_items[:26]))
         else:
             raise NotImplementedError(f"Task {task} not implemented.")
+
+        logit_bais = {token_id: 100 for token_id in range(64, 64 + 26)}  # 'a' to 'z' tokens
+        logit_bais.update({6: -100, 7: -100, 8: -100, 9: -100, 12: -100, 13: -100, 220: -100, 334: -100, 4155: -100, 12488: -100})
+
+        top_logprobs = llm_logits_cache.get(formatted_prompt.to_string())
+        if top_logprobs is None:
+            completion = self.model.invoke(formatted_prompt.to_messages(), max_tokens=1, seed=1, logprobs=True, top_logprobs=20, logit_bias=logit_bais)
+            top_logprobs = completion.response_metadata['logprobs']['content'][0]['top_logprobs']
+            llm_logits_cache.set(formatted_prompt.to_string(), top_logprobs)
+
+        top_logprobs = top_logprobs[:len(candidate_items)]
+        top_scores = {}  # {candidate_item: score}
+        for top_log in top_logprobs:
+            try:
+                top_scores[candidate_items[ord(top_log['token'].lower().strip("-().*' ")[0]) - 97]] = top_log['logprob']
+            except Exception as e:
+                print('score_pairs_chat exception', e, 'TopLogprob token:', top_log['token'])
+                continue
+
+        # connect candidate_indices and candidate_items
+        assert len(candidate_indices) == len(candidate_items)
+        candidate_indices_and_items = list(zip(candidate_indices, candidate_items))
+
+        # reorder candidate_indices based on top_scores
+        scored_candidates = [candidate_indices_and_items[i] for i in range(0, len(candidate_indices_and_items)) if candidate_indices_and_items[i][1] in top_scores]
+        sorted_scored_indices_and_items = sorted(scored_candidates, key=lambda x: top_scores[x[1]], reverse=True)
+
+        # split candidate_indices and candidate_items
+        sorted_candidate_indices, sorted_candidate_items = zip(*sorted_scored_indices_and_items)
+        sorted_scores = [top_scores[item] for item in sorted_candidate_items]
+
+        # return top_k indices and items
+        return sorted_candidate_indices[:top_k], sorted_candidate_items[:top_k], sorted_scores[:top_k]
 
 
 class RankGPT(Reranker):
@@ -125,7 +148,10 @@ class RankGPT(Reranker):
         super().__init__(model_name)
         set_llm_cache(SQLiteCache(database_path=f".llm_{model_name}_rerank.db"))
 
-    def rerank(self, task: str, query, candidate_indices, candidate_items, top_k=None, window_size=4, step_size=2):
+    def rerank(self, task: str, query, candidate_items, candidate_indices, top_k=None, window_size=4, step_size=2):
+        if candidate_indices is None:
+            candidate_indices = list(range(len(candidate_items)))
+
         def parse_numbers(s):
             try:
                 numbers = re.findall(r'\[(\d+)\]', s)

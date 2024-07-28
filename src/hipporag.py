@@ -390,12 +390,20 @@ class HippoRAG:
                 return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], log
 
         elif linking == 'query_to_passage':
-            from src.linking.query_to_passage import linking_by_passage_fact
+            from src.linking.query_to_passage import link_by_passage_fact
             if 'colbertv2' in self.linking_retriever_name:
                 pass
             else:
                 self.load_dpr_doc_embeddings()
-                sorted_doc_ids, sorted_scores, doc_rank_logs = linking_by_passage_fact(self, query, link_top_k=link_top_k)
+                sorted_doc_ids, sorted_scores, doc_rank_logs = link_by_passage_fact(self, query, link_top_k=link_top_k)
+
+        elif linking == 'query_passage_node':
+            self.load_dpr_doc_embeddings()
+            from src.linking.query_passage_node import link_by_passage_node
+            sorted_doc_ids, sorted_scores, doc_rank_logs = link_by_passage_node(self, query, link_top_k=link_top_k)
+
+        else:
+            raise NotImplementedError('Linking method not implemented')
 
         return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], doc_rank_logs
 
