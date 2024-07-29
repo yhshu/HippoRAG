@@ -1,3 +1,5 @@
+import json
+
 import numpy as np
 
 from src.processing import min_max_normalize
@@ -78,9 +80,9 @@ def graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, 
         # get phrases for top_pagerank_phrase_ids
         top_ranked_nodes = [hipporag.node_phrases[phrase_id] for phrase_id in top_pagerank_phrase_ids]
 
-        logs = {'linked_node_scores': {k: float(v) for k, v in linking_score_map.items()},
-                '1-hop_graph_for_linked_nodes': phrase_one_hop_triples,
-                'top_ranked_nodes': top_ranked_nodes, 'nodes_in_retrieved_doc': nodes_in_retrieved_doc}
+        logs = {'linked_node_scores': json.dumps({k: float(v) for k, v in linking_score_map.items()}),
+                '1-hop_graph_for_linked_nodes': json.dumps(phrase_one_hop_triples),
+                'top_ranked_nodes': json.dumps(top_ranked_nodes), 'nodes_in_retrieved_doc': json.dumps(nodes_in_retrieved_doc)}
     else:
         logs = {}
     return sorted_doc_ids, sorted_scores, logs

@@ -1,3 +1,7 @@
+import sys
+
+sys.path.append('.')
+
 import argparse
 import json
 
@@ -19,7 +23,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     arg_str, dataset_name, flags_present, num_passages, retrieval_corpus = load_corpus(args.dataset, args.model_name, args.num_passages, True)
-    passage_dict = {str(p['idx']): p['passage'] for p in retrieval_corpus}  # custom_id to passage
+    passage_dict = {
+        str(p['idx']) if 'idx' in p else str(i): p['passage']
+        for i, p in enumerate(retrieval_corpus)
+    }  # custom_id to passage
 
     client = OpenAI(max_retries=5, timeout=60)
     content = client.files.content(file_id=args.file_id)

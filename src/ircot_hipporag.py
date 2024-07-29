@@ -204,6 +204,7 @@ if __name__ == '__main__':
         try:
             with open(output_path, 'r') as f:
                 results = json.load(f)
+            print(f'Loaded {len(results)} results from {output_path}')
             if args.dataset in ['hotpotqa', '2wikimultihopqa', 'hotpotqa_train']:
                 processed_ids = {sample['_id'] for sample in results}
             else:
@@ -222,8 +223,8 @@ if __name__ == '__main__':
             print('Results file maybe empty, cannot be loaded.')
             results = []
             processed_ids = set()
+            metrics_sum = defaultdict(float)  # the sum of metrics for all samples
 
-    print(f'Loaded {len(results)} results from {output_path}')
     if len(results) > 0:
         for key in metrics_sum.keys():
             print(key, round(metrics_sum[key] / len(results), 4))
@@ -299,8 +300,8 @@ if __name__ == '__main__':
             del sample['paragraphs']
 
         sample['retrieved'] = retrieved_passages[:10]
-        sample['retrieved_scores'] = scores[:10]
-        sample['nodes_in_gold_doc'] = phrases_in_gold_docs
+        sample['retrieved_scores'] = json.dumps(scores[:10])
+        sample['nodes_in_gold_doc'] = json.dumps(phrases_in_gold_docs)
 
         logs_for_first_step = logs_for_all_steps[1]
         if logs_for_first_step is not None:
@@ -354,7 +355,9 @@ if __name__ == '__main__':
         sample['any_recall'] = any_recall_dict
 
         for key in sorted(metrics_sum.keys(), key=lambda x: (len(x), x)):
-            print(f'{key} {metrics_sum[key] / (sample_idx + 1):.4f} ', end='')
+            num = round(metrics_sum[key] / (sample_idx + 1), 4)
+            assert 0.0 <= num <= 1.0
+            print(f'{key} {num} ', end='')
         print()
         print('[ITERATION]', it, '[PASSAGE]', len(retrieved_passages), '[THOUGHT]', thoughts)
 

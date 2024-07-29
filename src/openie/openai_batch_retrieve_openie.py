@@ -1,3 +1,7 @@
+import sys
+
+sys.path.append('.')
+
 import argparse
 import json
 
@@ -60,9 +64,6 @@ if __name__ == '__main__':
         entities = set()
         triples = []
         for e in extraction:
-            if len(e) == 0:
-                print('Triple empty')
-                continue
             if isinstance(e, list) and isinstance(e[0], str):
                 if len(e) and isinstance(e[0], str):
                     entities.add(e[0])
