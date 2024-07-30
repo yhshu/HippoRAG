@@ -75,15 +75,15 @@ def detailed_log(dataset: list, run_dict, eval_res, chunk=False, threshold=None,
     return logs
 
 
-def run_retrieve_beir(dataset_name: str, extraction_model: str, retrieval_model: str, linking_model: str, linking: str, doc_ensemble: bool, dpr_only: bool, chunk: bool,
+def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: str, linker_name: str, linking: str, doc_ensemble: bool, dpr_only: bool, chunk: bool,
                       detail: bool,
                       link_top_k=3, oracle_extraction=False):
     doc_ensemble_str = 'doc_ensemble' if doc_ensemble else 'no_ensemble'
-    extraction_str = extraction_model.replace('/', '_').replace('.', '_')
-    graph_creating_str = retrieval_model.replace('/', '_').replace('.', '_')
-    if linking_model is None:
-        linking_model = retrieval_model
-    linking_str = f"{linking_model.replace('/', '_').replace('.', '_')}_linking_{linking}_top_k_{link_top_k}"
+    extraction_str = extractor_name.replace('/', '_').replace('.', '_')
+    graph_creating_str = retriever_name.replace('/', '_').replace('.', '_')
+    if linker_name is None:
+        linker_name = retriever_name
+    linking_str = f"{linker_name.replace('/', '_').replace('.', '_')}_linking_{linking}_top_k_{link_top_k}"
     if oracle_extraction:
         linking_str += '_oracle_ie'
     dpr_only_str = '_dpr_only' if dpr_only else ''
@@ -186,9 +186,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, help='dataset name and split, e.g., `scifact_test`, `fiqa_dev`.')
     parser.add_argument('--chunk', action='store_true')
-    parser.add_argument('--extraction_model', type=str, default='gpt-3.5-turbo')
-    parser.add_argument('--retrieval_model', type=str, help="Graph creating retriever name, e.g., 'facebook/contriever', 'colbertv2'")
-    parser.add_argument('--linking_model', type=str, help="Node linking model name, e.g., 'facebook/contriever', 'colbertv2'")
+    parser.add_argument('--extractor', type=str, default='gpt-3.5-turbo')
+    parser.add_argument('--retriever', type=str, help="Graph creating retriever name, e.g., 'facebook/contriever', 'colbertv2'")
+    parser.add_argument('--linker', type=str, help="Node linking model name, e.g., 'facebook/contriever', 'colbertv2'")
     parser.add_argument('--linking', type=str)
     parser.add_argument('--doc_ensemble', action='store_true')
     parser.add_argument('--dpr_only', action='store_true')
@@ -219,16 +219,16 @@ if __name__ == '__main__':
         dataset = dataset[:min(int(args.num), len(dataset))]
         qrel = {key: qrel[key] for i, key in enumerate(qrel) if i < min(int(args.num), len(dataset))}
 
-    hipporag = HippoRAG(args.dataset, 'openai', args.extraction_model, args.retrieval_model, doc_ensemble=args.doc_ensemble, dpr_only=args.dpr_only,
-                        linking_retriever_name=args.linking_model)
+    hipporag = HippoRAG(args.dataset, 'openai', args.extractor, args.retriever, doc_ensemble=args.doc_ensemble, dpr_only=args.dpr_only,
+                        linking_retriever_name=args.linker)
 
     if not args.dpr_only:
         link_top_k_list = [3, 5, 10, 20, 30]
         if args.linking == 'ner_to_node':
-            link_top_k_list.append(None)
+            link_top_k_list = [None]
         for link_top_k in link_top_k_list:
-            run_retrieve_beir(args.dataset, args.extraction_model, args.retrieval_model, args.linking_model, args.linking,
+            run_retrieve_beir(args.dataset, args.extractor, args.retriever, args.linker, args.linking,
                               args.doc_ensemble, args.dpr_only, args.chunk, args.detail, link_top_k=link_top_k, oracle_extraction=args.oracle_ie)
     else:  # DPR only
-        run_retrieve_beir(args.dataset, args.extraction_model, args.retrieval_model, args.linking_model, args.linking,
+        run_retrieve_beir(args.dataset, args.extractor, args.retriever, args.linker, args.linking,
                           args.doc_ensemble, args.dpr_only, args.chunk, args.detail, link_top_k=1, oracle_extraction=args.oracle_ie)

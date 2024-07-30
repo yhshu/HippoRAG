@@ -114,7 +114,7 @@ def oracle_ner_to_node(hipporag: HippoRAG, query_ner_list, oracle_phrases, link_
 
 
 def graph_search_with_entities(hipporag: HippoRAG, query_ner_list: list, all_phrase_weights, linking_score_map, query_doc_scores=None):
-    """a
+    """
 
     @param hipporag:
     @param query_ner_list:

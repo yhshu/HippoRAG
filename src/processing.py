@@ -87,3 +87,13 @@ def fix_broken_generated_json(json_str: str):
 
     processed_string = json_str + ']\n}'
     return processed_string
+
+
+def eval_json_str(json_str):
+    try:
+        return eval(json_str)
+    except Exception as e1:
+        try:
+            return eval(fix_broken_generated_json(json_str))
+        except Exception as e2:
+            return ''

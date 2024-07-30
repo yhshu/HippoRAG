@@ -119,7 +119,7 @@ if __name__ == '__main__':
     parser.add_argument('--llm', type=str, default='openai', help="LLM, e.g., 'openai' or 'together'")
     parser.add_argument('--llm_model', type=str, default='gpt-3.5-turbo-1106', help='Specific model name')
     parser.add_argument('--retriever', type=str, default='facebook/contriever')
-    parser.add_argument('--linking_model', type=str, default='facebook/contriever')
+    parser.add_argument('--linker', type=str, default='facebook/contriever')
     parser.add_argument('--linking', type=str, default='ner_to_node', help='linking method for the entry point of the graph')
     parser.add_argument('--prompt', type=str)
     parser.add_argument('--num_demo', type=int, default=1, help='the number of demo samples')
@@ -155,7 +155,7 @@ if __name__ == '__main__':
     colbert_configs = {'root': f'data/lm_vectors/colbert/{args.dataset}', 'doc_index_name': 'nbits_2', 'phrase_index_name': 'nbits_2'}
 
     hipporag = HippoRAG(args.dataset, extraction_model=args.llm, extraction_model_name=args.llm_model, graph_creating_retriever_name=args.retriever,
-                        linking_retriever_name=args.linking_model,
+                        linking_retriever_name=args.linker,
                         doc_ensemble=doc_ensemble, node_specificity=not (args.wo_node_spec), sim_threshold=args.sim_threshold,
                         colbert_config=colbert_configs, dpr_only=dpr_only, graph_alg=args.graph_alg, damping=args.damping, recognition_threshold=args.recognition_threshold)
 

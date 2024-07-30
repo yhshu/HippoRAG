@@ -22,7 +22,7 @@ from src.lm_wrapper.gritlm import GritWrapper
 from src.lm_wrapper.sentence_transformers_util import SentenceTransformersWrapper
 from src.lm_wrapper.util import init_embedding_model
 from src.named_entity_extraction_parallel import named_entity_recognition
-from src.processing import processing_phrases, softmax_with_zeros
+from src.processing import processing_phrases, softmax_with_zeros, eval_json_str
 
 os.environ['TOKENIZERS_PARALLELISM'] = 'FALSE'
 
@@ -133,10 +133,10 @@ class HippoRAG:
             self.named_entity_cache = pd.DataFrame([], columns=['query', 'triples'])
 
         if 'query' in self.named_entity_cache:
-            self.named_entity_cache = {row['query']: eval(row['triples']) for i, row in
+            self.named_entity_cache = {row['query']: eval_json_str(row['triples']) for i, row in
                                        self.named_entity_cache.iterrows()}
         elif 'question' in self.named_entity_cache:
-            self.named_entity_cache = {row['question']: eval(row['triples']) for i, row in
+            self.named_entity_cache = {row['question']: eval_json_str(row['triples']) for i, row in
                                        self.named_entity_cache.iterrows()}
 
         self.embed_model = init_embedding_model(self.linking_retriever_name)
@@ -284,7 +284,8 @@ class HippoRAG:
                 query_doc_scores = query_doc_scores.T[0]
             sorted_doc_ids = np.argsort(query_doc_scores)[::-1]
             sorted_scores = query_doc_scores[sorted_doc_ids.tolist()]
-            return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], None
+            logs = {}
+            return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], logs
 
         elif oracle_triples and linking == 'ner_to_node':
             from src.linking.ner_to_node import oracle_ner_to_node, graph_search_with_entities
@@ -356,9 +357,8 @@ class HippoRAG:
                     # max_query_score = self.get_colbert_max_score(query)
                     for corpus_id, rank, score in ranking.data[0]:
                         query_doc_scores[corpus_id] = score
-
-                    if len(query_ner_list) > 0:  # if no entities are found, assign uniform probability to documents
-                        all_phrase_weights, linking_score_map = link_node_by_colbertv2(self, query_ner_list, link_top_k)
+                if len(query_ner_list) > 0:  # if no entities are found, assign uniform probability to documents
+                    all_phrase_weights, linking_score_map = link_node_by_colbertv2(self, query_ner_list, link_top_k)
             else:  # huggingface dense retrieval
                 if self.doc_ensemble:
                     query_embedding = self.embed_model.encode_text(query, instruction=get_query_instruction(self.embed_model, 'ner_to_node', self.corpus_name),
@@ -368,6 +368,9 @@ class HippoRAG:
 
                 if len(query_ner_list) > 0:  # if no entities are found, assign uniform probability to documents
                     all_phrase_weights, linking_score_map = link_node_by_dpr(self, query_ner_list, link_top_k)
+
+            if sum(all_phrase_weights) == 0:
+                all_phrase_weights = np.ones(len(self.node_phrases)) / len(self.node_phrases)
             sorted_doc_ids, sorted_scores, doc_rank_logs = graph_search_with_entities(self, query_ner_list, all_phrase_weights, linking_score_map, query_doc_scores)
 
         elif linking == 'query_to_node' or (oracle_triples is not None and len(oracle_triples) == 0):
@@ -417,7 +420,7 @@ class HippoRAG:
                     query_ner_list = self.named_entity_cache[query]['named_entities']
                 else:
                     query_ner_json, total_tokens = named_entity_recognition(self.client, query)
-                    query_ner_list = eval(query_ner_json)['named_entities']
+                    query_ner_list = eval_json_str(query_ner_json).get('named_entities', [])
 
                 query_ner_list = [processing_phrases(p) for p in query_ner_list]
             except:

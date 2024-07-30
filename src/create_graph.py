@@ -20,8 +20,11 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
     version = 'v3'
     inter_triple_weight = 1.0
     similarity_max = 1.0
-    possible_files = glob(f'output/openie_{dataset}_results_{extraction_type}_{extraction_model}_*.json')
+    possible_file_path = f'output/openie_{dataset}_results_{extraction_type}_{extraction_model}_*.json'
+    possible_files = glob(possible_file_path)
+    assert len(possible_files) > 0, f'No files found for {possible_file_path}'
     max_samples = np.max([int(file.split('{}_'.format(extraction_model))[1].split('.json')[0]) for file in possible_files])
+
     extracted_file_path = f'output/openie_{dataset}_results_{extraction_type}_{extraction_model}_{max_samples}.json'
     extracted_file = json.load(open(extracted_file_path, 'r'))
 
@@ -109,18 +112,19 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
     try:
         queries_full_df = pd.read_csv('output/{}_queries.named_entity_output.tsv'.format(dataset), sep='\t')
 
-        if 'hotpotqa' in args.dataset:
-            queries = json.load(open(f'data/{args.dataset}.json', 'r'))
+        if 'hotpotqa' in dataset:
+            queries = json.load(open(f'data/{dataset}.json', 'r'))
             questions = [q['question'] for q in queries]
             queries_full_df = queries_full_df.set_index('0', drop=False)
         else:
-            queries_df = pd.read_json(f'data/{args.dataset}.json')
+            queries_df = pd.read_json(f'data/{dataset}.json')
             questions = queries_df['question'].values
             queries_full_df = queries_full_df.set_index('question', drop=False)
             queries_full_df = queries_full_df.loc[questions]
 
         queries_full_df = queries_full_df.loc[questions]
-    except:
+    except Exception as e:
+        print('Loading query NER exception: {}'.format(e))
         queries_full_df = pd.DataFrame([], columns=['question', 'triples'])
 
     q_entities = []
@@ -143,8 +147,8 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
     kb_df2 = copy.deepcopy(kb_df)
     kb_df['type'] = 'query'
     kb_df2['type'] = 'kb'
-    kb_full = pd.concat([kb_df, kb_df2])
-    kb_full.to_csv('output/kb_to_kb.tsv', sep='\t')
+    kb_full_df = pd.concat([kb_df, kb_df2])
+    kb_full_df.to_csv('output/kb_to_kb.tsv', sep='\t')
 
     rel_kb_df = pd.DataFrame(unique_relations, columns=['strings'])
     rel_kb_df2 = copy.deepcopy(rel_kb_df)
@@ -152,9 +156,9 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
     rel_kb_df2['type'] = 'kb'
     rel_kb_full_df = pd.concat([rel_kb_df, rel_kb_df2])
     rel_kb_full_df.to_csv('output/rel_kb_to_kb.tsv', sep='\t')
+
     query_df = pd.DataFrame(q_phrases, columns=['strings'])
     query_df['type'] = 'query'
-
     kb_df['type'] = 'kb'
     kb_query_df = pd.concat([kb_df, query_df])
     kb_query_df.to_csv('output/query_to_kb.tsv', sep='\t')
