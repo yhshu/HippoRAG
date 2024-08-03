@@ -127,16 +127,19 @@ if __name__ == '__main__':
     parser.add_argument('--top_k', type=int, default=8, help='retrieving k documents at each step')
     parser.add_argument('--link_top_k', type=int, help='the number of linked nodes at each retrieval step')
     parser.add_argument('--doc_ensemble', type=str, default='t')
-    parser.add_argument('--dpr_only', type=str, default='f')
+    parser.add_argument('--dpr_only', action='store_true')
     parser.add_argument('--graph_alg', type=str, default='ppr')
     parser.add_argument('--wo_node_spec', action='store_true')
     parser.add_argument('--sim_threshold', type=float, default=0.8)
     parser.add_argument('--recognition_threshold', type=float, default=0.9)
     parser.add_argument('--damping', type=float, default=0.1)
     parser.add_argument('--force_retry', action='store_true')
+    parser.add_argument('--do_eval', type=str, default='t')
     args = parser.parse_args()
 
     set_llm_cache(SQLiteCache(database_path=".ircot_hipporag.db"))
+
+    do_eval = string_to_bool(args.do_eval)
 
     # check args
     if args.linking in ['query_to_node', 'query_to_fact', 'query_to_passage']:
@@ -144,7 +147,6 @@ if __name__ == '__main__':
 
     # Please set environment variable OPENAI_API_KEY
     doc_ensemble = string_to_bool(args.doc_ensemble)
-    dpr_only = string_to_bool(args.dpr_only)
 
     client = init_langchain_model(args.llm, args.llm_model)
     llm_model_name_processed = args.llm_model.replace('/', '_').replace('.', '_')
@@ -157,7 +159,7 @@ if __name__ == '__main__':
     hipporag = HippoRAG(args.dataset, extraction_model=args.llm, extraction_model_name=args.llm_model, graph_creating_retriever_name=args.retriever,
                         linking_retriever_name=args.linker,
                         doc_ensemble=doc_ensemble, node_specificity=not (args.wo_node_spec), sim_threshold=args.sim_threshold,
-                        colbert_config=colbert_configs, dpr_only=dpr_only, graph_alg=args.graph_alg, damping=args.damping, recognition_threshold=args.recognition_threshold)
+                        colbert_config=colbert_configs, dpr_only=args.dpr_only, graph_alg=args.graph_alg, damping=args.damping, recognition_threshold=args.recognition_threshold)
 
     data = json.load(open(f'data/{args.dataset}.json', 'r'))
     corpus = json.load(open(f'data/{args.dataset}_corpus.json', 'r'))
@@ -178,7 +180,7 @@ if __name__ == '__main__':
 
     doc_ensemble_str = f'doc_ensemble_{args.recognition_threshold}' if doc_ensemble else 'no_ensemble'
 
-    if dpr_only:
+    if args.dpr_only:
         dpr_only_str = 'dpr_only'
     else:
         dpr_only_str = 'hipporag'
@@ -233,8 +235,10 @@ if __name__ == '__main__':
     for sample_idx, sample in tqdm(enumerate(data), total=len(data), desc='IRCoT retrieval'):  # for each sample
         if args.dataset in ['hotpotqa', '2wikimultihopqa', 'hotpotqa_train']:
             sample_id = sample['_id']
-        else:
+        elif 'id' in sample:
             sample_id = sample['id']
+        else:
+            sample_id = str(sample_idx)
 
         if sample_id in processed_ids:
             continue
@@ -273,35 +277,38 @@ if __name__ == '__main__':
         # end iteration
 
         # calculate recall
-        if args.dataset in ['hotpotqa', 'hotpotqa_train']:
-            gold_passages = [item for item in sample['supporting_facts']]
-            gold_items = set([item[0] for item in gold_passages])
-            retrieved_items = [passage.split('\n')[0].strip() for passage in retrieved_passages]
-        elif args.dataset in ['2wikimultihopqa']:
-            gold_passages = [item for item in sample['supporting_facts']]
-            gold_items = set([item[0] for item in gold_passages])
-            retrieved_items = [passage.split('\n')[0].strip() for passage in retrieved_passages]
-        else:
-            gold_passages = [item for item in sample['paragraphs'] if item['is_supporting']]
-            gold_items = set([item['title'] + '\n' + (item['text'] if 'text' in item else item['paragraph_text']) for item in gold_passages])
-            retrieved_items = retrieved_passages
+        if do_eval:
+            if args.dataset in ['hotpotqa', 'hotpotqa_train']:
+                gold_passages = [item for item in sample['supporting_facts']]
+                gold_items = set([item[0] for item in gold_passages])
+                retrieved_items = [passage.split('\n')[0].strip() for passage in retrieved_passages]
+            elif args.dataset in ['2wikimultihopqa']:
+                gold_passages = [item for item in sample['supporting_facts']]
+                gold_items = set([item[0] for item in gold_passages])
+                retrieved_items = [passage.split('\n')[0].strip() for passage in retrieved_passages]
+            else:
+                gold_passages = [item for item in sample['paragraphs'] if item['is_supporting']]
+                gold_items = set([item['title'] + '\n' + (item['text'] if 'text' in item else item['paragraph_text']) for item in gold_passages])
+                retrieved_items = retrieved_passages
 
-        # record results
-        phrases_in_gold_docs = []
-        if not hipporag.dpr_only:
-            for gold_passage in gold_passages:
-                passage_content = gold_passage['text'] if 'text' in gold_passage else gold_passage['paragraph_text']
-                phrases_in_gold_docs.append(hipporag.get_phrases_in_doc_by_str(passage_content))
+            # record results
+            phrases_in_gold_docs = []
+            if not hipporag.dpr_only:
+                for gold_passage in gold_passages:
+                    passage_content = gold_passage['text'] if 'text' in gold_passage else gold_passage['paragraph_text']
+                    phrases_in_gold_docs.append(hipporag.get_phrases_in_doc_by_str(passage_content))
 
-        if args.dataset in ['hotpotqa', '2wikimultihopqa', 'hotpotqa_train']:
-            sample['supporting_docs'] = [item for item in sample['supporting_facts']]
-        else:
-            sample['supporting_docs'] = [item for item in sample['paragraphs'] if item['is_supporting']]
-            del sample['paragraphs']
+            if args.dataset in ['hotpotqa', '2wikimultihopqa', 'hotpotqa_train']:
+                sample['supporting_docs'] = [item for item in sample['supporting_facts']]
+            else:
+                sample['supporting_docs'] = [item for item in sample['paragraphs'] if item['is_supporting']]
+                del sample['paragraphs']
+
+            if len(phrases_in_gold_docs):
+                sample['nodes_in_gold_doc'] = json.dumps(phrases_in_gold_docs)
 
         sample['retrieved'] = retrieved_passages[:10]
         sample['retrieved_scores'] = json.dumps(scores[:10])
-        sample['nodes_in_gold_doc'] = json.dumps(phrases_in_gold_docs)
 
         logs_for_first_step = logs_for_all_steps[1]
         if logs_for_first_step is not None:
@@ -310,8 +317,8 @@ if __name__ == '__main__':
         sample['thoughts'] = thoughts
 
         # calculate node precision/recall/Hit
-        linked_nodes = set()
-        if logs_for_first_step is not None:
+        if do_eval and logs_for_first_step is not None and not hipporag.dpr_only:
+            linked_nodes = set()
             for link in logs_for_first_step['linked_node_scores']:
                 if isinstance(link, list):
                     linked_nodes.add(link[1])
@@ -332,44 +339,47 @@ if __name__ == '__main__':
             metrics_sum['node_hit'] += node_hit
 
         # calculate passage retrieval recall
-        recall = dict()
-        print(f'idx: {sample_idx + 1} ', end='')
-        for k in k_list:
-            recall[k] = round(sum(1 for t in gold_items if t in retrieved_items[:k]) / len(gold_items), 4)
-            metrics_sum[f"recall_{k}"] += recall[k]
+        if do_eval:
+            recall = dict()
+            print(f'idx: {sample_idx + 1} ', end='')
+            for k in k_list:
+                recall[k] = round(sum(1 for t in gold_items if t in retrieved_items[:k]) / len(gold_items), 4)
+                metrics_sum[f"recall_{k}"] += recall[k]
 
-        # calculate all-recall: whether all gold items are retrieved
-        all_recall_dict = dict()
-        any_recall_dict = dict()
-        for k in k_list:
-            all_recall = 1 if all(t in retrieved_items[:k] for t in gold_items) else 0
-            any_recall = 1 if any(t in retrieved_items[:k] for t in gold_items) else 0
-            metrics_sum[f'all_recall_{k}'] += all_recall
-            metrics_sum[f'any_recall_{k}'] += any_recall
-            if k in [1, 2, 5, 10]:
-                all_recall_dict[str(k)] = all_recall
-                any_recall_dict[str(k)] = any_recall
+            # calculate all-recall: whether all gold items are retrieved
+            all_recall_dict = dict()
+            any_recall_dict = dict()
+            for k in k_list:
+                all_recall = 1 if all(t in retrieved_items[:k] for t in gold_items) else 0
+                any_recall = 1 if any(t in retrieved_items[:k] for t in gold_items) else 0
+                metrics_sum[f'all_recall_{k}'] += all_recall
+                metrics_sum[f'any_recall_{k}'] += any_recall
+                if k in [1, 2, 5, 10]:
+                    all_recall_dict[str(k)] = all_recall
+                    any_recall_dict[str(k)] = any_recall
 
-        sample['recall'] = recall
-        sample['all_recall'] = all_recall_dict
-        sample['any_recall'] = any_recall_dict
+            sample['recall'] = recall
+            sample['all_recall'] = all_recall_dict
+            sample['any_recall'] = any_recall_dict
 
-        for key in sorted(metrics_sum.keys(), key=lambda x: (len(x), x)):
-            num = round(metrics_sum[key] / (sample_idx + 1), 4)
-            assert 0.0 <= num <= 1.0
-            print(f'{key} {num} ', end='')
-        print()
-        print('[ITERATION]', it, '[PASSAGE]', len(retrieved_passages), '[THOUGHT]', thoughts)
+            for key in sorted(metrics_sum.keys(), key=lambda x: (len(x), x)):
+                num = round(metrics_sum[key] / (sample_idx + 1), 4)
+                assert 0.0 <= num <= 1.0
+                print(f'{key} {num} ', end='')
+            print()
+            print('[ITERATION]', it, '[PASSAGE]', len(retrieved_passages), '[THOUGHT]', thoughts)
 
         results.append(sample)
         if (sample_idx + 1) % 10 == 0:
             with open(output_path, 'w') as f:
                 json.dump(results, f)
+    # end for each sample
 
-    # show metrics
-    for key in sorted(metrics_sum.keys(), key=lambda x: (len(x), x)):
-        metrics_sum[key] /= len(data)
-        print(key, round(metrics_sum[key], 3))
+    if do_eval:
+        # show metrics
+        for key in sorted(metrics_sum.keys(), key=lambda x: (len(x), x)):
+            metrics_sum[key] /= len(data)
+            print(key, round(metrics_sum[key], 3))
 
     # save results
     with open(output_path, 'w') as f:

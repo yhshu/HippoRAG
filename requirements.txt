@@ -143,3 +143,5 @@ llama-cpp-python
 pytrec_eval
 gritlm
 charset-normalizer==3.3.2
+evaluate
+rouge_score

@@ -23,13 +23,15 @@ if __name__ == '__main__':
     parser.add_argument('--retriever', type=str, default='colbertv2')
     parser.add_argument('--num_thread', type=int, default=10)
     parser.add_argument('--syn_thresh', type=float, default=0.8)
+    parser.add_argument('--skip_openie', action='store_true')
     args = parser.parse_args()
 
     set_llm_cache(SQLiteCache(database_path=".langchain.db"))
     extraction_type = 'ner'
 
     # Running Open Information Extraction
-    openie_for_corpus(args.dataset, args.run_ner, args.num_passages, args.llm, args.extractor, args.num_thread)
+    if not args.skip_openie:
+        openie_for_corpus(args.dataset, args.run_ner, args.num_passages, args.llm, args.extractor, args.num_thread)
     query_ner_parallel(args.dataset, args.llm, args.extractor, args.num_thread)
 
     # Creating ColBERT Graph
