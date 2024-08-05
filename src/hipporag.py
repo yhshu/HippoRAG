@@ -127,17 +127,16 @@ class HippoRAG:
         self.logger = logging.getLogger('HippoRAG')
 
         try:
-            self.named_entity_cache = pd.read_csv('output/{}_queries.named_entity_output.tsv'.format(self.corpus_name),
-                                                  sep='\t')
+            query_ner_path = f'output/{self.corpus_name}_{self.extraction_model_name_processed}_queries.named_entity_output.tsv'
+            self.query_ner_cache = pd.read_csv(query_ner_path, sep='\t')
+            self.logger.info('Loaded query NER cache from: ' + query_ner_path)
         except Exception as e:
-            self.named_entity_cache = pd.DataFrame([], columns=['query', 'triples'])
+            self.query_ner_cache = pd.DataFrame([], columns=['query', 'triples'])
+            self.logger.error('Query NER cache is not loaded ' + str(e))
 
-        if 'query' in self.named_entity_cache:
-            self.named_entity_cache = {row['query']: eval_json_str(row['triples']) for i, row in
-                                       self.named_entity_cache.iterrows()}
-        elif 'question' in self.named_entity_cache:
-            self.named_entity_cache = {row['question']: eval_json_str(row['triples']) for i, row in
-                                       self.named_entity_cache.iterrows()}
+        query_key = 'query' if 'query' in self.query_ner_cache else 'question'
+        self.query_ner_cache = {row[query_key]: eval_json_str(row['triples']) for i, row in
+                                self.query_ner_cache.iterrows()}
 
         self.embed_model = init_embedding_model(self.linking_retriever_name)
         self.dpr_only = dpr_only
@@ -416,8 +415,8 @@ class HippoRAG:
         else:
             # Extract Entities
             try:
-                if query in self.named_entity_cache:
-                    query_ner_list = self.named_entity_cache[query]['named_entities']
+                if query in self.query_ner_cache:
+                    query_ner_list = self.query_ner_cache[query]['named_entities']
                 else:
                     query_ner_json, total_tokens = named_entity_recognition(self.client, query)
                     query_ner_list = eval_json_str(query_ner_json).get('named_entities', [])

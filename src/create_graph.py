@@ -110,7 +110,7 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
     print('Correct Wiki Format: {} out of {}'.format(correct_wiki_format, len(extracted_triples)))
 
     try:
-        queries_full_df = pd.read_csv('output/{}_queries.named_entity_output.tsv'.format(dataset), sep='\t')
+        queries_full_df = pd.read_csv(f'output/{dataset}_{extraction_model}_queries.named_entity_output.tsv', sep='\t')
 
         if 'hotpotqa' in dataset:
             queries = json.load(open(f'data/{dataset}.json', 'r'))

@@ -37,6 +37,12 @@ Question: {}
 
 
 def named_entity_recognition(client, text: str):
+    """
+    Named entity recognition
+    @param client:
+    @param text:
+    @return: a dict {"named_entities": a list of named entities}, an integer total_tokens
+    """
     query_ner_prompts = ChatPromptTemplate.from_messages([SystemMessage("You're a very effective entity extraction system."),
                                                           HumanMessage(query_prompt_one_shot_input),
                                                           AIMessage(query_prompt_one_shot_output),
@@ -70,21 +76,27 @@ def named_entity_recognition(client, text: str):
     return response_content, total_tokens
 
 
-def run_ner_on_texts(client, texts):
+def run_ner_on_texts(client, texts: list):
+    """
+    Named entity recognition on a list of texts
+    @param client:
+    @param texts:
+    @return:
+    """
     ner_output = []
-    total_cost = 0
+    total_tokens = 0
 
     for text in tqdm(texts):
-        ner, cost = named_entity_recognition(client, text)
+        ner, num_token = named_entity_recognition(client, text)
         ner_output.append(ner)
-        total_cost += cost
+        total_tokens += num_token
 
-    return ner_output, total_cost
+    return ner_output, total_tokens
 
 
 def query_ner_parallel(dataset: str, llm: str, model_name: str, num_processes):
     client = init_langchain_model(llm, model_name)  # LangChain model
-    output_file = 'output/{}_queries.named_entity_output.tsv'.format(dataset)
+    output_file = f'output/{dataset}_{model_name}_queries.named_entity_output.tsv'
     try:
         queries_df = pd.read_json(f'data/{dataset}.json')
 

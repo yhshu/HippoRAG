@@ -1,6 +1,5 @@
 import argparse
 import json
-from collections import defaultdict
 
 import torch
 from tqdm import tqdm
@@ -74,8 +73,6 @@ if __name__ == '__main__':
                 ner_results = ner(d['answer'], t, model, tokenizer, args.device)
                 sample[f'universal_ner_{t}'] = ner_results
                 all_entities[t].update(ner_results)
-
-    model_label = args.model.replace('/', '_')
 
     # save results
     ner_output_path = f'data/universal_ner_{args.dataset}_{model_label}_entities.json'

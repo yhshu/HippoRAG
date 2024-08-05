@@ -319,7 +319,7 @@ if __name__ == '__main__':
         # calculate node precision/recall/Hit
         if do_eval and logs_for_first_step is not None and not hipporag.dpr_only:
             linked_nodes = set()
-            for link in logs_for_first_step['linked_node_scores']:
+            for link in logs_for_first_step.get('linked_node_scores', []):
                 if isinstance(link, list):
                     linked_nodes.add(link[1])
                 elif isinstance(link, str):

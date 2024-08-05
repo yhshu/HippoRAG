@@ -182,15 +182,16 @@ def replace_phrases(text: str, mapping: dict):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, default='musique_gpt_alternate')
+    parser.add_argument('--llm', type=str, default='gpt-4o-mini')
     args = parser.parse_args()
 
     random.seed(1)
-    client = init_langchain_model('openai', 'gpt-4o-mini')
+    client = init_langchain_model('openai', args.llm)
     set_llm_cache(SQLiteCache(database_path=".langchain.db"))
 
     musique_samples = json.load(open('data/musique.json'))
     musique_corpus = json.load(open('data/musique_corpus.json'))
-    musique_query_ner = pd.read_csv('output/musique_queries.named_entity_output.tsv', sep='\t')
+    musique_query_ner = pd.read_csv(f'output/musique_{args.llm}_queries.named_entity_output.tsv', sep='\t')
 
     # all_named_entities = set()
     nlp = spacy.load("en_core_web_sm")
