@@ -195,6 +195,7 @@ if __name__ == '__main__':
     parser.add_argument('--detail', action='store_true')
     parser.add_argument('--oracle_ie', action='store_true')
     parser.add_argument('--num', help='the number of samples to evaluate')
+    parser.add_argument('-rs', '--recognition_threshold', type=float, default=0.9)
     args = parser.parse_args()
 
     if args.chunk is False and 'chunk' in args.dataset:
@@ -220,7 +221,7 @@ if __name__ == '__main__':
         qrel = {key: qrel[key] for i, key in enumerate(qrel) if i < min(int(args.num), len(dataset))}
 
     hipporag = HippoRAG(args.dataset, 'openai', args.extractor, args.retriever, doc_ensemble=args.doc_ensemble, dpr_only=args.dpr_only,
-                        linking_retriever_name=args.linker)
+                        linking_retriever_name=args.linker, recognition_threshold=args.recognition_threshold)
 
     if not args.dpr_only:
         link_top_k_list = [3, 5, 10, 20, 30]

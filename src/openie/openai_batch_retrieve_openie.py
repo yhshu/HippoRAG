@@ -64,7 +64,7 @@ if __name__ == '__main__':
         entities = set()
         triples = []
         for e in extraction:
-            if isinstance(e, list) and isinstance(e[0], str):
+            if isinstance(e, list) and len(e) > 0 and isinstance(e[0], str):
                 if len(e) and isinstance(e[0], str):
                     entities.add(e[0])
                 if len(e) == 3 and isinstance(e[2], str):
