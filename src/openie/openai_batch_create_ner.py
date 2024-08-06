@@ -50,6 +50,7 @@ def named_entity_recognition_for_corpus_openai_batch(dataset_name: str, num_pass
                                       completion_window='24h',
                                       metadata={'description': f"HippoRAG OpenIE for {dataset_name}, len: {len(jsonl_contents)}"})
     print(batch_obj)
+    print()
     print("Go to https://platform.openai.com/batches/ or use OpenAI file API to get the output file ID after the batch job is done.")
 
 
