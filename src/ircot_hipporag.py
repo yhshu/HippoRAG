@@ -295,8 +295,9 @@ if __name__ == '__main__':
             phrases_in_gold_docs = []
             if not hipporag.dpr_only:
                 for gold_passage in gold_passages:
-                    passage_content = gold_passage['text'] if 'text' in gold_passage else gold_passage['paragraph_text']
-                    phrases_in_gold_docs.append(hipporag.get_phrases_in_doc_by_str(passage_content))
+                    if isinstance(gold_passage, dict):
+                        passage_content = gold_passage['text'] if 'text' in gold_passage else gold_passage['paragraph_text']
+                        phrases_in_gold_docs.append(hipporag.get_phrases_in_doc_by_str(passage_content))
 
             if args.dataset in ['hotpotqa', '2wikimultihopqa', 'hotpotqa_train']:
                 sample['supporting_docs'] = [item for item in sample['supporting_facts']]

@@ -1,3 +1,4 @@
+import json
 from typing import Optional, Set
 
 
@@ -28,7 +29,7 @@ class Plan:
         self.score = None
 
     def __str__(self):
-        return self.plan
+        return self.plan_str
 
     def __eq__(self, other):  # can be customized to support more advanced equality checking
         return self.plan == other.plan
@@ -37,5 +38,4 @@ class Plan:
         return hash(self.plan)
 
     def __repr__(self):
-        return self.plan
-
+        return json.dumps({'plan': self.plan, 'plan_str': self.plan_str, 'height': self.height, 'rtn_type': self.rtn_type, 'score': self.score})

@@ -133,6 +133,7 @@ class PanguForOpenKG:
         cur_step = 1  # 1 to max_steps
         final_step = cur_step  # final step maybe less than the max cur_step because of determination strategy
         searched_plans = defaultdict(list)  # {step (int, starting from 1): [plan objects]}
+        beams = []  # {step (int, starting from 1): [beam objects]}
         while cur_step <= max_steps:
             new_plans = self.symbolic_agent.propose_new_plans(use_all_previous=True)
             if len(new_plans) == 0:
@@ -185,6 +186,7 @@ class PanguForOpenKG:
                         filtered_plans[plan.rtn_type].add(plan)
                         break
             self.symbolic_agent.update_current_plans(filtered_plans)
+            beams.append([str(p) for p in cur_plans])
             cur_step += 1
             final_step = cur_step
 
@@ -230,7 +232,7 @@ class PanguForOpenKG:
         res = res[:top_k]
         if num_valid:
             res = [r for r in res if len(r['results']) > 0]
-        return res
+        return res, beams
 
     def retrieve_node(self, question: str, top_k: int = 10, distinct: bool = True):
         return self.node_retriever.get_top_k_sentences(question, top_k, distinct)

@@ -31,7 +31,7 @@ if __name__ == '__main__':
     for i, sample in tqdm(enumerate(data), total=len(data), desc='Pangu QA'):
         question = sample['question']
         gold_ans = sample['answer']
-        predicted_queries = pangu.text_to_query(question, max_steps=max_steps, beam_size=args.beam_size)
+        predicted_queries, beams = pangu.text_to_query(question, max_steps=max_steps, beam_size=args.beam_size)
 
         pred_ans = ''
         pred_lisp_repr = ''
@@ -68,7 +68,9 @@ if __name__ == '__main__':
         print('[Prediction]', pred_ans)
         print('[EM]', em, '[F1]', f1)
         print('[Avg EM]', metrics['em'] / (i + 1), '[Avg F1]', metrics['f1'] / (i + 1))
-        logs.append({'question': question, 'gold_ans': gold_ans, 'pred_ans': pred_ans, 'pred_lisp_repr': pred_lisp_repr, 'final_step': final_step, 'em': em, 'f1': f1})
+        logs.append({'question': question, 'gold_ans': gold_ans, 'pred_ans': pred_ans,
+                     'pred_lisp_repr': pred_lisp_repr, 'final_step': final_step,
+                     'em': em, 'f1': f1, 'beams': beams})
 
         log_output_path = f'output/ttl_kg/{args.dataset}_{args.llm}_qa_log.json'
         json.dump(logs, open(log_output_path, 'w'), indent=4)
