@@ -70,7 +70,7 @@ def graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, 
 
         # get top ranked nodes from doc_prob and self.doc_to_phrases_mat
         nodes_in_retrieved_doc = []
-        for doc_id in sorted_doc_ids[:5]:
+        for doc_id in sorted_doc_ids[:10]:
             node_id_in_doc = list(np.where(hipporag.docs_to_phrases_mat[[doc_id], :].toarray()[0] > 0)[0])
             nodes_in_retrieved_doc.append([hipporag.node_phrases[node_id] for node_id in node_id_in_doc])
 

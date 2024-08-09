@@ -50,7 +50,19 @@ def generate_nodes(hipporag: HippoRAG, query: str, docs: list, phrases_by_doc: l
     return list(selected_nodes)
 
 
-def link_by_passage_node(hipporag: HippoRAG, query: str, link_top_k: Union[None, int]):
+def rank_phrase_in_doc(query: str, doc: str, phrases: list, hipporag: HippoRAG, top_k):
+    if top_k is None or len(phrases) <= top_k:
+        return phrases
+    query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction(hipporag.embed_model, 'query_to_node', hipporag.corpus_name),
+                                                       return_cpu=True, return_numpy=True, norm=True)
+    node_embeddings = hipporag.embed_model.encode_text(phrases, '', return_numpy=True, norm=True, return_cpu=True)
+    scores = np.dot(node_embeddings, query_embedding.T)  # (num_nodes, dim) x (1, dim).T = (num_nodes, 1)
+    scores = np.squeeze(scores)
+    top_idx = np.argsort(scores)[-top_k:][::-1].tolist()
+    return [phrases[i] for i in top_idx]
+
+
+def link_by_passage_node(hipporag: HippoRAG, query: str, link_top_k: Union[None, int], top_k_node_per_doc=None):
     query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction(hipporag.embed_model, 'query_to_passage', hipporag.corpus_name),
                                                        return_cpu=True, return_numpy=True, norm=True)
     query_doc_scores = np.dot(hipporag.doc_embedding_mat, query_embedding.T)  # (num_docs, dim) x (1, dim).T = (num_docs, 1)
@@ -64,11 +76,12 @@ def link_by_passage_node(hipporag: HippoRAG, query: str, link_top_k: Union[None,
     all_candidate_phrases = set()
     for doc_idx in top_doc_idx:
         doc = hipporag.get_passage_by_idx(doc_idx)
-        phrases = hipporag.get_phrase_in_doc_by_idx(doc_idx)
+        phrases_in_doc = hipporag.get_phrase_in_doc_by_idx(doc_idx)
         docs.append(doc)
-        phrases_by_doc.append(phrases)
+        phrases_by_doc.append(phrases_in_doc)
         doc_scores.append(query_doc_scores[doc_idx])
-        all_candidate_phrases.update([p.lower() for p in phrases])
+        top_phrases_in_doc = rank_phrase_in_doc(query, doc, phrases_in_doc, hipporag, top_k_node_per_doc)
+        all_candidate_phrases.update([p.lower() for p in top_phrases_in_doc])
 
     assert len(docs) == len(phrases_by_doc)
     selected_nodes = generate_nodes(hipporag, query, docs, phrases_by_doc)

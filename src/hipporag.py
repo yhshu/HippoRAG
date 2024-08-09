@@ -29,15 +29,6 @@ os.environ['TOKENIZERS_PARALLELISM'] = 'FALSE'
 COLBERT_CKPT_DIR = "exp/colbertv2.0"
 
 
-class SpecificLoggerFilter(logging.Filter):
-    def __init__(self, name):
-        super().__init__()
-        self.name = name
-
-    def filter(self, record):
-        return record.name == self.name
-
-
 def get_query_instruction(embedding_model: EmbeddingModelWrapper, task=None, dataset_name=None):
     if isinstance(embedding_model, GritWrapper):
         if task == 'ner_to_node':
