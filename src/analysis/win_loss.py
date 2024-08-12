@@ -69,6 +69,8 @@ if __name__ == '__main__':
         data2 = json.load(f)
 
     win, loss, tie = compare_recalls(data1, data2)
-    json.dump(win, open('output/win.json', 'w'), indent=4)
-    json.dump(loss, open('output/loss.json', 'w'), indent=4)
-    json.dump(tie, open('output/tie.json', 'w'), indent=4)
+    label1 = args.data1.split('/')[-1].split('.')[0]
+    label2 = args.data2.split('/')[-1].split('.')[0]
+    json.dump(win, open(f'output/win_{label1}_vs_{label2}.json', 'w'), indent=4)
+    json.dump(loss, open(f'output/loss_{label1}_vs_{label2}.json', 'w'), indent=4)
+    json.dump(tie, open(f'output/tie_{label1}_vs_{label2}.json', 'w'), indent=4)

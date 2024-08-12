@@ -1,3 +1,4 @@
+import os
 import sys
 from typing import Union
 
@@ -137,6 +138,7 @@ if __name__ == '__main__':
     parser.add_argument('--do_eval', type=str, default='t')
     args = parser.parse_args()
 
+    # set langchain cache
     set_llm_cache(SQLiteCache(database_path=".ircot_hipporag.db"))
 
     do_eval = string_to_bool(args.do_eval)
@@ -150,10 +152,6 @@ if __name__ == '__main__':
 
     client = init_langchain_model(args.llm, args.llm_model)
     llm_model_name_processed = args.llm_model.replace('/', '_').replace('.', '_')
-    # if args.llm_model == 'gpt-3.5-turbo-1106':  # Default OpenIE system
-    #     colbert_configs = {'root': f'data/lm_vectors/colbert/{args.dataset}', 'doc_index_name': 'nbits_2', 'phrase_index_name': 'nbits_2'}
-    # else:
-    #     colbert_configs = {'root': f'data/lm_vectors/colbert/{args.dataset}_{llm_model_name_processed}', 'doc_index_name': 'nbits_2', 'phrase_index_name': 'nbits_2'}
     colbert_configs = {'root': f'data/lm_vectors/colbert/{args.dataset}', 'doc_index_name': 'nbits_2', 'phrase_index_name': 'nbits_2'}
 
     hipporag = HippoRAG(args.dataset, extraction_model=args.llm, extraction_model_name=args.llm_model, graph_creating_retriever_name=args.retriever,
@@ -185,7 +183,8 @@ if __name__ == '__main__':
     else:
         dpr_only_str = 'hipporag'
 
-    output_path = (f'output/ircot/ircot_results_{args.dataset}_{dpr_only_str}_R_{hipporag.graph_creating_retriever_name_processed}_L_{hipporag.linking_retriever_name_processed}'
+    os.makedirs(f'output/ircot_retrieval/{args.dataset}', exist_ok=True)
+    output_path = (f'output/ircot_retrieval/{args.dataset}/{args.dataset}_{dpr_only_str}_R_{hipporag.graph_creating_retriever_name_processed}_L_{hipporag.linking_retriever_name_processed}_{args.linking}'
                    f'_demo_{args.num_demo}_E_{llm_model_name_processed}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}_{args.graph_alg}_damping_{args.damping}_sim_thresh_{args.sim_threshold}')
 
     if args.wo_node_spec:
@@ -193,6 +192,7 @@ if __name__ == '__main__':
     if args.link_top_k:
         output_path += f'_LT_{args.link_top_k}'
     output_path += '.json'
+    print('Log file will be saved to', output_path)
 
     k_list = [1, 2, 5, 10, 20]
     metrics_sum = defaultdict(float)  # the sum of metrics for all samples

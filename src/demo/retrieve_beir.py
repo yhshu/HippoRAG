@@ -1,11 +1,13 @@
 # Note that BEIR uses https://github.com/cvangysel/pytrec_eval to evaluate the retrieval results.
 import sys
+
+sys.path.append('.')
+
 from collections import defaultdict
+from typing import Union
 
 from langchain.globals import set_llm_cache
 from langchain_community.cache import SQLiteCache
-
-sys.path.append('.')
 
 from src.data_process.util import merge_chunk_scores, merge_chunks
 from src.hipporag import HippoRAG
@@ -35,8 +37,14 @@ def detailed_log(dataset: list, run_dict, eval_res, chunk=False, threshold=None,
             gold_passage_extracted_triples = [t for extr in gold_passage_extractions for t in extr['extracted_triples']]
 
             if 'linked_node_scores' in run_dict['log'][query_id]:
-                for node_linking in run_dict['log'][query_id]['linked_node_scores']:
-                    linked_node_phrase = node_linking[1]
+                linked_node_scores = run_dict['log'][query_id].get('linked_node_scores', '{}')
+                if isinstance(linked_node_scores, str):
+                    linked_node_scores = json.loads(linked_node_scores)
+                for node_linking in linked_node_scores:
+                    if isinstance(node_linking, list):
+                        linked_node_phrase = node_linking[1]
+                    else:  # node_linking is a string as a key of linked_node_scores
+                        linked_node_phrase = linked_node_scores[node_linking]
                     distance = []
                     for e in gold_passage_extracted_entities:
                         if e == linked_node_phrase:
@@ -75,9 +83,8 @@ def detailed_log(dataset: list, run_dict, eval_res, chunk=False, threshold=None,
     return logs
 
 
-def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: str, linker_name: str, linking: str, doc_ensemble: bool, dpr_only: bool, chunk: bool,
-                      detail: bool,
-                      link_top_k=3, oracle_extraction=False):
+def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: str, linker_name: str, linking: str,
+                      doc_ensemble: bool, dpr_only: bool, chunk: bool, link_top_k: Union[int, None] = 3, oracle_extraction=False):
     doc_ensemble_str = 'doc_ensemble' if doc_ensemble else 'no_ensemble'
     extraction_str = extractor_name.replace('/', '_').replace('.', '_')
     graph_creating_str = retriever_name.replace('/', '_').replace('.', '_')
@@ -87,7 +94,9 @@ def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: st
     if oracle_extraction:
         linking_str += '_oracle_ie'
     dpr_only_str = '_dpr_only' if dpr_only else ''
-    run_output_path = f'exp/{dataset_name}_run_{doc_ensemble_str}_{extraction_str}_{graph_creating_str}_{linking_str}{dpr_only_str}.json'
+    os.makedirs(f'output/retrieval/{dataset_name}', exist_ok=True)
+    run_output_path = f'output/retrieval/{dataset_name}/{dataset_name}_run_{doc_ensemble_str}_{extraction_str}_{graph_creating_str}_{linking_str}{dpr_only_str}.json'
+    print(f'Log will be saved to {run_output_path}')  # this file is used for pytrec_eval, another log file will be saved for details
 
     pytrec_metrics = {'map', 'ndcg'}
     metrics = defaultdict(float)
@@ -147,12 +156,13 @@ def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: st
             else:
                 hipporag.logger.info(f'No linked nodes found for query {query_id}.')
 
+        # evaluate the retrieval results
         log['query'] = query_text
         run_dict['retrieved'][query_id] = {doc['idx']: score for doc, score in zip(retrieved_docs, scores)}
         run_dict['log'][query_id] = log
     # end each query
 
-    if to_update_run:
+    if to_update_run:  # if there are new results from this run, save them
         with open(run_output_path, 'w') as f:
             json.dump(run_dict, f)
             print(f'Run saved to {run_output_path}, len: {len(run_dict["retrieved"])}')
@@ -174,12 +184,12 @@ def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: st
         metrics[key] = round(metrics[key], 3)
     print(f'Metrics: {metrics}')
 
-    if detail:
-        logs = detailed_log(dataset, run_dict, eval_res, chunk, dpr_only=dpr_only)
-        detailed_log_output_path = f'exp/{dataset_name}_log_{doc_ensemble_str}_{extraction_str}_{graph_creating_str}{linking_str}{dpr_only_str}.json'
-        with open(detailed_log_output_path, 'w') as f:
-            json.dump(logs, f)
-        print(f'Detailed log saved to {detailed_log_output_path}')
+    logs = detailed_log(dataset, run_dict, eval_res, chunk, dpr_only=dpr_only)
+    os.makedirs(f'output/retrieval/{dataset_name}', exist_ok=True)
+    detailed_log_output_path = f'output/retrieval/{dataset_name}/{dataset_name}_log_{doc_ensemble_str}_{extraction_str}_{graph_creating_str}_{linking_str}{dpr_only_str}.json'
+    with open(detailed_log_output_path, 'w') as f:
+        json.dump(logs, f)
+    print(f'Detailed log saved to {detailed_log_output_path}')
 
 
 if __name__ == '__main__':
@@ -192,11 +202,12 @@ if __name__ == '__main__':
     parser.add_argument('--linking', type=str)
     parser.add_argument('--doc_ensemble', action='store_true')
     parser.add_argument('--dpr_only', action='store_true')
-    parser.add_argument('--detail', action='store_true')
     parser.add_argument('--oracle_ie', action='store_true')
     parser.add_argument('--num', help='the number of samples to evaluate')
     parser.add_argument('-rs', '--recognition_threshold', type=float, default=0.9)
     args = parser.parse_args()
+
+    set_llm_cache(SQLiteCache(database_path=f".hipporag_{args.extractor}.db"))
 
     if args.chunk is False and 'chunk' in args.dataset:
         args.chunk = True
@@ -220,16 +231,16 @@ if __name__ == '__main__':
         dataset = dataset[:min(int(args.num), len(dataset))]
         qrel = {key: qrel[key] for i, key in enumerate(qrel) if i < min(int(args.num), len(dataset))}
 
-    hipporag = HippoRAG(args.dataset, 'openai', args.extractor, args.retriever, doc_ensemble=args.doc_ensemble, dpr_only=args.dpr_only,
-                        linking_retriever_name=args.linker, recognition_threshold=args.recognition_threshold)
+    hipporag = HippoRAG(args.dataset, 'openai', args.extractor, args.retriever, doc_ensemble=args.doc_ensemble,
+                        dpr_only=args.dpr_only, linking_retriever_name=args.linker, recognition_threshold=args.recognition_threshold)
 
     if not args.dpr_only:
-        link_top_k_list = [3, 5, 10, 20, 30]
+        link_top_k_list = [3, 5, 10]
         if args.linking == 'ner_to_node':
             link_top_k_list = [None]
         for link_top_k in link_top_k_list:
             run_retrieve_beir(args.dataset, args.extractor, args.retriever, args.linker, args.linking,
-                              args.doc_ensemble, args.dpr_only, args.chunk, args.detail, link_top_k=link_top_k, oracle_extraction=args.oracle_ie)
+                              args.doc_ensemble, args.dpr_only, args.chunk, link_top_k=link_top_k, oracle_extraction=args.oracle_ie)
     else:  # DPR only
         run_retrieve_beir(args.dataset, args.extractor, args.retriever, args.linker, args.linking,
-                          args.doc_ensemble, args.dpr_only, args.chunk, args.detail, link_top_k=1, oracle_extraction=args.oracle_ie)
+                          args.doc_ensemble, args.dpr_only, args.chunk, link_top_k=1, oracle_extraction=args.oracle_ie)
