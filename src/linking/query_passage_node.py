@@ -7,26 +7,7 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate
 
 from src.hipporag import get_query_instruction, HippoRAG
-from src.linking import graph_search_with_entities
-from src.linking.query_to_fact import link_fact_by_dpr
-
-router_system_prompt = """Task: Analyze the provided query and its associated passages to determine if the passages sufficiently answer or support the query.
-
-- Evaluate the relevance and completeness of the passages concerning the query. Consider whether multi-hop reasoning is necessary, which requires you to integrate information from multiple passages.
-- Decide whether to retain the current retrieval results or if further refinement is needed.
-- To enhance accuracy, explain your reasoning step-by-step before arriving at the final decision.
-- Choose one of the following options for your response: 'yes', 'no', or 'likely'.
-- Provide your final response in JSON format. Example:
-{"thought": "These passages support the query by providing all necessary facts.", "answer": "yes"}"""
-
-beir_router_system_prompt = """Task: Analyze the provided query and its associated passages to determine if the passages sufficiently support or contradict the query.
-
-- Evaluate the relevance and completeness of the passages concerning the query.
-- Decide whether to retain the current retrieval results or if further refinement is needed.
-- To enhance accuracy, explain your reasoning step-by-step before arriving at the final decision.
-- Choose one of the following options for your response: 'yes', 'no', or 'likely'.
-- Provide your final response in JSON format. Example:
-{"thought": "These passages support the query by providing all necessary facts.", "answer": "yes"}"""
+from src.linking import graph_search_with_entities, plan_given_query_passage, plan_given_query_fact
 
 system_prompt = """Given a question, potentially relevant passages, and a list of phrases (entities or literals) extracted from each passage, select the phrases that are most relevant to the question.
 - Only select the given phrases that are relevant to the question and do not generate new ones.
@@ -44,26 +25,6 @@ Passage 2: Berlin is the capital of Germany.
 Phrases: ["berlin", "germany"]"""
 
 demo_output = """{"phrases": ["paris", "france"]}"""
-
-
-def generate_plan(hipporag: HippoRAG, query: str, docs: list):
-    user_prompt = f"Question: {query}"
-    for i, doc in enumerate(docs):
-        user_prompt += f"\n\nPassage {i + 1}: {doc}"
-
-    messages = [
-        SystemMessage(router_system_prompt if 'beir' not in hipporag.corpus_name else beir_router_system_prompt),
-        HumanMessage(user_prompt),
-    ]
-    messages = ChatPromptTemplate.from_messages(messages).format_prompt()
-    completion = hipporag.client.invoke(messages.to_messages(), temperature=0, response_format={"type": "json_object"})
-    contents = completion.content
-    try:
-        print(contents)
-        return json.loads(contents)
-    except Exception as e:
-        print(f"Error parsing the response: {e}")
-        return {"answer": ""}
 
 
 def generate_nodes(hipporag: HippoRAG, query: str, docs: list, phrases_by_doc: list):
@@ -101,7 +62,7 @@ def rank_phrase_in_doc(query: str, doc: str, phrases: list, hipporag: HippoRAG, 
     return [phrases[i] for i in top_idx]
 
 
-def link_by_passage_node(hipporag: HippoRAG, query: str, link_top_k: Union[None, int] = 5, top_k_node_per_doc=None, router=False):
+def link_by_passage_node(hipporag: HippoRAG, query: str, link_top_k: Union[None, int] = 5, top_k_node_per_doc=None, router='fact'):
     query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction(hipporag.embed_model, 'query_to_passage', hipporag.corpus_name),
                                                        return_cpu=True, return_numpy=True, norm=True)
     query_doc_scores = np.dot(hipporag.doc_embedding_mat, query_embedding.T)  # (num_docs, dim) x (1, dim).T = (num_docs, 1)
@@ -112,6 +73,7 @@ def link_by_passage_node(hipporag: HippoRAG, query: str, link_top_k: Union[None,
     docs = []
     doc_scores = []
     phrases_by_doc = []
+    fact_by_doc = []
     all_candidate_phrases = set()
     for doc_idx in top_doc_idx:
         doc = hipporag.get_passage_by_idx(doc_idx)
@@ -121,11 +83,20 @@ def link_by_passage_node(hipporag: HippoRAG, query: str, link_top_k: Union[None,
         doc_scores.append(query_doc_scores[doc_idx])
         top_phrases_in_doc = rank_phrase_in_doc(query, doc, phrases_in_doc, hipporag, top_k_node_per_doc)
         all_candidate_phrases.update([p.lower() for p in top_phrases_in_doc])
+        facts = hipporag.get_triples_by_corpus_idx(doc_idx)
+        fact_by_doc.append(facts[0])
 
     assert len(docs) == len(phrases_by_doc)
-    if router:
-        plan = generate_plan(hipporag, query, docs)
+    if router == 'passage':
+        plan = plan_given_query_passage(hipporag, query, docs)
         if plan['answer'] == 'no':
+            selected_nodes = generate_nodes(hipporag, query, docs, phrases_by_doc)
+        else:
+            sorted_scores = np.sort(query_doc_scores)[::-1][:10]
+            return np.array(top_doc_idx), sorted_scores, {}
+    elif router == 'fact':
+        plan = plan_given_query_fact(hipporag, query, fact_by_doc)
+        if plan['answer'] != 'no':
             selected_nodes = generate_nodes(hipporag, query, docs, phrases_by_doc)
         else:
             sorted_scores = np.sort(query_doc_scores)[::-1][:10]

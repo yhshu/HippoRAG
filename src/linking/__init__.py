@@ -1,8 +1,65 @@
 import json
 
 import numpy as np
+from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.prompts import ChatPromptTemplate
 
+from src.hipporag import HippoRAG
 from src.processing import min_max_normalize
+
+passage_router_system_prompt = """Task: Analyze the provided query and its associated passages to determine if the passages sufficiently answer or support the query.
+
+- Evaluate the relevance and completeness of the passages concerning the query. Consider whether multi-hop reasoning is necessary, which requires you to integrate information from multiple passages.
+- Decide whether to retain the current retrieval results or if further refinement is needed.
+- To enhance accuracy, explain your reasoning step-by-step before arriving at the final decision.
+- Choose one of the following options for your response: 'yes', 'no', or 'likely'.
+- Provide your final response in JSON format. Example:
+{"thought": "These passages support the query by providing all necessary facts.", "answer": "yes"}"""
+
+fact_router_system_prompt = """Task: Analyze the provided query and its associated subgraphs to determine if these facts sufficiently answer or support the query.
+
+- These subgraphs are extracted from passages using OpenIE.
+- Evaluate how relevant the facts are to the query and determine if they fully answer the query. 
+- Multi-hop reasoning is potentially needed, which requires you to integrate information from multiple subgraphs.
+- Choose one of the following options for your response: 'yes', 'no', or 'likely'.
+- Provide your final response in JSON format. Example:
+{"thought": "These facts support the query by providing all necessary information.", "answer": "yes"}"""
+
+
+def plan_given_query_passage(hipporag: HippoRAG, query: str, docs: list):
+    user_prompt = f"Question: {query}"
+    for i, doc in enumerate(docs):
+        user_prompt += f"\n\nPassage {i + 1}: {doc}"
+
+    messages = [SystemMessage(passage_router_system_prompt),
+                HumanMessage(user_prompt)]
+    messages = ChatPromptTemplate.from_messages(messages).format_prompt()
+    completion = hipporag.client.invoke(messages.to_messages(), temperature=0, response_format={"type": "json_object"})
+    contents = completion.content
+    try:
+        print(contents)
+        return json.loads(contents)
+    except Exception as e:
+        print(f"Error parsing the response: {e}")
+        return {"answer": ""}
+
+
+def plan_given_query_fact(hipporag: HippoRAG, query: str, facts: list):
+    user_prompt = f"Question: {query}"
+    for i, fact in enumerate(facts):
+        user_prompt += f"\n\nSubgraph {i + 1}: {fact}"
+
+    messages = [SystemMessage(fact_router_system_prompt),
+                HumanMessage(user_prompt)]
+    messages = ChatPromptTemplate.from_messages(messages).format_prompt()
+    completion = hipporag.client.invoke(messages.to_messages(), temperature=0, response_format={"type": "json_object"})
+    contents = completion.content
+    try:
+        print(contents)
+        return json.loads(contents)
+    except Exception as e:
+        print(f"Error parsing the response: {e}")
+        return {"answer": ""}
 
 
 def graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, query_doc_scores=None):
