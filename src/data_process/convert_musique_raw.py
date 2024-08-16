@@ -4,7 +4,7 @@ import os.path
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dir', type=str, default='data/musique_raw')
+    parser.add_argument('--dir', type=str, default='data/raw/musique')
     args = parser.parse_args()
 
     for split in ['train', 'dev', 'test']:
@@ -16,7 +16,7 @@ if __name__ == '__main__':
             for line in raw:
                 split_data.append(json.loads(line))
 
-        output_path = f'data/musique_{split}_all.json'
+        output_path = f'data/musique_{split}_raw.json'
         with open(output_path, 'w') as f:
             json.dump(split_data, f)
         print(f'Saving {split} ({len(split_data)}) to {output_path}')

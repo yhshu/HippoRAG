@@ -62,7 +62,7 @@ def plan_given_query_fact(hipporag: HippoRAG, query: str, facts: list):
         return {"answer": ""}
 
 
-def graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, query_doc_scores=None):
+def graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, query_doc_scores=None, damping=None, return_ppr=False):
     """
     Run Personalized PageRank (PPR) or other graph algorithm to get doc rankings
     @param query_doc_scores: query-doc scores based on dense model, without phrase as mediators
@@ -73,7 +73,7 @@ def graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, 
         combined_vector = np.max([all_phrase_weights], axis=0)
 
         if hipporag.graph_alg == 'ppr':
-            ppr_phrase_probs = hipporag.run_pagerank_igraph_chunk([all_phrase_weights])[0]
+            ppr_phrase_probs = hipporag.run_pagerank_igraph_chunk([all_phrase_weights], damping=damping)[0]
         elif hipporag.graph_alg == 'none':
             ppr_phrase_probs = combined_vector
         elif hipporag.graph_alg == 'neighbor_2':
@@ -142,4 +142,7 @@ def graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, 
                 'top_ranked_nodes': json.dumps(top_ranked_nodes), 'nodes_in_retrieved_doc': json.dumps(nodes_in_retrieved_doc)}
     else:
         logs = {}
-    return sorted_doc_ids, sorted_scores, logs
+
+    if return_ppr is False:
+        return sorted_doc_ids, sorted_scores, logs
+    return sorted_doc_ids, sorted_scores, logs, ppr_phrase_probs, ppr_doc_prob

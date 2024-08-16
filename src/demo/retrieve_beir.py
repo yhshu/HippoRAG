@@ -111,13 +111,13 @@ def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: st
     for i, sample in tqdm(enumerate(dataset), total=len(dataset), desc='Evaluating samples'):
         query_text = sample['text']
         query_id = sample['id']
-        if query_id in run_dict['retrieved']:
-            continue
+        # if query_id in run_dict['retrieved']:
+        #     continue
         supporting_docs = sample['paragraphs']
         if oracle_extraction:
             oracle_triples = []
             for p in supporting_docs:
-                oracle_triples += hipporag.get_triples_by_corpus_idx(hipporag.get_corpus_idx_by_passage_idx(p['idx']))[0]
+                oracle_triples += hipporag.get_triples_and_triple_ids_by_corpus_idx(hipporag.get_corpus_idx_by_passage_idx(p['idx']))[0]
         else:
             oracle_triples = None
         ranks, scores, log = hipporag.rank_docs(query_text, doc_top_k=10, link_top_k=link_top_k, linking=linking, oracle_triples=oracle_triples)
@@ -130,7 +130,7 @@ def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: st
             if oracle_triples is None:
                 oracle_triples = []
                 for p in supporting_docs:
-                    oracle_triples += hipporag.get_triples_by_corpus_idx(hipporag.get_corpus_idx_by_passage_idx(p['idx']))[0]
+                    oracle_triples += hipporag.get_triples_and_triple_ids_by_corpus_idx(hipporag.get_corpus_idx_by_passage_idx(p['idx']))[0]
             oracle_nodes = set([t[0] for t in oracle_triples]).union(set([t[2] for t in oracle_triples]))
 
             # get linked nodes
@@ -235,7 +235,7 @@ if __name__ == '__main__':
                         dpr_only=args.dpr_only, linking_retriever_name=args.linker, recognition_threshold=args.recognition_threshold)
 
     if not args.dpr_only:
-        link_top_k_list = [3, 5, 10]
+        link_top_k_list = [5]
         if args.linking == 'ner_to_node':
             link_top_k_list = [None]
         for link_top_k in link_top_k_list:

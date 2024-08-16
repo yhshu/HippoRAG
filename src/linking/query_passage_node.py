@@ -62,7 +62,7 @@ def rank_phrase_in_doc(query: str, doc: str, phrases: list, hipporag: HippoRAG, 
     return [phrases[i] for i in top_idx]
 
 
-def link_by_passage_node(hipporag: HippoRAG, query: str, link_top_k: Union[None, int] = 5, top_k_node_per_doc=None, router='fact'):
+def link_by_passage_node(hipporag: HippoRAG, query: str, link_top_k: Union[None, int] = 5, top_k_node_per_doc=None, router=None):
     query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction(hipporag.embed_model, 'query_to_passage', hipporag.corpus_name),
                                                        return_cpu=True, return_numpy=True, norm=True)
     query_doc_scores = np.dot(hipporag.doc_embedding_mat, query_embedding.T)  # (num_docs, dim) x (1, dim).T = (num_docs, 1)
@@ -83,7 +83,7 @@ def link_by_passage_node(hipporag: HippoRAG, query: str, link_top_k: Union[None,
         doc_scores.append(query_doc_scores[doc_idx])
         top_phrases_in_doc = rank_phrase_in_doc(query, doc, phrases_in_doc, hipporag, top_k_node_per_doc)
         all_candidate_phrases.update([p.lower() for p in top_phrases_in_doc])
-        facts = hipporag.get_triples_by_corpus_idx(doc_idx)
+        facts = hipporag.get_triples_and_triple_ids_by_corpus_idx(doc_idx)
         fact_by_doc.append(facts[0])
 
     assert len(docs) == len(phrases_by_doc)

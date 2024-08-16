@@ -25,7 +25,7 @@ def linking_by_passage_sentences(hipporag: HippoRAG, query: str, link_top_k: Uni
     for doc_id, doc_score in zip(sorted_doc_ids[:10], sorted_doc_scores[:10]):
         doc = hipporag.corpus[doc_id]
         docs.append(doc)
-        triples, triple_ids = hipporag.get_triples_by_corpus_idx(doc_id)
+        triples, triple_ids = hipporag.get_triples_and_triple_ids_by_corpus_idx(doc_id)
         facts.extend(triples)
         for t in triples:
             triple_to_doc_id[t] = doc_id
@@ -85,7 +85,7 @@ def linking_by_passage(hipporag: HippoRAG, query: str, link_top_k: Union[None, i
     for doc_id, doc_score in zip(sorted_doc_ids[:5], sorted_doc_scores[:5]):
         doc = hipporag.corpus[doc_id]
         docs.append(doc)
-        triples, triple_ids = hipporag.get_triples_by_corpus_idx(doc_id)
+        triples, triple_ids = hipporag.get_triples_and_triple_ids_by_corpus_idx(doc_id)
         if len(triple_ids):
             # find the most relevant fact for each doc
             fact_embeddings = hipporag.embed_model.encode_text([str(f) for f in triples], return_cpu=True, return_numpy=True, norm=True)
@@ -120,7 +120,7 @@ def link_by_passage_fact(hipporag: HippoRAG, query: str, link_top_k: Union[None,
     for doc_id, doc_score in zip(sorted_doc_ids[:10], sorted_doc_scores[:10]):
         doc = hipporag.corpus[doc_id]
         docs.append(doc)
-        triples, triple_ids = hipporag.get_triples_by_corpus_idx(doc_id)
+        triples, triple_ids = hipporag.get_triples_and_triple_ids_by_corpus_idx(doc_id)
         facts.extend(triples)
         for t in triples:
             triple_to_doc_id[t] = doc_id

@@ -194,7 +194,7 @@ class HippoRAG:
                 return item
         return None
 
-    def get_triples_by_corpus_idx(self, corpus_idx):
+    def get_triples_and_triple_ids_by_corpus_idx(self, corpus_idx):
         """
         Get the triples in the knowledge graph for a specific passage.
         @param corpus_idx: the passage idx, i.e., 'idx' within each passage dict, not the array index for the corpus
@@ -261,20 +261,8 @@ class HippoRAG:
             self.logger.info('No oracle triples found for the query: ' + query)
 
         if self.dpr_only:
-            if 'colbertv2' in self.linking_retriever_name:
-                queries = Queries(path=None, data={0: query})
-                query_doc_scores = np.zeros(len(self.dataset_df))
-                ranking = self.corpus_searcher.search_all(queries, k=len(self.dataset_df))
-                for corpus_id, rank, score in ranking.data[0]:
-                    query_doc_scores[corpus_id] = score
-            else:  # HuggingFace dense retrieval
-                query_embedding = self.embed_model.encode_text(query, instruction=get_query_instruction(self.embed_model, 'query_to_passage', self.corpus_name),
-                                                               return_cpu=True, return_numpy=True, norm=True)
-                query_doc_scores = np.dot(self.doc_embedding_mat, query_embedding.T)
-                query_doc_scores = query_doc_scores.T[0]
-            sorted_doc_ids = np.argsort(query_doc_scores)[::-1]
-            sorted_scores = query_doc_scores[sorted_doc_ids.tolist()]
-            logs = {}
+            from src.linking.dpr_only import dense_passage_retrieval
+            sorted_doc_ids, sorted_scores, logs = dense_passage_retrieval(self, query)
             return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], logs
 
         elif oracle_triples and linking == 'ner_to_node':
@@ -394,6 +382,11 @@ class HippoRAG:
             self.load_dpr_doc_embeddings()
             from src.linking.query_passage_node import link_by_passage_node
             sorted_doc_ids, sorted_scores, doc_rank_logs = link_by_passage_node(self, query, link_top_k=link_top_k)
+
+        elif linking == 'query_passage_fact':
+            self.load_dpr_doc_embeddings()
+            from src.linking.query_passage_fact import link_by_passage_fact
+            sorted_doc_ids, sorted_scores, doc_rank_logs = link_by_passage_fact(self, query)
 
         else:
             raise NotImplementedError('Linking method not implemented')
@@ -677,16 +670,17 @@ class HippoRAG:
             pickle.dump(self.doc_embedding_mat, open(cache_filename, 'wb'))
             self.logger.info(f'Saved doc embeddings to {cache_filename}, shape: {self.doc_embedding_mat.shape}')
 
-    def run_pagerank_igraph_chunk(self, reset_prob_chunk):
+    def run_pagerank_igraph_chunk(self, reset_prob_chunk, damping=None):
         """
-        Run pagerank on the graph
-        :param reset_prob_chunk:
-        :return: PageRank probabilities
+        Run PageRank on the graph
+        @param reset_prob_chunk: reset probability chunk
+        @param damping: dampling factor for PPR algorithm
+        @return: PageRank probabilities
         """
         pageranked_probabilities = []
-
+        damping = self.damping if damping is None else damping
         for reset_prob in reset_prob_chunk:
-            pageranked_probs = self.g.personalized_pagerank(vertices=range(len(self.kb_node_phrase_to_id)), damping=self.damping, directed=False,
+            pageranked_probs = self.g.personalized_pagerank(vertices=range(len(self.kb_node_phrase_to_id)), damping=damping, directed=False,
                                                             weights=None, reset=reset_prob, implementation='prpack')
 
             pageranked_probabilities.append(np.array(pageranked_probs))
