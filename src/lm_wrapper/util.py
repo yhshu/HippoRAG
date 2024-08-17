@@ -1,7 +1,7 @@
 def init_embedding_model(model_name):
     if 'GritLM/' in model_name:
-        from src.lm_wrapper.gritlm import GritWrapper
-        return GritWrapper(model_name)
+        from src.lm_wrapper.gritlm import GritLMWrapper
+        return GritLMWrapper(model_name)
     elif model_name.startswith("Alibaba-NLP/gte-Qwen"):
         from src.lm_wrapper.sentence_transformers_util import SentenceTransformersWrapper
         return SentenceTransformersWrapper(model_name)

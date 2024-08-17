@@ -4,6 +4,7 @@ from typing import Union, List
 import numpy as np
 import torch
 from gritlm import GritLM
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 from src.lm_wrapper import EmbeddingModelWrapper
 
@@ -12,7 +13,7 @@ def gritlm_instruction(instruction):
     return "<|user|>\n" + instruction + "\n<|embed|>\n" if instruction else "<|embed|>\n"
 
 
-class GritWrapper(EmbeddingModelWrapper):
+class GritLMWrapper(EmbeddingModelWrapper):
     def __init__(self, model_name: str = 'GritLM/GritLM-7B', **kwargs):
         """
         Loads the model for both capabilities; If you only need embedding pass `mode="embedding"` to save memory (no lm head).
@@ -52,7 +53,7 @@ class GritWrapper(EmbeddingModelWrapper):
         """
         return np.dot(doc_vecs, query_vec.T)
 
-    def generate(self, messages: list, max_new_tokens=256, do_sample=False):
+    def generate(self, messages: List, max_new_tokens=256, do_sample=False):
         """
 
         @param messages: a list, e.g., [{"role": "user", "content": "Please write me a poem."}]
@@ -63,3 +64,23 @@ class GritWrapper(EmbeddingModelWrapper):
         gen = self.model.generate(encoded, max_new_tokens=max_new_tokens, do_sample=do_sample)
         decoded = self.model.tokenizer.batch_decode(gen)
         return decoded
+
+
+class GritLMLangchainWrapper:
+
+    def __init__(self, model_name):
+        self.model_name = model_name
+        self.model = GritLMWrapper(model_name)
+
+    def invoke(self, messages: List, max_new_tokens=256, do_sample=False, **kwargs):
+        new_messages = []
+        for message in messages:
+            if isinstance(message, SystemMessage):
+                new_messages.append({"role": "system", "content": message.content})
+            elif isinstance(message, HumanMessage):
+                new_messages.append({"role": "user", "content": message.content})
+            elif isinstance(message, AIMessage):
+                new_messages.append({"role": "assistant", "content": message.content})
+
+        completions = self.model.generate(new_messages, max_new_tokens, do_sample)
+        return AIMessage(content=completions, response_metadata={'model_name': self.model_name})

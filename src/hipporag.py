@@ -18,7 +18,7 @@ from tqdm import tqdm
 from src.colbertv2_indexing import colbertv2_index
 from src.langchain_util import init_langchain_model, LangChainModel
 from src.lm_wrapper import EmbeddingModelWrapper
-from src.lm_wrapper.gritlm import GritWrapper
+from src.lm_wrapper.gritlm import GritLMWrapper
 from src.lm_wrapper.sentence_transformers_util import SentenceTransformersWrapper
 from src.lm_wrapper.util import init_embedding_model
 from src.named_entity_extraction_parallel import named_entity_recognition
@@ -30,7 +30,7 @@ COLBERT_CKPT_DIR = "exp/colbertv2.0"
 
 
 def get_query_instruction(embedding_model: EmbeddingModelWrapper, task=None, dataset_name=None):
-    if isinstance(embedding_model, GritWrapper):
+    if isinstance(embedding_model, GritLMWrapper):
         if task == 'ner_to_node':
             return 'Given a phrase, retrieve synonymous or relevant phrases that best match this phrase.'
         elif task == 'query_to_node':

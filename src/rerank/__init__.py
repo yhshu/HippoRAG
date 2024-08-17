@@ -1,5 +1,8 @@
+import difflib
+import json
 import os
 import re
+from typing import List, Tuple
 
 from langchain.globals import set_llm_cache
 from langchain_community.cache import SQLiteCache
@@ -49,7 +52,14 @@ class Reranker:
         self.model_name = model_name
         if model_name.startswith('gpt'):
             llm_provider = 'openai'
-            self.model = init_langchain_model(llm_provider, model_name)
+        elif model_name.lower().startswith('gritlm'):
+            llm_provider = 'gritlm'
+        elif model_name == 'llama_cpp_server':
+            llm_provider = 'llama_cpp_server'
+            model_name = 'http://localhost:8080/completion'
+        else:
+            raise NotImplementedError(f"Model {model_name} not implemented for reranker.")
+        self.model = init_langchain_model(llm_provider, model_name)
 
     def rerank(self, task: str, query, candidate_indices, candidate_items, top_k=None):
         pass
@@ -136,7 +146,7 @@ class LLMLogitsReranker(Reranker):
         sorted_scores = [top_scores[item] for item in sorted_candidate_items]
 
         # return top_k indices and items
-        return sorted_candidate_indices[:top_k], sorted_candidate_items[:top_k], sorted_scores[:top_k]
+        return sorted_candidate_indices[:top_k], sorted_candidate_items[:top_k]  # sorted_scores[:top_k]
 
 
 class RankGPT(Reranker):
@@ -206,4 +216,61 @@ class RankGPT(Reranker):
                                      "The facts should be listed in descending order using identifiers, "
                                      "and the most relevant facts should be listed first, and the output format should be [] > [], e.g., [1] > [2]. "
                                      "Only respond the ranking results, do not say any word or explain."))
+        return messages
+
+
+generative_reranking_prompt = """You are an expert in ranking facts based on their relevance to the query. 
+
+- Multi-hop reasoning **may be** required, meaning you might need to combine multiple facts to form a complete response.
+- If the query is a claim, relevance means the fact supports or contradicts it. For queries seeking specific information, relevance means the fact aids in reasoning and providing an answer.
+- Provide a rationale and select up to 4 relevant facts from the candidate list in JSON format, e.g., {"thought": "Fact (s1, p1, o1) and (s2, p2, o2) support this query.", "fact": [["s1", "p1", "o1"], ["s2", "p2", "o2"]]}.
+- If no facts are relevant, return an empty list, e.g., {"thought": "No fact is relevant to this query.", "fact": []}.
+- Only use facts from the candidate list; do NOT generate new facts.
+"""
+
+
+class LLMGenerativeReranker(Reranker):
+    def __init__(self, model_name):
+        super().__init__(model_name)
+        if 'gpt' in model_name:
+            set_llm_cache(SQLiteCache(database_path=f".llm_{model_name}_rerank.db"))
+
+    def rerank(self, task: str, query: str, candidate_items: List[Tuple], candidate_indices, top_k=None):
+        if candidate_indices is None:
+            candidate_indices = list(range(len(candidate_items)))
+
+        if task == 'fact_reranking':
+            messages = self.write_rerank_prompt(query, candidate_items)
+            completion = self.model.invoke(messages, temperature=0, response_format={"type": "json_object"})
+            content = completion.content
+            try:
+                response = json.loads(content)
+            except Exception as e:
+                print('json.load exception', e)
+                response = {'fact': []}
+
+            result_indices = []
+            for generated_fact in response['fact']:
+                closest_matched_fact = difflib.get_close_matches(str(generated_fact), [str(i) for i in candidate_items], n=1, cutoff=0.0)[0]
+                try:
+                    result_indices.append(candidate_items.index(eval(closest_matched_fact)))
+                except Exception as e:
+                    print('result_indices exception', e)
+
+            sorted_candidate_indices = [candidate_indices[i] for i in result_indices]
+            sorted_candidate_items = [candidate_items[i] for i in result_indices]
+            return sorted_candidate_indices[:top_k], sorted_candidate_items[:top_k]
+
+    def write_rerank_prompt(self, query: str, candidates: List[Tuple]):
+        user_prompt = 'Query: ' + query + '\nCandidate facts:\n'
+        # group candidate triples by subject
+        sorted_candidates = sorted(candidates, key=lambda x: x[0])
+
+        for i, candidate in enumerate(sorted_candidates):
+            user_prompt += f'- {candidate}\n'
+
+        messages = [
+            SystemMessage(generative_reranking_prompt),
+            HumanMessage(user_prompt),
+        ]
         return messages

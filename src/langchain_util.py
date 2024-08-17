@@ -3,6 +3,9 @@ import os
 
 import tiktoken
 
+from src.lm_wrapper.gritlm import GritLMLangchainWrapper, GritLMLangchainWrapper
+from src.util.llama_cpp_service import LlamaCppWrapper
+
 enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
 
 
@@ -40,6 +43,10 @@ def init_langchain_model(llm: str, model_name: str, temperature: float = 0.0, ma
         # https://python.langchain.com/v0.2/docs/integrations/chat/llamacpp/
         from langchain_community.chat_models import ChatLlamaCpp
         return ChatLlamaCpp(model_path=model_name, verbose=True)  # model_name is the model path (gguf file)
+    elif llm == 'llama_cpp_server':
+        return LlamaCppWrapper()
+    elif llm.lower() =='gritlm':
+        return GritLMLangchainWrapper(model_name=model_name)
     else:
         # add any LLMs you want to use here using LangChain
         raise NotImplementedError(f"LLM '{llm}' not implemented yet.")

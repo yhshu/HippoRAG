@@ -2,7 +2,7 @@ import sys
 
 from gritlm import GritLM
 
-from src.lm_wrapper.gritlm import GritWrapper
+from src.lm_wrapper.gritlm import GritLMWrapper
 from src.lm_wrapper.sentence_transformers_util import SentenceTransformersWrapper
 
 sys.path.append('.')
@@ -57,7 +57,7 @@ class RetrievalModule:
 
         try:
             if 'GritLM' in retriever_name:
-                self.plm = GritWrapper(retriever_name)
+                self.plm = GritLMWrapper(retriever_name)
                 self.encode_strings_func = self.encode_strings_wrapper
             elif 'Qwen' in retriever_name:
                 self.plm = SentenceTransformersWrapper(retriever_name)
