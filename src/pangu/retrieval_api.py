@@ -2,9 +2,6 @@ from abc import abstractmethod, ABC
 
 import numpy as np
 import torch
-from rank_bm25 import BM25Okapi
-from sentence_transformers import SentenceTransformer, util, CrossEncoder
-from sklearn.feature_extraction.text import TfidfVectorizer
 
 
 class TextRetriever(ABC):
@@ -57,6 +54,7 @@ class BM25Retriever(TextRetriever):
 
     def _preprocess(self):
         tokenized_corpus = [doc.split(self.split_char) for doc in self.corpus]
+        from rank_bm25 import BM25Okapi
         self.bm25 = BM25Okapi(tokenized_corpus)
 
     def scores_on_corpus(self, query):
@@ -73,6 +71,7 @@ class TfidfRetriever(TextRetriever):
         self._preprocess()
 
     def _preprocess(self):
+        from sklearn.feature_extraction.text import TfidfVectorizer
         self.vectorizer = TfidfVectorizer()
         self.tfidf_matrix = self.vectorizer.fit_transform(self.corpus)
 
@@ -85,6 +84,8 @@ class TfidfRetriever(TextRetriever):
 class SentenceTransformerRetriever(TextRetriever):
     def __init__(self, corpus, model_name=None, model=None):
         super().__init__(corpus)
+        from sentence_transformers import SentenceTransformer
+
         assert model_name is not None or model is not None, "Either model_name or model should be provided"
         if model is None:
             self.model = SentenceTransformer(model_name)
@@ -98,6 +99,7 @@ class SentenceTransformerRetriever(TextRetriever):
             self.embeddings = self.model.encode(self.corpus)
 
     def scores_on_corpus(self, query):
+        from sentence_transformers import util
         with torch.no_grad():
             query_embedding = self.model.encode([query])[0]
             scores = util.pytorch_cos_sim(query_embedding, self.embeddings)[0]
@@ -127,6 +129,8 @@ class GritLMRetriever(TextRetriever):
             self.embeddings = self.model.encode(self.corpus, instruction=self.gritlm_instruction(""))
 
     def scores_on_corpus(self, query):
+        from sentence_transformers import util
+
         if isinstance(query, str):
             query = [query]
         with torch.no_grad():
@@ -139,6 +143,7 @@ class DPR(TextRetriever):
     def __init__(self, corpus, passage_encoder='facebook-dpr-ctx_encoder-single-nq-base', query_encoder='facebook-dpr-question_encoder-single-nq-base'):
         super().__init__(corpus)
         # Initialize the encoders
+        from sentence_transformers import SentenceTransformer
         self.passage_encoder = SentenceTransformer(passage_encoder)
         self.query_encoder = SentenceTransformer(query_encoder)
         self.passage_embeddings = self._preprocess()
@@ -147,6 +152,7 @@ class DPR(TextRetriever):
         return self.passage_encoder.encode(self.corpus)
 
     def scores_on_corpus(self, query):
+        from sentence_transformers import util
         query_embedding = self.query_encoder.encode(query)
         scores = util.dot_score(query_embedding, self.passage_embeddings)[0]
         return scores.cpu().numpy()
@@ -155,6 +161,7 @@ class DPR(TextRetriever):
 class CrossEncoderRetrieval(TextRetriever):
     def __init__(self, corpus, model_name_or_path='cross-encoder/nli-deberta-v3-base'):
         super().__init__(corpus)
+        from sentence_transformers import CrossEncoder
         self.model = CrossEncoder(model_name_or_path)
 
     def _preprocess(self):

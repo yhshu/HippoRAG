@@ -1,3 +1,6 @@
+import hashlib
+
+
 def chunk_corpus(corpus: list, chunk_size: int = 64) -> list:
     """
     Chunk the corpus into smaller parts. Run the following command to download the required nltk data:
@@ -86,3 +89,10 @@ def merge_chunks(corpus: list):
                 new_corpus[original_idx]['text'] += ' ' + p['text']
 
     return list(new_corpus.values())
+
+
+
+def generate_hash(input_string):
+    sha256 = hashlib.sha256()
+    sha256.update(input_string.encode('utf-8'))
+    return sha256.hexdigest()
