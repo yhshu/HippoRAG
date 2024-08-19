@@ -4,10 +4,12 @@ import os
 import re
 from typing import List, Tuple
 
+import torch
 from langchain.globals import set_llm_cache
 from langchain_community.cache import SQLiteCache
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from src.langchain_util import init_langchain_model
 
@@ -219,7 +221,7 @@ class RankGPT(Reranker):
         return messages
 
 
-generative_reranking_prompt = """You are an expert in ranking facts based on their relevance to the query. 
+generative_cot_reranking_prompt = """You are an expert in ranking facts based on their relevance to the query. 
 
 - Multi-hop reasoning **may be** required, meaning you might need to combine multiple facts to form a complete response.
 - If the query is a claim, relevance means the fact supports or contradicts it. For queries seeking specific information, relevance means the fact aids in reasoning and providing an answer.
@@ -270,7 +272,54 @@ class LLMGenerativeReranker(Reranker):
             user_prompt += f'- {candidate}\n'
 
         messages = [
-            SystemMessage(generative_reranking_prompt),
+            SystemMessage(generative_cot_reranking_prompt),
             HumanMessage(user_prompt),
         ]
         return messages
+
+
+class HFLoRAModelGenerativeReranker(Reranker):
+    def __init__(self, lora_path, model='meta-llama/Meta-Llama-3.1-8B-Instruct'):
+        from src.linking.lora_training import peft_config
+        peft_config.inference_mode = True
+
+        model = AutoModelForCausalLM.from_pretrained(model, device_map='auto')
+        from peft import get_peft_model
+        self.model = get_peft_model(model, peft_config)
+        self.model.eval()
+        self.tokenizer = AutoTokenizer.from_pretrained(os.path.join(lora_path, 'tokenizer'))
+
+    def rerank(self, task: str, query: str, candidate_items: List[Tuple], candidate_indices, top_k=None):
+        if task == 'fact_reranking':
+            from src.linking.lora_training import generative_reranking_prompt
+            messages = [{'role': 'system', 'content': generative_reranking_prompt},
+                        {'role': 'user', 'content': f'\nQuery: {query}\nCandidate facts:\n' + '\n'.join([json.dumps(triple).lower() for triple in candidate_items])}]
+
+            with torch.no_grad():
+                input_text = self.tokenizer.apply_chat_template(messages, tokenize=False)
+                inputs = self.tokenizer(input_text, return_tensors='pt').to(self.model.device)
+                input_length = inputs['input_ids'].shape[-1]
+
+                outputs = self.model.generate(**inputs, max_length=1024, pad_token_id=self.tokenizer.eos_token_id)
+                completion = outputs[:, input_length:]
+
+                output_text = self.tokenizer.decode(completion[0])
+                output_text = output_text.split('<|end_header_id|>')[1].split('<|eot_id|>')[0].strip()
+
+            try:
+                response = json.loads(output_text)
+            except Exception as e:
+                print('json.load exception', e)
+                response = {'fact': []}
+
+            result_indices = []
+            for generated_fact in response['fact']:
+                closest_matched_fact = difflib.get_close_matches(str(generated_fact), [str(i) for i in candidate_items], n=1, cutoff=0.0)[0]
+                try:
+                    result_indices.append(candidate_items.index(eval(closest_matched_fact)))
+                except Exception as e:
+                    print('result_indices exception', e)
+
+            sorted_candidate_indices = [candidate_indices[i] for i in result_indices]
+            sorted_candidate_items = [candidate_items[i] for i in result_indices]
+            return sorted_candidate_indices[:top_k], sorted_candidate_items[:top_k]

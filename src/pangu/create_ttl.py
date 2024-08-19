@@ -16,7 +16,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # read triples
-    hipporag = HippoRAG(args.dataset, extraction_model_name=args.extractor, graph_creating_retriever_name=args.retriever)
+    hipporag = HippoRAG(args.dataset, extractor_name=args.extractor, graph_creating_retriever_name=args.retriever)
     triples = pickle.load(
         open('output/{}_{}_graph_relation_dict_{}_{}_{}.{}.subset.p'.format(args.dataset, hipporag.graph_type,
                                                                             hipporag.phrase_type, hipporag.extraction_type,

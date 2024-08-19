@@ -232,7 +232,7 @@ if __name__ == '__main__':
         qrel = {key: qrel[key] for i, key in enumerate(qrel) if i < min(int(args.num), len(dataset))}
 
     hipporag = HippoRAG(args.dataset, 'openai', args.extractor, args.retriever, doc_ensemble=args.doc_ensemble,
-                        dpr_only=args.dpr_only, linking_retriever_name=args.linker, recognition_threshold=args.recognition_threshold)
+                        dpr_only=args.dpr_only, linker_name=args.linker, recognition_threshold=args.recognition_threshold)
 
     if not args.dpr_only:
         link_top_k_list = [5]

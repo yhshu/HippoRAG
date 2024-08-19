@@ -10,12 +10,9 @@ import igraph as ig
 import numpy as np
 import pandas as pd
 import torch
-from colbert import Searcher
-from colbert.data import Queries
-from colbert.infra import RunConfig, Run, ColBERTConfig
+
 from tqdm import tqdm
 
-from src.colbertv2_indexing import colbertv2_index
 from src.langchain_util import init_langchain_model, LangChainModel
 from src.lm_wrapper import EmbeddingModelWrapper
 from src.lm_wrapper.gritlm import GritLMWrapper
@@ -61,16 +58,16 @@ def get_query_instruction(embedding_model: EmbeddingModelWrapper, task=None, dat
 
 class HippoRAG:
 
-    def __init__(self, corpus_name='hotpotqa', extraction_model='openai', extraction_model_name='gpt-3.5-turbo-1106',
+    def __init__(self, corpus_name='hotpotqa', extraction_model='openai', extractor_name='gpt-3.5-turbo-1106',
                  graph_creating_retriever_name='facebook/contriever', extraction_type='ner', graph_type='facts_and_sim',
                  sim_threshold=0.8, node_specificity=True,
                  doc_ensemble=False, colbert_config=None, dpr_only=False,
                  graph_alg='ppr', damping=0.1, recognition_threshold=0.9, corpus_path=None,
-                 qa_model: LangChainModel = None, linking_retriever_name=None):
+                 qa_model: LangChainModel = None, linker_name=None, reranker_name='exp/fact_linker'):
         """
         @param corpus_name: Name of the dataset to use for retrieval
         @param extraction_model: LLM provider for query NER, e.g., 'openai' or 'together'
-        @param extraction_model_name: LLM name used for query NER
+        @param extractor_name: LLM name used for query NER
         @param graph_creating_retriever_name: Retrieval encoder used to link query named entities with query nodes
         @param extraction_type: Type of NER extraction during indexing
         @param graph_type: Type of graph used by HippoRAG
@@ -84,19 +81,21 @@ class HippoRAG:
         @param recognition_threshold: Threshold used for uncertainty-based ensembling.
         @param corpus_path: path to the corpus file (see the format in README.md), not needed for now if extraction files are already present
         @param qa_model: QA model
+        @param linker_name: linking model name
+        @param reranker_name: reranker model name, for reranking task during linking
         """
 
         self.corpus_name = corpus_name
-        self.extraction_model_name = extraction_model_name
-        self.extraction_model_name_processed = extraction_model_name.replace('/', '_')
-        self.client = init_langchain_model(extraction_model, extraction_model_name)
+        self.extraction_model_name = extractor_name
+        self.extraction_model_name_processed = extractor_name.replace('/', '_')
+        self.client = init_langchain_model(extraction_model, extractor_name)
         assert graph_creating_retriever_name
-        if linking_retriever_name is None:
-            linking_retriever_name = graph_creating_retriever_name
+        if linker_name is None:
+            linker_name = graph_creating_retriever_name
         self.graph_creating_retriever_name = graph_creating_retriever_name  # 'colbertv2', 'facebook/contriever', or other HuggingFace models
         self.graph_creating_retriever_name_processed = graph_creating_retriever_name.replace('/', '_').replace('.', '')
-        self.linking_retriever_name = linking_retriever_name
-        self.linking_retriever_name_processed = linking_retriever_name.replace('/', '_').replace('.', '')
+        self.linking_retriever_name = linker_name
+        self.linking_retriever_name_processed = linker_name.replace('/', '_').replace('.', '')
 
         self.extraction_type = extraction_type
         self.graph_type = graph_type
@@ -152,6 +151,10 @@ class HippoRAG:
             self.load_dpr_doc_embeddings()
 
         if self.linking_retriever_name == 'colbertv2':
+            from colbert import Searcher
+            from colbert.infra import RunConfig, Run, ColBERTConfig
+            from src.colbertv2_indexing import colbertv2_index
+
             if self.dpr_only is False or self.doc_ensemble:
                 colbertv2_index(self.node_phrases.tolist(), self.corpus_name, 'phrase',
                                 self.colbert_config['phrase_index_name'], overwrite=True)
@@ -170,6 +173,20 @@ class HippoRAG:
         if qa_model is None:
             qa_model = LangChainModel('openai', 'gpt-3.5-turbo')
         self.qa_model = init_langchain_model(qa_model.provider, qa_model.model_name)
+
+        self.reranker = None
+        if reranker_name is not None:
+            if reranker_name.startswith('gpt'):
+                # from src.rerank import LLMLogitsReranker
+                # reranker = LLMLogitsReranker(fact_rerank_model_name)
+                # from src.rerank import RankGPT
+                # reranker = RankGPT(rerank_model_name)
+                from src.rerank import LLMGenerativeReranker
+                self.reranker = LLMGenerativeReranker(reranker_name)
+
+            else:  # load Llama 3.1 model with LoRA
+                from src.rerank import HFLoRAModelGenerativeReranker
+                self.reranker = HFLoRAModelGenerativeReranker(reranker_name)
 
     def get_passage_by_idx(self, passage_idx):
         """
@@ -323,6 +340,7 @@ class HippoRAG:
             return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], logs
 
         elif linking == 'ner_to_node':
+            from colbert.data import Queries
             from src.linking.ner_to_node import link_node_by_dpr, link_node_by_colbertv2, graph_search_with_entities
             all_phrase_weights = np.zeros(len(self.node_phrases))
             linking_score_map = {}

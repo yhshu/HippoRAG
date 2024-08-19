@@ -1,7 +1,6 @@
 import json
 
 import numpy as np
-from colbert.data import Queries
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -17,6 +16,7 @@ rerank_system_prompt = """Given a query and the top-k retrieved passages from tw
 
 def dense_passage_retrieval(hipporag: HippoRAG, query: str, rerank: bool = False):
     if 'colbertv2' in hipporag.linking_retriever_name:
+        from colbert.data import Queries
         queries = Queries(path=None, data={0: query})
         query_doc_scores = np.zeros(len(hipporag.dataset_df))
         ranking = hipporag.corpus_searcher.search_all(queries, k=len(hipporag.dataset_df))

@@ -1,5 +1,9 @@
 # https://llama.meta.com/docs/how-to-guides/fine-tuning/
 # https://github.com/huggingface/peft
+
+import sys
+
+sys.path.append('.')
 import json
 import os
 import pickle
@@ -8,7 +12,7 @@ from datasets import DatasetDict, Dataset
 from gritlm import GritLM
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, DataCollatorForLanguageModeling, Trainer, TrainingArguments
-from peft import get_peft_config, get_peft_model, LoraConfig, TaskType
+from peft import get_peft_model, LoraConfig, TaskType
 from trl import SFTTrainer, SFTConfig
 from src.pangu.retrieval_api import GritLMRetriever
 
@@ -20,6 +24,14 @@ generative_reranking_prompt = """You are an expert in ranking facts based on the
 - If no facts are relevant, return an empty list, e.g., {"fact": []}.
 - Only use facts from the candidate list; do NOT generate new facts.
 """
+
+peft_config = LoraConfig(
+    task_type=TaskType.CAUSAL_LM,
+    inference_mode=False,
+    r=8,
+    lora_alpha=32,
+    lora_dropout=0.1
+)
 
 
 def load_custom_dataset():
@@ -98,14 +110,6 @@ if __name__ == '__main__':
     model_name_or_path = "meta-llama/Meta-Llama-3.1-8B-Instruct"
     tokenizer_name_or_path = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 
-    peft_config = LoraConfig(
-        task_type=TaskType.CAUSAL_LM,
-        inference_mode=False,
-        r=4,
-        lora_alpha=32,
-        lora_dropout=0.1
-    )
-
     model = AutoModelForCausalLM.from_pretrained(model_name_or_path, device_map='auto')
     model = get_peft_model(model, peft_config)
     model.print_trainable_parameters()
@@ -125,9 +129,7 @@ if __name__ == '__main__':
                            max_length=1024)
         return inputs
 
-
-    # tokenized_datasets = dataset.map(preprocess_function, batched=True, remove_columns=["text"])
-    tokenized_datasets = dataset.map(preprocess_function, batched=True)
+    # tokenized_datasets = dataset.map(preprocess_function, batched=True)
 
     # Data collator
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
