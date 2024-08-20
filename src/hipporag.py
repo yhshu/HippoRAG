@@ -63,7 +63,7 @@ class HippoRAG:
                  sim_threshold=0.8, node_specificity=True,
                  doc_ensemble=False, colbert_config=None, dpr_only=False,
                  graph_alg='ppr', damping=0.1, recognition_threshold=0.9, corpus_path=None,
-                 qa_model: LangChainModel = None, linker_name=None, reranker_name='exp/fact_linker'):
+                 qa_model: LangChainModel = None, linker_name=None, reranker_name=None):
         """
         @param corpus_name: Name of the dataset to use for retrieval
         @param extraction_model: LLM provider for query NER, e.g., 'openai' or 'together'
@@ -73,7 +73,7 @@ class HippoRAG:
         @param graph_type: Type of graph used by HippoRAG
         @param sim_threshold: Synonymy threshold which was used to create the graph that will be used by HippoRAG
         @param node_specificity: Flag that determines whether node specificity will be used
-        @param doc_ensemble: Flag to determine whether to use uncertainty-based ensembling
+        @param doc_ensemble: Flag to determine whether to use uncertainty-based ensemble
         @param colbert_config: ColBERTv2 configuration
         @param dpr_only: Flag to determine whether HippoRAG will be used at all
         @param graph_alg: Type of graph algorithm to be used for retrieval, defaults ot PPR
@@ -82,7 +82,7 @@ class HippoRAG:
         @param corpus_path: path to the corpus file (see the format in README.md), not needed for now if extraction files are already present
         @param qa_model: QA model
         @param linker_name: linking model name
-        @param reranker_name: reranker model name, for reranking task during linking
+        @param reranker_name: reranker model name, for reranking task during linking, choices: openai model names, 'llama_cpp_server', local llama 3 lora path
         """
 
         self.corpus_name = corpus_name
@@ -168,7 +168,7 @@ class HippoRAG:
                     config = ColBERTConfig(root=self.colbert_config['root'], )
                     self.corpus_searcher = Searcher(index=self.colbert_config['doc_index_name'], config=config, verbose=0)
 
-        self.statistics = {}
+        self.statistics = defaultdict(int)
         self.ensembling_debug = []
         if qa_model is None:
             qa_model = LangChainModel('openai', 'gpt-3.5-turbo')
@@ -176,17 +176,17 @@ class HippoRAG:
 
         self.reranker = None
         if reranker_name is not None:
-            if reranker_name.startswith('gpt'):
+            if reranker_name.startswith('gpt') or reranker_name in ['llama_cpp_server']:
                 # from src.rerank import LLMLogitsReranker
                 # reranker = LLMLogitsReranker(fact_rerank_model_name)
                 # from src.rerank import RankGPT
                 # reranker = RankGPT(rerank_model_name)
                 from src.rerank import LLMGenerativeReranker
                 self.reranker = LLMGenerativeReranker(reranker_name)
-
             else:  # load Llama 3.1 model with LoRA
                 from src.rerank import HFLoRAModelGenerativeReranker
                 self.reranker = HFLoRAModelGenerativeReranker(reranker_name)
+            self.statistics['num_dpr'] = 0
 
     def get_passage_by_idx(self, passage_idx):
         """

@@ -120,6 +120,7 @@ if __name__ == '__main__':
     parser.add_argument('--llm_model', type=str, default='gpt-3.5-turbo-1106', help='Specific model name')
     parser.add_argument('--retriever', type=str, default='facebook/contriever')
     parser.add_argument('--linker', type=str, default='facebook/contriever')
+    parser.add_argument('--reranker', type=str)
     parser.add_argument('--linking', type=str, default='ner_to_node', help='linking method for the entry point of the graph')
     parser.add_argument('--prompt', type=str)
     parser.add_argument('--num_demo', type=int, default=1, help='the number of demo samples')
@@ -156,7 +157,8 @@ if __name__ == '__main__':
     hipporag = HippoRAG(args.dataset, extraction_model=args.llm, extractor_name=args.llm_model, graph_creating_retriever_name=args.retriever,
                         linker_name=args.linker,
                         doc_ensemble=doc_ensemble, node_specificity=not (args.wo_node_spec), sim_threshold=args.sim_threshold,
-                        colbert_config=colbert_configs, dpr_only=args.dpr_only, graph_alg=args.graph_alg, damping=args.damping, recognition_threshold=args.recognition_threshold)
+                        colbert_config=colbert_configs, dpr_only=args.dpr_only, graph_alg=args.graph_alg, damping=args.damping, recognition_threshold=args.recognition_threshold,
+                        reranker_name=args.reranker)
 
     data = json.load(open(f'data/{args.dataset}.json', 'r'))
     corpus = json.load(open(f'data/{args.dataset}_corpus.json', 'r'))
@@ -183,8 +185,9 @@ if __name__ == '__main__':
         dpr_only_str = 'hipporag'
 
     os.makedirs(f'output/ircot_retrieval/{args.dataset}', exist_ok=True)
-    output_path = (f'output/ircot_retrieval/{args.dataset}/{args.dataset}_{dpr_only_str}_R_{hipporag.graph_creating_retriever_name_processed}_L_{hipporag.linking_retriever_name_processed}_{args.linking}'
-                   f'_demo_{args.num_demo}_E_{llm_model_name_processed}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}_{args.graph_alg}_damping_{args.damping}_sim_thresh_{args.sim_threshold}')
+    output_path = (
+        f'output/ircot_retrieval/{args.dataset}/{args.dataset}_{dpr_only_str}_R_{hipporag.graph_creating_retriever_name_processed}_L_{hipporag.linking_retriever_name_processed}_{args.linking}'
+        f'_demo_{args.num_demo}_E_{llm_model_name_processed}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}_{args.graph_alg}_damping_{args.damping}_sim_thresh_{args.sim_threshold}')
 
     if args.wo_node_spec:
         output_path += 'wo_node_spec'
@@ -367,7 +370,8 @@ if __name__ == '__main__':
                 assert 0.0 <= num <= 1.0
                 print(f'{key} {num} ', end='')
             print()
-            print('[ITERATION]', it, '[PASSAGE]', len(retrieved_passages), '[THOUGHT]', thoughts)
+            if max_steps > 1:
+                print('[ITERATION]', it, '[PASSAGE]', len(retrieved_passages), '[THOUGHT]', thoughts)
 
         results.append(sample)
         if (sample_idx + 1) % 10 == 0:
@@ -380,6 +384,8 @@ if __name__ == '__main__':
         for key in sorted(metrics_sum.keys(), key=lambda x: (len(x), x)):
             metrics_sum[key] /= len(data)
             print(key, round(metrics_sum[key], 3))
+        if hipporag.reranker is not None:
+            print('num_dpr', hipporag.statistics['num_dpr'])
 
     # save results
     with open(output_path, 'w') as f:

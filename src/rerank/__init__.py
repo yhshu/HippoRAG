@@ -15,7 +15,7 @@ from src.langchain_util import init_langchain_model
 
 
 class LLMLogitsCache:
-    def __init__(self, model_name='gpt-3.5-turbo'):
+    def __init__(self, model_name='gpt-4o-mini'):
         self.set_model_name(model_name)
 
     def set_model_name(self, model_name):
@@ -221,11 +221,29 @@ class RankGPT(Reranker):
         return messages
 
 
+generative_reranking_prompt = """You are an expert in ranking facts based on their relevance to the query. 
+
+- Multi-hop reasoning may be required, meaning you might need to combine multiple facts to form a complete response.
+- If the query is a claim, relevance means the fact supports or contradicts it. For queries seeking specific information, relevance means the fact aids in reasoning and providing an answer.
+- Select up to 4 relevant facts from the candidate list and output in JSON format without any other words, e.g., 
+
+```json
+{"fact": [["s1", "p1", "o1"], ["s2", "p2", "o2"]]}.
+```
+
+- If no facts are relevant, return an empty list, e.g., {"fact": []}.
+- Only use facts from the candidate list; do NOT generate new facts.
+"""
 generative_cot_reranking_prompt = """You are an expert in ranking facts based on their relevance to the query. 
 
 - Multi-hop reasoning **may be** required, meaning you might need to combine multiple facts to form a complete response.
 - If the query is a claim, relevance means the fact supports or contradicts it. For queries seeking specific information, relevance means the fact aids in reasoning and providing an answer.
-- Provide a rationale and select up to 4 relevant facts from the candidate list in JSON format, e.g., {"thought": "Fact (s1, p1, o1) and (s2, p2, o2) support this query.", "fact": [["s1", "p1", "o1"], ["s2", "p2", "o2"]]}.
+- Provide a rationale and select up to 4 relevant facts from the candidate list, output in JSON format without any other words, e.g., 
+
+```json
+{"thought": "Fact (s1, p1, o1) and (s2, p2, o2) support this query.", "fact": [["s1", "p1", "o1"], ["s2", "p2", "o2"]]}.
+```
+
 - If no facts are relevant, return an empty list, e.g., {"thought": "No fact is relevant to this query.", "fact": []}.
 - Only use facts from the candidate list; do NOT generate new facts.
 """
@@ -248,7 +266,7 @@ class LLMGenerativeReranker(Reranker):
             try:
                 response = json.loads(content)
             except Exception as e:
-                print('json.load exception', e)
+                print('json.load exception', e, 'output:', content)
                 response = {'fact': []}
 
             result_indices = []
@@ -269,10 +287,10 @@ class LLMGenerativeReranker(Reranker):
         sorted_candidates = sorted(candidates, key=lambda x: x[0])
 
         for i, candidate in enumerate(sorted_candidates):
-            user_prompt += f'- {candidate}\n'
+            user_prompt += f'- {json.dumps(list(candidate))}\n'
 
         messages = [
-            SystemMessage(generative_cot_reranking_prompt),
+            SystemMessage(generative_reranking_prompt),
             HumanMessage(user_prompt),
         ]
         return messages
@@ -280,7 +298,9 @@ class LLMGenerativeReranker(Reranker):
 
 class HFLoRAModelGenerativeReranker(Reranker):
     def __init__(self, lora_path, model='meta-llama/Meta-Llama-3.1-8B-Instruct'):
+
         from src.linking.lora_training import peft_config
+        peft_config.lora_dropout = 0.0
         peft_config.inference_mode = True
 
         model = AutoModelForCausalLM.from_pretrained(model, device_map='auto')
@@ -309,7 +329,7 @@ class HFLoRAModelGenerativeReranker(Reranker):
             try:
                 response = json.loads(output_text)
             except Exception as e:
-                print('json.load exception', e)
+                print('json.load exception', e, 'output:', output_text)
                 response = {'fact': []}
 
             result_indices = []

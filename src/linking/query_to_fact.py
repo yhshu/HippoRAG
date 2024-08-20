@@ -17,7 +17,6 @@ verify_system_prompt = """Given a query and the top-k retrieved subgraphs from a
 
 
 def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, fact_embeddings, link_top_k, graph_search=True,
-                            fact_rerank_llm_name=None, fact_rerank_lora_path='exp/fact_linker',
                             ppr_doc_verify=False, ppr_phrase_verify=False, merge_dpr=False):
     query_doc_scores = np.zeros(hipporag.docs_to_phrases_mat.shape[0])
     query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction(hipporag.embed_model, 'query_to_fact', hipporag.corpus_name),
@@ -36,6 +35,7 @@ def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, 
             # return DPR results
             hipporag.load_dpr_doc_embeddings()
             hipporag.logger.info('No facts found after reranking, return DPR results')
+            hipporag.statistics['num_dpr'] += 1
             return dense_passage_retrieval(hipporag, query, False)
     else:  # no reranking
         if link_top_k is not None:
@@ -66,7 +66,7 @@ def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, 
         sorted_doc_ids, sorted_scores, logs, ppr_phrase_probs, ppr_doc_prob = graph_search_with_fact_entities(hipporag, link_top_k, query_doc_scores, query_fact_scores,
                                                                                                               top_k_facts, top_k_fact_indicies, return_ppr=True)
 
-    if fact_rerank_llm_name is not None:
+    if hipporag.reranker is not None:
         logs['rerank'] = rerank_log
 
     if ppr_phrase_verify:

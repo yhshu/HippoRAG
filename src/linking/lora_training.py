@@ -16,19 +16,11 @@ from peft import get_peft_model, LoraConfig, TaskType
 from trl import SFTTrainer, SFTConfig
 from src.pangu.retrieval_api import GritLMRetriever
 
-generative_reranking_prompt = """You are an expert in ranking facts based on their relevance to the query. 
-
-- Multi-hop reasoning may be required, meaning you might need to combine multiple facts to form a complete response.
-- If the query is a claim, relevance means the fact supports or contradicts it. For queries seeking specific information, relevance means the fact aids in reasoning and providing an answer.
-- Select up to 4 relevant facts from the candidate list in JSON format, e.g., {"fact": [["s1", "p1", "o1"], ["s2", "p2", "o2"]]}.
-- If no facts are relevant, return an empty list, e.g., {"fact": []}.
-- Only use facts from the candidate list; do NOT generate new facts.
-"""
 
 peft_config = LoraConfig(
     task_type=TaskType.CAUSAL_LM,
     inference_mode=False,
-    r=8,
+    r=4,
     lora_alpha=32,
     lora_dropout=0.1
 )
@@ -79,6 +71,7 @@ def load_custom_dataset():
             # order retrieved facts by subject
             retrieved = sorted(retrieved, key=lambda x: x[0])
 
+            from src.rerank import generative_reranking_prompt
             messages = [
                 {'role': 'system', 'content': generative_reranking_prompt},
                 {'role': 'user', 'content': f'\nQuery: {query}\nCandidate facts:\n' + '\n'.join([json.dumps(triple).lower() for triple in retrieved])},
