@@ -1,9 +1,10 @@
 # https://llama.meta.com/docs/how-to-guides/fine-tuning/
 # https://github.com/huggingface/peft
-
 import sys
 
 sys.path.append('.')
+
+import argparse
 import json
 import os
 import pickle
@@ -15,15 +16,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, DataCollatorForLan
 from peft import get_peft_model, LoraConfig, TaskType
 from trl import SFTTrainer, SFTConfig
 from src.pangu.retrieval_api import GritLMRetriever
-
-
-peft_config = LoraConfig(
-    task_type=TaskType.CAUSAL_LM,
-    inference_mode=False,
-    r=4,
-    lora_alpha=32,
-    lora_dropout=0.1
-)
 
 
 def load_custom_dataset():
@@ -100,8 +92,23 @@ def load_custom_dataset():
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--lora_rank', type=int, default=16)
+    parser.add_argument('--lora_alpha', type=int, default=32)
+    parser.add_argument('--lora_dropout', type=float, default=0.1)
+    parser.add_argument('--epoch', type=int, default=3)
+    args = parser.parse_args()
+
     model_name_or_path = "meta-llama/Meta-Llama-3.1-8B-Instruct"
     tokenizer_name_or_path = "meta-llama/Meta-Llama-3.1-8B-Instruct"
+
+    peft_config = LoraConfig(
+        task_type=TaskType.CAUSAL_LM,
+        inference_mode=False,
+        r=args.lora_rank,
+        lora_alpha=args.lora_alpha,
+        lora_dropout=args.lora_dropout
+    )
 
     model = AutoModelForCausalLM.from_pretrained(model_name_or_path, device_map='auto')
     model = get_peft_model(model, peft_config)
@@ -122,6 +129,7 @@ if __name__ == '__main__':
                            max_length=1024)
         return inputs
 
+
     # tokenized_datasets = dataset.map(preprocess_function, batched=True)
 
     # Data collator
@@ -131,7 +139,7 @@ if __name__ == '__main__':
         dataset_text_field="text",
         max_seq_length=1024,
         output_dir="exp/fact_linker",
-        num_train_epochs=3,
+        num_train_epochs=args.epoch,
         per_device_train_batch_size=8,
         per_gpu_eval_batch_size=8
     )

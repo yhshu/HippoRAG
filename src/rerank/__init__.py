@@ -299,7 +299,14 @@ class LLMGenerativeReranker(Reranker):
 class HFLoRAModelGenerativeReranker(Reranker):
     def __init__(self, lora_path, model='meta-llama/Meta-Llama-3.1-8B-Instruct'):
 
-        from src.linking.lora_training import peft_config
+        from peft import LoraConfig
+        from peft import TaskType
+        peft_config = LoraConfig(
+            task_type=TaskType.CAUSAL_LM,
+            r=16,
+            lora_alpha=32,
+            inference_mode=True,
+        )
         peft_config.lora_dropout = 0.0
         peft_config.inference_mode = True
 
@@ -311,7 +318,6 @@ class HFLoRAModelGenerativeReranker(Reranker):
 
     def rerank(self, task: str, query: str, candidate_items: List[Tuple], candidate_indices, top_k=None):
         if task == 'fact_reranking':
-            from src.linking.lora_training import generative_reranking_prompt
             messages = [{'role': 'system', 'content': generative_reranking_prompt},
                         {'role': 'user', 'content': f'\nQuery: {query}\nCandidate facts:\n' + '\n'.join([json.dumps(triple).lower() for triple in candidate_items])}]
 
