@@ -9,6 +9,7 @@ from langchain.globals import set_llm_cache
 from langchain_community.cache import SQLiteCache
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate
+from peft import PeftConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from src.langchain_util import init_langchain_model
@@ -298,21 +299,12 @@ class LLMGenerativeReranker(Reranker):
 
 class HFLoRAModelGenerativeReranker(Reranker):
     def __init__(self, lora_path, model='meta-llama/Meta-Llama-3.1-8B-Instruct'):
-
-        from peft import LoraConfig
-        from peft import TaskType
-        peft_config = LoraConfig(
-            task_type=TaskType.CAUSAL_LM,
-            r=16,
-            lora_alpha=32,
-            inference_mode=True,
-        )
-        peft_config.lora_dropout = 0.0
-        peft_config.inference_mode = True
-
-        model = AutoModelForCausalLM.from_pretrained(model, device_map='auto')
         from peft import get_peft_model
-        self.model = get_peft_model(model, peft_config)
+
+        peft_config = PeftConfig.from_pretrained(os.path.join(lora_path, 'model'))
+        peft_config.inference_mode = True
+        self.model = AutoModelForCausalLM.from_pretrained(model, device_map='auto')
+        self.model = get_peft_model(self.model, peft_config)
         self.model.eval()
         self.tokenizer = AutoTokenizer.from_pretrained(os.path.join(lora_path, 'tokenizer'))
 

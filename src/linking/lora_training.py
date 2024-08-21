@@ -12,13 +12,13 @@ import pickle
 from datasets import DatasetDict, Dataset
 from gritlm import GritLM
 from tqdm import tqdm
-from transformers import AutoModelForCausalLM, AutoTokenizer, DataCollatorForLanguageModeling, Trainer, TrainingArguments
+from transformers import AutoModelForCausalLM, AutoTokenizer, DataCollatorForLanguageModeling
 from peft import get_peft_model, LoraConfig, TaskType
 from trl import SFTTrainer, SFTConfig
 from src.pangu.retrieval_api import GritLMRetriever
 
 
-def load_custom_dataset():
+def load_custom_dataset(tokenizer):
     cache = pickle.load(open('data/linker_training/sentence_triple_cache.pkl', 'rb'))
 
     training = []
@@ -115,7 +115,7 @@ if __name__ == '__main__':
     model.print_trainable_parameters()
 
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_name_or_path)
-    dataset = load_custom_dataset()
+    dataset = load_custom_dataset(tokenizer)
 
     if tokenizer.pad_token is None:
         tokenizer.add_special_tokens({'pad_token': '<|finetune_right_pad_id|>'})
