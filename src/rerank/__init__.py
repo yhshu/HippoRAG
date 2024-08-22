@@ -53,7 +53,7 @@ def format_candidates(candidates: list):
 class Reranker:
     def __init__(self, model_name):
         self.model_name = model_name
-        if model_name.startswith('gpt'):
+        if model_name.startswith('gpt') or model_name.startswith('ft:gpt'):
             llm_provider = 'openai'
         elif model_name.lower().startswith('gritlm'):
             llm_provider = 'gritlm'

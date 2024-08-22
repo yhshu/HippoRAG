@@ -176,7 +176,7 @@ class HippoRAG:
 
         self.reranker = None
         if reranker_name is not None:
-            if reranker_name.startswith('gpt') or reranker_name in ['llama_cpp_server']:
+            if reranker_name.startswith('gpt') or reranker_name.startswith('ft:gpt') or reranker_name in ['llama_cpp_server']:
                 # from src.rerank import LLMLogitsReranker
                 # reranker = LLMLogitsReranker(fact_rerank_model_name)
                 # from src.rerank import RankGPT

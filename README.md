@@ -144,6 +144,29 @@ python3 index_hf.py --dataset $DATA --run_ner --llm $LLM_API --extractor $LLM --
 
 ```
 
+### Indexing with OpenAI Batch API
+
+Using the OpenAI Batch API helps to reduce costs of large-scale indexing.
+If you want to use OpenAI Batch API for extraction, you need to execute additional steps to call batch API and retrieve results before indexing.  
+
+```shell
+DATA=sample
+LLM=gpt-4o-mini
+python3 src/openie/openai_batch_create_ner.py --dataset $DATA --model_name $LLM
+python3 src/openie/openai_batch_retrieve_ner_and_create_openie.py --dataset $DATA --model_name $LLM --file_id <output_file_id_in_last_step>
+python3 python src/openie/openai_batch_retrieve_openie.py --dataset $DATA --model_name $LLM --file_id <output_file_id_in_last_step>
+```
+
+After all the batch jobs are done, run the following commands to index based on the batch results.
+
+```shell
+# HF indexing after OpenAI Batch API
+python src/index_hf.py --dataset $DATA --run_ner --skip_openie --extractor $LLM --retriever facebook/contriever
+
+# ColBERTv2 indexing after OpenAI Batch API
+python src/index_colbertv2.py --dataset $DATA --run_ner --skip_openie --extractor $LLM --retriever colbertv2
+```
+
 ### Retrieval
 
 After indexing, HippoRAG is ready to aid with online retrieval. Below, we provide two strategies for using HippoRAG:

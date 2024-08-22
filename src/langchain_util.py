@@ -29,7 +29,7 @@ def init_langchain_model(llm: str, model_name: str, temperature: float = 0.0, ma
     if llm == 'openai':
         # https://python.langchain.com/v0.1/docs/integrations/chat/openai/
         from langchain_openai import ChatOpenAI
-        assert model_name.startswith('gpt-')
+        assert model_name.startswith('gpt-') or model_name.startswith('ft:gpt-')
         return ChatOpenAI(api_key=os.environ.get("OPENAI_API_KEY"), model=model_name, temperature=temperature, max_retries=max_retries, timeout=timeout, **kwargs)
     elif llm == 'together':
         # https://python.langchain.com/v0.1/docs/integrations/chat/together/
@@ -45,7 +45,7 @@ def init_langchain_model(llm: str, model_name: str, temperature: float = 0.0, ma
         return ChatLlamaCpp(model_path=model_name, verbose=True)  # model_name is the model path (gguf file)
     elif llm == 'llama_cpp_server':
         return LlamaCppWrapper()
-    elif llm.lower() =='gritlm':
+    elif llm.lower() == 'gritlm':
         return GritLMLangchainWrapper(model_name=model_name)
     else:
         # add any LLMs you want to use here using LangChain
