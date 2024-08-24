@@ -9,7 +9,7 @@ from langchain.globals import set_llm_cache
 from langchain_community.cache import SQLiteCache
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate
-from peft import PeftConfig
+from peft import PeftConfig, PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from src.langchain_util import init_langchain_model
@@ -298,14 +298,10 @@ class LLMGenerativeReranker(Reranker):
 
 
 class HFLoRAModelGenerativeReranker(Reranker):
-    def __init__(self, lora_path, model='meta-llama/Meta-Llama-3.1-8B-Instruct'):
-        from peft import get_peft_model
-
-        peft_config = PeftConfig.from_pretrained(os.path.join(lora_path, 'model'))
-        peft_config.inference_mode = True
-        self.model = AutoModelForCausalLM.from_pretrained(model, device_map='auto')
-        self.model = get_peft_model(self.model, peft_config)
-        self.model.eval()
+    def __init__(self, lora_path, base_model='meta-llama/Meta-Llama-3.1-8B-Instruct'):
+        base_model = AutoModelForCausalLM.from_pretrained(base_model, device_map='auto', return_dict=True)
+        model = PeftModel.from_pretrained(base_model, os.path.join(lora_path, 'model'))
+        self.model = model.merge_and_unload()
         self.tokenizer = AutoTokenizer.from_pretrained(os.path.join(lora_path, 'tokenizer'))
 
     def rerank(self, task: str, query: str, candidate_items: List[Tuple], candidate_indices, top_k=None):
@@ -318,7 +314,7 @@ class HFLoRAModelGenerativeReranker(Reranker):
                 inputs = self.tokenizer(input_text, return_tensors='pt').to(self.model.device)
                 input_length = inputs['input_ids'].shape[-1]
 
-                outputs = self.model.generate(**inputs, max_length=1024, pad_token_id=self.tokenizer.eos_token_id)
+                outputs = self.model.generate(**inputs, max_length=1200, pad_token_id=self.tokenizer.eos_token_id)
                 completion = outputs[:, input_length:]
 
                 output_text = self.tokenizer.decode(completion[0])

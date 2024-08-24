@@ -3,11 +3,8 @@ import json
 import os.path
 import random
 
-from django.utils.lorem_ipsum import paragraph
 from langchain.globals import set_llm_cache
 from langchain_community.cache import SQLiteCache
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-from nltk import sent_tokenize
 from tqdm import tqdm
 
 from src.langchain_util import init_langchain_model
@@ -44,7 +41,7 @@ if __name__ == '__main__':
         # add passages to corpus
         corpus = []
         for sample in tqdm(split_data, total=len(split_data), desc=f'Processing {split}'):
-            candidates = []
+            evidence_candidates = []
             for passage in sample['paragraphs']:
                 # add to query data
                 is_supporting = passage['is_supporting']
@@ -52,7 +49,7 @@ if __name__ == '__main__':
                 if is_supporting is False:
                     continue
 
-                candidates.append({'passage_id': full_text_to_id.get(full_text, str(corpus_id)), 'sentence': passage['paragraph_text'], 'triples': '', 'relevance': 'support'})
+                evidence_candidates.append({'passage_id': full_text_to_id.get(full_text, str(corpus_id)), 'sentence': passage['paragraph_text'], 'triples': '', 'relevance': 'support'})
 
                 if full_text in full_text_to_id:
                     continue
@@ -62,7 +59,7 @@ if __name__ == '__main__':
                 full_text_to_id[full_text] = str(corpus_id)
                 corpus_id += 1
 
-            sample['candidates'] = candidates
+            sample['candidates'] = evidence_candidates
 
         corpus_dict.update({item['id']: item for item in corpus})
 

@@ -25,7 +25,7 @@ class LlamaCppWrapper:
         return ai_message
 
 
-def langchain_message_to_llama_3_prompt(messages: list):
+def langchain_message_to_llama_3_prompt(messages: list, add_assistant_header=True):
     prompt = "<|begin_of_text|>"
     for message in messages:
         if isinstance(message, SystemMessage):
@@ -34,8 +34,21 @@ def langchain_message_to_llama_3_prompt(messages: list):
             prompt += f"<|start_header_id|>user<|end_header_id|>" + message.content + "<|eot_id|>"
         elif isinstance(message, AIMessage):
             prompt += f"<|start_header_id|>assistant<|end_header_id|>" + message.content + "<|eot_id|>"
-    prompt += "<|start_header_id|>assistant<|end_header_id|>"
+    if add_assistant_header:
+        prompt += "<|start_header_id|>assistant<|end_header_id|>"
     return prompt
+
+
+def langchain_message_to_chatml(messages: list):
+    res = []
+    for message in messages:
+        if isinstance(message, SystemMessage):
+            res.append({'role': 'system', 'content': message.content})
+        elif isinstance(message, HumanMessage):
+            res.append({'role': 'user', 'content': message.content})
+        elif isinstance(message, AIMessage):
+            res.append({'role': 'assistant', 'content': message.content})
+    return res
 
 
 def request_llama_cpp_server(prompt, url="http://localhost:8080/completion", n_probs=20, seed=1, n_predict=256, temperature=0.0):
