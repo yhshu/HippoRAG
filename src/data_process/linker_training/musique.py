@@ -2,29 +2,19 @@ import argparse
 import json
 import os.path
 import random
-
-from langchain.globals import set_llm_cache
-from langchain_community.cache import SQLiteCache
 from tqdm import tqdm
-
-from src.langchain_util import init_langchain_model
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--llm', type=str, default='openai')
-    parser.add_argument('--llm_model', type=str, default='gpt-4o-mini')
     parser.add_argument('--dir', type=str, default='data/raw/musique')
     args = parser.parse_args()
-
-    set_llm_cache(SQLiteCache(database_path=f".dataset_{args.llm_model}.db"))
-    llm = init_langchain_model(args.llm, args.llm_model)
 
     os.makedirs('data/linker_training/queries', exist_ok=True)
     os.makedirs('data/linker_training/corpus', exist_ok=True)
     corpus_dict = {}
     full_text_to_id = {}
     corpus_id = 0
-    num_sample = {'train': 5000, 'dev': 500}
+    num_sample = {'train': 'all', 'dev': 'all'}
     random.seed(1)
 
     for split in num_sample.keys():
@@ -35,9 +25,12 @@ if __name__ == '__main__':
             raw = f.readlines()
             for line in raw:
                 split_data.append(json.loads(line))
-        assert 0 <= num_sample[split] <= len(split_data)
-        split_data = random.sample(split_data, min(num_sample[split], len(split_data)))
 
+        if num_sample[split] is not None and isinstance(num_sample[split], int):
+            assert 0 <= num_sample[split] <= len(split_data)
+            split_data = random.sample(split_data, min(num_sample[split], len(split_data)))
+
+        print(f'Processing {split} ({len(split_data)})')
         # add passages to corpus
         corpus = []
         for sample in tqdm(split_data, total=len(split_data), desc=f'Processing {split}'):
@@ -49,7 +42,8 @@ if __name__ == '__main__':
                 if is_supporting is False:
                     continue
 
-                evidence_candidates.append({'passage_id': full_text_to_id.get(full_text, str(corpus_id)), 'sentence': passage['paragraph_text'], 'triples': '', 'relevance': 'support'})
+                evidence_candidates.append({'passage_id': full_text_to_id.get(full_text, str(corpus_id)),
+                                            'sentence': passage['paragraph_text'], 'triples': '', 'relevance': 'support'})
 
                 if full_text in full_text_to_id:
                     continue
