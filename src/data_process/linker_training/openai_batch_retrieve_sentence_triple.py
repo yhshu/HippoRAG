@@ -27,7 +27,11 @@ if __name__ == '__main__':
     print('Batch output length:', len(lines))
     for line in tqdm(lines):
         response = json.loads(line)
-        content = json.loads(response['response']['body']['choices'][0]['message']['content'])
+        try:
+            content = json.loads(response['response']['body']['choices'][0]['message']['content'])
+        except:
+            print('Error:', response)
+            continue
         custom_id = response['custom_id']
         cache[custom_id] = content
 

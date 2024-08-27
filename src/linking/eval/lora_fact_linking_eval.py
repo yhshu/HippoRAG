@@ -8,32 +8,32 @@ import json
 import os.path
 
 import torch
-from peft import PeftConfig, get_peft_model, PeftModel
+from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from src.linking.llama3_fact_linker_lora_train import load_custom_dataset
+from src.linking.llama3_fact_linker_train import load_custom_dataset
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', type=str, help='lora dir', default='exp/fact_linker')
+    parser.add_argument('--model', type=str, help='lora dir')
     parser.add_argument('--ckpt', type=str)
+    parser.add_argument('--datasets', nargs='+', type=str, help='A list of datasets, e.g., musique')
     args = parser.parse_args()
 
+    base_model = AutoModelForCausalLM.from_pretrained('meta-llama/Meta-Llama-3.1-8B-Instruct', device_map='auto', return_dict=True)
     if args.model is not None:
         if args.ckpt is None:
-            peft_config = PeftConfig.from_pretrained(os.path.join(args.model, 'model'))
+            model = PeftModel.from_pretrained(base_model, os.path.join(args.model, 'adapter'))
+            tokenizer = AutoTokenizer.from_pretrained(os.path.join(args.model, 'adapter'))
         else:
-            peft_config = PeftConfig.from_pretrained(os.path.join(args.model, args.ckpt))
-
-        base_model = AutoModelForCausalLM.from_pretrained('meta-llama/Meta-Llama-3.1-8B-Instruct', device_map='auto', return_dict=True)
-        model = PeftModel.from_pretrained(base_model, os.path.join(args.model, 'model'))
+            model = PeftModel.from_pretrained(base_model, os.path.join(args.model, args.ckpt))
+            tokenizer = AutoTokenizer.from_pretrained(os.path.join(args.model, args.ckpt))
         model = model.merge_and_unload()
-        tokenizer = AutoTokenizer.from_pretrained(os.path.join(args.model, 'tokenizer'))
     else:
-        model = AutoModelForCausalLM.from_pretrained('meta-llama/Meta-Llama-3.1-8B-Instruct', device_map='auto')
+        model = base_model
         tokenizer = AutoTokenizer.from_pretrained('meta-llama/Meta-Llama-3.1-8B-Instruct')
 
-    datasets = load_custom_dataset()
+    datasets = load_custom_dataset(selected_datasets=args.datasets)
     metrics = {'precision': 0, 'recall': 0, 'f1': 0}
     for idx, sample in tqdm(enumerate(datasets['validation']), total=len(datasets['validation']), desc='Evaluating'):
         messages = json.loads(sample['text'])

@@ -9,7 +9,7 @@ from langchain.globals import set_llm_cache
 from langchain_community.cache import SQLiteCache
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate
-from peft import PeftConfig, PeftModel
+from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from src.langchain_util import init_langchain_model
@@ -297,15 +297,33 @@ class LLMGenerativeReranker(Reranker):
         return messages
 
 
+def retrieved_to_candidate_facts(candidate_items, candidate_indices, k=30):
+    # bind candidate_items and candidate_indices
+    candidate_indices_and_items = list(zip(candidate_indices, candidate_items))
+    # remove triples with duplicate subjects and objects
+    candidate_dict = {}
+    for item in candidate_indices_and_items:
+        if (item[1][0], item[1][2]) not in candidate_dict:
+            candidate_dict[(item[1][0], item[1][2])] = item
+    candidate_indices_and_items = list(candidate_dict.values())
+    # order candidate items by subject
+    candidate_indices_and_items = sorted(candidate_indices_and_items, key=lambda x: x[1][0])
+    # unpack candidate_indices_and_items
+    sorted_candidate_indices, sorted_candidate_items = zip(*candidate_indices_and_items)
+    return sorted_candidate_items[:k], sorted_candidate_indices[:k]
+
+
 class HFLoRAModelGenerativeReranker(Reranker):
     def __init__(self, lora_path, base_model='meta-llama/Meta-Llama-3.1-8B-Instruct'):
         base_model = AutoModelForCausalLM.from_pretrained(base_model, device_map='auto', return_dict=True)
-        model = PeftModel.from_pretrained(base_model, os.path.join(lora_path, 'model'))
+        model = PeftModel.from_pretrained(base_model, os.path.join(lora_path, 'adapter'))
         self.model = model.merge_and_unload()
-        self.tokenizer = AutoTokenizer.from_pretrained(os.path.join(lora_path, 'tokenizer'))
+        self.tokenizer = AutoTokenizer.from_pretrained(os.path.join(lora_path, 'adapter'))
 
-    def rerank(self, task: str, query: str, candidate_items: List[Tuple], candidate_indices, top_k=None):
+    def rerank(self, task: str, query: str, input_items: List[Tuple], input_indices, top_k=None):
         if task == 'fact_reranking':
+            candidate_items, candidate_indices = retrieved_to_candidate_facts(input_items, input_indices, k=30)
+
             messages = [{'role': 'system', 'content': generative_reranking_prompt},
                         {'role': 'user', 'content': f'\nQuery: {query}\nCandidate facts:\n' + '\n'.join([json.dumps(triple).lower() for triple in candidate_items])}]
 
@@ -328,9 +346,9 @@ class HFLoRAModelGenerativeReranker(Reranker):
 
             result_indices = []
             for generated_fact in response['fact']:
-                closest_matched_fact = difflib.get_close_matches(str(generated_fact), [str(i) for i in candidate_items], n=1, cutoff=0.0)[0]
+                closest_matched_fact = difflib.get_close_matches(json.dumps(generated_fact), [json.dumps(i) for i in candidate_items], n=1, cutoff=0.0)[0]
                 try:
-                    result_indices.append(candidate_items.index(eval(closest_matched_fact)))
+                    result_indices.append(candidate_items.index(tuple(eval(closest_matched_fact))))
                 except Exception as e:
                     print('result_indices exception', e)
 

@@ -91,8 +91,11 @@ def merge_chunks(corpus: list):
     return list(new_corpus.values())
 
 
-
-def generate_hash(input_string):
-    sha256 = hashlib.sha256()
-    sha256.update(input_string.encode('utf-8'))
-    return sha256.hexdigest()
+def generate_hash(input_string, algorithm='sha224'):
+    import hashlib
+    try:
+        algo = getattr(hashlib, algorithm)()
+    except AttributeError:
+        raise ValueError(f'Unsupported algorithm: {algorithm}')
+    algo.update(input_string.encode('utf-8'))
+    return algo.hexdigest()

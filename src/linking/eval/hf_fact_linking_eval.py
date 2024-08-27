@@ -1,3 +1,7 @@
+import sys
+
+sys.path.append('.')
+
 import argparse
 import json
 
@@ -6,19 +10,21 @@ from langchain_community.cache import SQLiteCache
 from tqdm import tqdm
 
 from src.langchain_util import init_langchain_model
-from src.linking.llama3_fact_linker_lora_train import load_custom_dataset
+from src.linking.llama3_fact_linker_train import load_custom_dataset
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--llm', type=str, default='openai')
     parser.add_argument('--model', type=str, default='gpt-4o-mini')
+    parser.add_argument('--datasets', nargs='+', type=str, help='A list of datasets, e.g., musique')
     args = parser.parse_args()
 
     set_llm_cache(SQLiteCache(database_path=f".llm_{args.model}_rerank.db"))
     if args.model.startswith('gpt-') or args.model.startswith('ft:gpt-'):
         model = init_langchain_model(args.llm, args.model)
 
-    datasets = load_custom_dataset()
+    selected_datasets = args.datasets
+    datasets = load_custom_dataset(selected_datasets=selected_datasets)
     metrics = {'precision': 0, 'recall': 0, 'f1': 0}
     for idx, sample in tqdm(enumerate(datasets['validation']), total=len(datasets['validation']), desc='Evaluating'):
         messages = json.loads(sample['text'])

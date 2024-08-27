@@ -1,5 +1,7 @@
 import sys
 
+from src.lm_wrapper.util import openai_batch_create_api
+
 sys.path.append('.')
 
 import argparse
@@ -96,6 +98,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, default='gpt-4o-mini')
     parser.add_argument('--dir', type=str, default='data/linker_training/queries')
+    parser.add_argument('--datasets', nargs='+', type=str, help='A list of datasets')
     args = parser.parse_args()
 
     cache_path = 'data/linker_training/sentence_triple_cache.pkl'
@@ -107,6 +110,11 @@ if __name__ == '__main__':
     jsonl_contents = []
 
     for path in os.listdir(args.dir):
+        if not os.path.isfile(os.path.join(args.dir, path)):
+            continue
+        if args.datasets is not None and not any(dataset in path for dataset in args.datasets):
+            continue
+
         data = json.load(open(os.path.join(args.dir, path), 'r'))
         dataset_label = path.split('.')[0]
         for sample in data:
@@ -144,21 +152,5 @@ if __name__ == '__main__':
                     {"custom_id": custom_id, "method": "POST", "url": "/v1/chat/completions",
                      "body": {"model": args.model, "messages": messages, "max_tokens": 1024, "response_format": sentence_triple_response_format}}))
 
-    # Save to the batch file
-    assert len(jsonl_contents) > 0
     corpus_jsonl_path = f'data/linker_training/sentence_triple_{args.model}_submission_{len(jsonl_contents)}.jsonl'
-    with open(corpus_jsonl_path, 'w') as f:
-        f.write('\n'.join(jsonl_contents))
-    print("Batch file saved to", corpus_jsonl_path, 'len: ', len(jsonl_contents))
-
-    # Call OpenAI Batch API
-    from openai import OpenAI
-
-    client = OpenAI(max_retries=5, timeout=60)
-    batch_input_file = client.files.create(file=open(corpus_jsonl_path, 'rb'), purpose='batch')
-    batch_obj = client.batches.create(input_file_id=batch_input_file.id, endpoint='/v1/chat/completions',
-                                      completion_window='24h',
-                                      metadata={'description': f"Linking dataset synthesis, len: {len(jsonl_contents)}"})
-    print(batch_obj)
-    print()
-    print("Go to https://platform.openai.com/batches/ or use OpenAI file API to get the output file ID after the batch job is done.")
+    openai_batch_create_api(corpus_jsonl_path, jsonl_contents)
