@@ -7,6 +7,7 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from src.hipporag import HippoRAG, get_query_instruction
 from src.linking import graph_search_with_entities
+from src.linking.query_to_fact import link_query_to_fact_core
 
 system_prompt = """Given the following query and potentially relevant facts, your task is: 
 - Determine whether these facts are relevant to the query and sufficient to support or answer the query.
@@ -46,7 +47,7 @@ def generate_plan(hipporag: HippoRAG, query: str, fact_by_docs: list):
         return {"thought": "", "relevance": "", "facts": []}
 
 
-def link_by_passage_fact(hipporag: HippoRAG, query: str, router=True):
+def link_by_passage_fact(hipporag: HippoRAG, query: str, link_top_k: int, router=False):
     query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction(hipporag.embed_model, 'query_to_passage', hipporag.corpus_name),
                                                        return_cpu=True, return_numpy=True, norm=True)
     query_doc_scores = np.dot(hipporag.doc_embedding_mat, query_embedding.T)  # (num_docs, dim) x (1, dim).T = (num_docs, 1)
@@ -79,40 +80,48 @@ def link_by_passage_fact(hipporag: HippoRAG, query: str, router=True):
             logs = {'llm_selected_nodes': []}
             return np.array(top_doc_idx), sorted_scores, logs
 
-    # link the generation to the facts and start graph search
-    predicted_nodes = set()
-    for fact in plan['facts']:
-        if len(fact) > 0:
-            predicted_nodes.add(fact[0])
-        if len(fact) == 3:
-            predicted_nodes.add(fact[2])
+        # link the generation to the facts and start graph search
+        predicted_nodes = set()
+        for fact in plan['facts']:
+            if len(fact) > 0:
+                predicted_nodes.add(fact[0])
+            if len(fact) == 3:
+                predicted_nodes.add(fact[2])
 
-    predicted_nodes = list(predicted_nodes)
+        predicted_nodes = list(predicted_nodes)
 
-    all_phrase_weights = np.zeros(len(hipporag.node_phrases))
-    linking_score_map = {}
-    for phrase in predicted_nodes:
-        # choose the most similar phrase from phrases_by_doc
-        closest_match = difflib.get_close_matches(phrase, all_candidate_phrases, n=1, cutoff=0)[0]
+        all_phrase_weights = np.zeros(len(hipporag.node_phrases))
+        linking_score_map = {}
+        for phrase in predicted_nodes:
+            # choose the most similar phrase from phrases_by_doc
+            closest_match = difflib.get_close_matches(phrase, all_candidate_phrases, n=1, cutoff=0)[0]
 
-        phrase_id = hipporag.kb_node_phrase_to_id.get(closest_match, None)
-        if phrase_id is None:
-            hipporag.logger.error(f'Phrase {phrase} not found in the KG')
-            continue
-        if hipporag.node_specificity:
-            if hipporag.phrase_to_num_doc[phrase_id] == 0:
-                weight = 1
+            phrase_id = hipporag.kb_node_phrase_to_id.get(closest_match, None)
+            if phrase_id is None:
+                hipporag.logger.error(f'Phrase {phrase} not found in the KG')
+                continue
+            if hipporag.node_specificity:
+                if hipporag.phrase_to_num_doc[phrase_id] == 0:
+                    weight = 1
+                else:
+                    weight = 1 / hipporag.phrase_to_num_doc[phrase_id]
+                all_phrase_weights[phrase_id] = weight
             else:
-                weight = 1 / hipporag.phrase_to_num_doc[phrase_id]
-            all_phrase_weights[phrase_id] = weight
-        else:
-            all_phrase_weights[phrase_id] = 1.0
+                all_phrase_weights[phrase_id] = 1.0
 
-        for p in phrases_by_doc:
-            if phrase in p:
-                linking_score_map[phrase_id] = doc_scores[phrases_by_doc.index(p)]
-                break
+            for p in phrases_by_doc:
+                if phrase in p:
+                    linking_score_map[phrase_id] = doc_scores[phrases_by_doc.index(p)]
+                    break
 
-    # graph search
-    sorted_doc_ids, sorted_scores, logs = graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, query_doc_scores=query_doc_scores, damping=None)
-    return sorted_doc_ids, sorted_scores, logs
+        # graph search
+        sorted_doc_ids, sorted_scores, logs = graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, query_doc_scores=query_doc_scores, damping=None)
+        return sorted_doc_ids, sorted_scores, logs
+
+    else:
+        candidate_facts = [f for facts in fact_by_doc for f in facts]
+        facts_to_encode = [str(f) for f in candidate_facts]
+        fact_embeddings = hipporag.embed_model.encode_text(facts_to_encode, return_cpu=True, return_numpy=True, norm=True)
+        assert len(fact_embeddings) == len(candidate_facts)
+        print(len(fact_embeddings))
+        return link_query_to_fact_core(hipporag, query, candidate_facts, fact_embeddings, link_top_k)

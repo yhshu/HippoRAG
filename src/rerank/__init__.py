@@ -314,11 +314,14 @@ def retrieved_to_candidate_facts(candidate_items, candidate_indices, k=30):
 
 
 class HFLoRAModelGenerativeReranker(Reranker):
-    def __init__(self, lora_path, base_model='meta-llama/Meta-Llama-3.1-8B-Instruct'):
-        base_model = AutoModelForCausalLM.from_pretrained(base_model, device_map='auto', return_dict=True)
-        model = PeftModel.from_pretrained(base_model, os.path.join(lora_path, 'adapter'))
-        self.model = model.merge_and_unload()
-        self.tokenizer = AutoTokenizer.from_pretrained(os.path.join(lora_path, 'adapter'))
+    def __init__(self, model_path, base_model='meta-llama/Meta-Llama-3.1-8B-Instruct'):
+        if 'adapter_config.json' in os.listdir(model_path):
+            base_model = AutoModelForCausalLM.from_pretrained(base_model, device_map='auto', return_dict=True)
+            model = PeftModel.from_pretrained(base_model, model_path)
+            self.model = model.merge_and_unload()
+        else:
+            self.model = AutoModelForCausalLM.from_pretrained(base_model, device_map='auto', return_dict=True)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
 
     def rerank(self, task: str, query: str, input_items: List[Tuple], input_indices, top_k=None):
         if task == 'fact_reranking':

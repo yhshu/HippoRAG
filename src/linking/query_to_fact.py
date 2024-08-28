@@ -17,7 +17,7 @@ verify_system_prompt = """Given a query and the top-k retrieved subgraphs from a
 
 
 def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, fact_embeddings, link_top_k, graph_search=True,
-                            ppr_doc_verify=False, ppr_phrase_verify=False, merge_dpr=False):
+                            ppr_doc_verify=False, ppr_phrase_verify=False, merge_dpr=False, num_rerank_fact=120):
     query_doc_scores = np.zeros(hipporag.docs_to_phrases_mat.shape[0])
     query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction(hipporag.embed_model, 'query_to_fact', hipporag.corpus_name),
                                                        return_cpu=True, return_numpy=True, norm=True)
@@ -26,7 +26,7 @@ def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, 
     query_fact_scores = np.squeeze(query_fact_scores)
 
     if hipporag.reranker is not None:
-        candidate_fact_indices = np.argsort(query_fact_scores)[-30:][::-1].tolist()
+        candidate_fact_indices = np.argsort(query_fact_scores)[-num_rerank_fact:][::-1].tolist()
         candidate_facts = [candidate_triples[i] for i in candidate_fact_indices]
         top_k_fact_indicies, top_k_facts = hipporag.reranker.rerank('fact_reranking', query, candidate_facts, candidate_fact_indices, link_top_k)
         rerank_log = {'facts_before_rerank': candidate_facts, 'facts_after_rerank': top_k_facts}

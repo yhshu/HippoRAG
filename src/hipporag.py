@@ -404,7 +404,7 @@ class HippoRAG:
         elif linking == 'query_passage_fact':
             self.load_dpr_doc_embeddings()
             from src.linking.query_passage_fact import link_by_passage_fact
-            sorted_doc_ids, sorted_scores, doc_rank_logs = link_by_passage_fact(self, query)
+            sorted_doc_ids, sorted_scores, doc_rank_logs = link_by_passage_fact(self, query, link_top_k=link_top_k)
 
         else:
             raise NotImplementedError('Linking method not implemented')

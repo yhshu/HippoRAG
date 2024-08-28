@@ -2,34 +2,29 @@ import sys
 
 sys.path.append('.')
 
-from tqdm import tqdm
 import argparse
 import json
-import os.path
 
-import torch
-from peft import PeftModel
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from langchain.globals import set_llm_cache
+from langchain_community.cache import SQLiteCache
+from tqdm import tqdm
 
+from src.langchain_util import init_langchain_model
 from src.linking.llama3_fact_linker_train import load_custom_dataset
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', type=str, help='The path to the model or adapter checkpoint')
-    parser.add_argument('--use_peft', action='store_true', help='Whether to use the PEFT model')
+    parser.add_argument('--llm', type=str, default='openai')
+    parser.add_argument('--model', type=str, default='gpt-4o-mini')
     parser.add_argument('--datasets', nargs='+', type=str, help='A list of datasets, e.g., musique')
     args = parser.parse_args()
 
-    base_model = AutoModelForCausalLM.from_pretrained('meta-llama/Meta-Llama-3.1-8B-Instruct', device_map='auto', return_dict=True)
-    if args.use_peft:
-        model = PeftModel.from_pretrained(base_model, args.model)
-        tokenizer = AutoTokenizer.from_pretrained(args.model)
-        model = model.merge_and_unload()
-    else:
-        model = base_model
-        tokenizer = AutoTokenizer.from_pretrained(args.model)
+    set_llm_cache(SQLiteCache(database_path=f".llm_{args.model}_rerank.db"))
+    if args.model.startswith('gpt-') or args.model.startswith('ft:gpt-'):
+        model = init_langchain_model(args.llm, args.model)
 
-    datasets = load_custom_dataset(selected_datasets=args.datasets)
+    selected_datasets = args.datasets
+    datasets = load_custom_dataset(selected_datasets=selected_datasets)
     metrics = {'precision': 0, 'recall': 0, 'f1': 0}
     for idx, sample in tqdm(enumerate(datasets['validation']), total=len(datasets['validation']), desc='Evaluating'):
         messages = json.loads(sample['text'])
@@ -39,20 +34,11 @@ if __name__ == '__main__':
         except Exception as e:
             print(e)
             continue
-        with torch.no_grad():
-            input_text = tokenizer.apply_chat_template(messages[:2], tokenize=False)
-            inputs = tokenizer(input_text, return_tensors='pt').to(model.device)
-            input_length = inputs['input_ids'].shape[-1]
-
-            outputs = model.generate(**inputs, max_length=1024, pad_token_id=tokenizer.eos_token_id)
-            completion = outputs[:, input_length:]
-
-            output_text = tokenizer.decode(completion[0])
-            output_text = output_text.split('<|end_header_id|>')[1].split('<|eot_id|>')[0].strip()
 
         try:
-            completion = json.loads(output_text).get('fact', [])
-            completion = [tuple(t) for t in completion]
+            completion = model.invoke(messages[:2], response_format={"type": "json_object"})
+            content = json.loads(completion.content).get('fact', [])
+            completion = [tuple(t) for t in content]
         except Exception as e:
             print(e)
             completion = []

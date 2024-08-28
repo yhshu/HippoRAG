@@ -2,8 +2,6 @@
 # https://github.com/huggingface/peft
 import sys
 
-from src.data_process.util import generate_hash
-
 sys.path.append('.')
 
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
@@ -79,6 +77,7 @@ def retrieved_to_candidate_facts(retrieved, labels, k=30):
 
 
 def load_triples(cache: dict, dataset_label: str, sample: dict):
+    from src.data_process.util import generate_hash
     if 'msmacro' in dataset_label:
         for candidate in sample['candidates']:
             custom_id = f"{dataset_label}_{sample['id']}_{generate_hash(candidate['sentence'])}"
