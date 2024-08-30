@@ -311,7 +311,7 @@ if __name__ == '__main__':
                 sample['nodes_in_gold_doc'] = json.dumps(phrases_in_gold_docs)
 
         sample['retrieved'] = retrieved_passages[:10]
-        sample['retrieved_scores'] = json.dumps(scores[:10])
+        sample['retrieved_scores'] = json.dumps(list(scores)[:10])
 
         logs_for_first_step = logs_for_all_steps[1]
         if logs_for_first_step is not None:
@@ -322,7 +322,10 @@ if __name__ == '__main__':
         # calculate node precision/recall/Hit
         if do_eval and logs_for_first_step is not None and not hipporag.dpr_only:
             linked_nodes = set()
-            for link in logs_for_first_step.get('linked_node_scores', []):
+            linked_node_scores = logs_for_first_step.get('linked_node_scores', '')
+            if isinstance(linked_node_scores, str) and linked_node_scores.startswith('{') and linked_node_scores.endswith('}'):
+                linked_node_scores = json.loads(linked_node_scores)
+            for link in linked_node_scores:
                 if isinstance(link, list):
                     linked_nodes.add(link[1])
                 elif isinstance(link, str):
@@ -340,6 +343,22 @@ if __name__ == '__main__':
             metrics_sum['node_precision'] += node_precision
             metrics_sum['node_recall'] += node_recall
             metrics_sum['node_hit'] += node_hit
+
+            if hipporag.reranker is not None:
+                if 'rerank' in logs_for_first_step and 'facts_before_rerank' in logs_for_first_step['rerank']:
+                    facts_before_rerank = logs_for_first_step['rerank']['facts_before_rerank']
+                    nodes_before_rerank = set([fact[0] for fact in facts_before_rerank] + [fact[2] for fact in facts_before_rerank if len(fact) == 3])
+                    fact_after_rerank = logs_for_first_step['rerank']['facts_after_rerank']
+                    nodes_after_renank = set([fact[0] for fact in fact_after_rerank] + [fact[2] for fact in fact_after_rerank if len(fact) == 3])
+
+                    node_precision_before_rerank = len(nodes_before_rerank.intersection(oracle_nodes)) / len(nodes_before_rerank) if len(nodes_before_rerank) > 0 else 0.0
+                    node_recall_before_rerank = len(nodes_before_rerank.intersection(oracle_nodes)) / len(oracle_nodes) if len(oracle_nodes) > 0 else 0.0
+                    node_precision_after_rerank = len(nodes_after_renank.intersection(oracle_nodes)) / len(nodes_after_renank) if len(nodes_after_renank) > 0 else 0.0
+                    node_recall_after_rerank = len(nodes_after_renank.intersection(oracle_nodes)) / len(oracle_nodes) if len(oracle_nodes) > 0 else 0.0
+                    sample['node_precision_before_rerank'] = node_precision_before_rerank
+                    sample['node_recall_before_rerank'] = node_recall_before_rerank
+                    metrics_sum['node_precision_before_rerank'] += node_precision_before_rerank
+                    metrics_sum['node_recall_before_rerank'] += node_recall_before_rerank
 
         # calculate passage retrieval recall
         if do_eval:

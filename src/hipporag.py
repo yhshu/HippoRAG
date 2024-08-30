@@ -183,6 +183,9 @@ class HippoRAG:
                 # reranker = RankGPT(rerank_model_name)
                 from src.rerank import LLMGenerativeReranker
                 self.reranker = LLMGenerativeReranker(reranker_name)
+            elif reranker_name == 'placeholder':
+                from src.rerank import RerankerPlaceholder
+                self.reranker = RerankerPlaceholder(reranker_name)
             else:  # load Llama 3.1 model with LoRA
                 from src.rerank import HFLoRAModelGenerativeReranker
                 self.reranker = HFLoRAModelGenerativeReranker(reranker_name)
@@ -340,12 +343,12 @@ class HippoRAG:
             return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], logs
 
         elif linking == 'ner_to_node':
-            from colbert.data import Queries
             from src.linking.ner_to_node import link_node_by_dpr, link_node_by_colbertv2, graph_search_with_entities
             all_phrase_weights = np.zeros(len(self.node_phrases))
             linking_score_map = {}
             query_ner_list = self.query_ner(query)
             if 'colbertv2' in self.linking_retriever_name:
+                from colbert.data import Queries
                 queries = Queries(path=None, data={0: query})
                 if self.doc_ensemble:
                     query_doc_scores = np.zeros(self.docs_to_phrases_mat.shape[0])

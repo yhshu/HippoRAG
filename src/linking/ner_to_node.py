@@ -1,5 +1,4 @@
 import numpy as np
-from colbert.data import Queries
 
 from src.hipporag import HippoRAG, get_query_instruction
 from src.processing import min_max_normalize
@@ -8,6 +7,7 @@ from src.processing import min_max_normalize
 def link_node_by_colbertv2(hipporag: HippoRAG, query_ner_list, link_top_k=None):
     phrase_ids = []
     max_scores = []
+    from colbert.data import Queries
 
     for query in query_ner_list:
         queries = Queries(path=None, data={0: query})

@@ -282,13 +282,26 @@ class LLMGenerativeReranker(Reranker):
             sorted_candidate_items = [candidate_items[i] for i in result_indices]
             return sorted_candidate_indices[:top_k], sorted_candidate_items[:top_k]
 
-    def write_rerank_prompt(self, query: str, candidates: List[Tuple]):
-        user_prompt = 'Query: ' + query + '\nCandidate facts:\n'
-        # group candidate triples by subject
+    def write_rerank_prompt(self, query: str, candidates: List[Tuple], group_by_subject=False):
+        user_prompt = 'Query: ' + query
+        # sort candidate triples by subject
         sorted_candidates = sorted(candidates, key=lambda x: x[0])
-
+        # group by subject
+        candidates_group_by_subject = []  # [[triple]]
         for i, candidate in enumerate(sorted_candidates):
-            user_prompt += f'- {json.dumps(list(candidate))}\n'
+            if i == 0 or candidate[0] != sorted_candidates[i - 1][0]:
+                candidates_group_by_subject.append([candidate])
+            else:
+                candidates_group_by_subject[-1].append(candidate)
+
+        if not group_by_subject:
+            user_prompt += '\nCandidate facts:\n'
+            for i, candidate in enumerate(sorted_candidates):
+                user_prompt += f'- {json.dumps(list(candidate))}\n'
+        else:
+            user_prompt += '\nCandidate facts:\n'
+            for i, candidates in enumerate(candidates_group_by_subject):  # write each subject group in one line
+                user_prompt += f'- {json.dumps([list(candidate) for candidate in candidates])}\n'
 
         messages = [
             SystemMessage(generative_reranking_prompt),
@@ -358,3 +371,11 @@ class HFLoRAModelGenerativeReranker(Reranker):
             sorted_candidate_indices = [candidate_indices[i] for i in result_indices]
             sorted_candidate_items = [candidate_items[i] for i in result_indices]
             return sorted_candidate_indices[:top_k], sorted_candidate_items[:top_k]
+
+
+class RerankerPlaceholder(Reranker):
+    def __init__(self, model_name):
+        self.model_name = model_name
+
+    def rerank(self, task: str, query, input_items, input_indices, top_k=None):
+        return input_indices[:top_k], input_items[:top_k]

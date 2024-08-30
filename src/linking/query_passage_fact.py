@@ -7,6 +7,7 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from src.hipporag import HippoRAG, get_query_instruction
 from src.linking import graph_search_with_entities
+from src.linking.dpr_only import dense_passage_retrieval
 from src.linking.query_to_fact import link_query_to_fact_core
 
 system_prompt = """Given the following query and potentially relevant facts, your task is: 
@@ -120,8 +121,19 @@ def link_by_passage_fact(hipporag: HippoRAG, query: str, link_top_k: int, router
 
     else:
         candidate_facts = [f for facts in fact_by_doc for f in facts]
+        if hipporag.reranker is not None:
+            input_facts = candidate_facts
+            input_indices = [i for i in range(len(input_facts))]
+            candidate_indices, candidate_facts = hipporag.reranker.rerank('fact_reranking', query, input_facts, input_indices, top_k=link_top_k)
+            if len(candidate_facts) == 0:
+                hipporag.load_dpr_doc_embeddings()
+                hipporag.logger.info('No facts found after reranking, return DPR results')
+                hipporag.statistics['num_dpr'] += 1
+                return dense_passage_retrieval(hipporag, query, False, {})
         facts_to_encode = [str(f) for f in candidate_facts]
         fact_embeddings = hipporag.embed_model.encode_text(facts_to_encode, return_cpu=True, return_numpy=True, norm=True)
+
         assert len(fact_embeddings) == len(candidate_facts)
-        print(len(fact_embeddings))
+        # print(len(fact_embeddings))
         return link_query_to_fact_core(hipporag, query, candidate_facts, fact_embeddings, link_top_k)
+
