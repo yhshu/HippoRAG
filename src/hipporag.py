@@ -380,7 +380,7 @@ class HippoRAG:
             else:
                 all_phrase_weights, linking_score_map = link_node_by_dpr(self, query, top_k=link_top_k)
             sorted_doc_ids, sorted_scores, doc_rank_logs = graph_search_with_entities(self, all_phrase_weights, linking_score_map, query_doc_scores)
-            return sorted_doc_ids, sorted_scores, doc_rank_logs
+            return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], doc_rank_logs
 
         elif linking == 'query_to_fact':
             from src.linking.query_to_fact import link_fact_by_dpr
