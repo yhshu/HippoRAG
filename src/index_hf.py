@@ -11,7 +11,7 @@ from src.openie_with_retrieval_option_parallel import openie_for_corpus
 
 
 def index_with_huggingface(dataset_name: str, run_ner: bool, num_passages, llm_provider: str, extractor: str, retriever: str,
-                           num_thread, syn_thresh=0.8, langchain_db='.langchain.db', skip_openie=False):
+                           num_thread, syn_thresh=0.8, langchain_db='.langchain.db', skip_openie=False, passage_node=False):
     # set_llm_cache(SQLiteCache(database_path=langchain_db))
     if skip_openie is False:
         openie_for_corpus(dataset_name, run_ner, num_passages, llm_provider, extractor, num_thread)
@@ -22,11 +22,11 @@ def index_with_huggingface(dataset_name: str, run_ner: bool, num_passages, llm_p
     extraction_type = 'ner'
     processed_extractor_name = extractor.replace('/', '_')
 
-    create_graph(dataset_name, extraction_type, processed_extractor_name, retriever, syn_thresh, False, True)
+    create_graph(dataset_name, extraction_type, processed_extractor_name, retriever, syn_thresh, False, True, passage_node)
     RetrievalModule(retriever, 'output/query_to_kb.tsv', 'mean')
     RetrievalModule(retriever, 'output/kb_to_kb.tsv', 'mean')
     RetrievalModule(retriever, 'output/rel_kb_to_kb.tsv', 'mean')
-    create_graph(dataset_name, extraction_type, processed_extractor_name, retriever, syn_thresh, True, True)
+    create_graph(dataset_name, extraction_type, processed_extractor_name, retriever, syn_thresh, True, True, passage_node)
 
 
 if __name__ == '__main__':
@@ -40,7 +40,8 @@ if __name__ == '__main__':
     parser.add_argument('--retriever', type=str, default='facebook/contriever')
     parser.add_argument('--num_thread', type=int, default=10)
     parser.add_argument('--syn_thresh', type=float, default=0.8)
+    parser.add_argument('--passage_node', action='store_true')
 
     args = parser.parse_args()
     index_with_huggingface(args.dataset, args.run_ner, args.num_passages, args.llm, args.extractor, args.retriever, args.num_thread, args.syn_thresh,
-                           skip_openie=args.skip_openie)
+                           skip_openie=args.skip_openie, passage_node=args.passage_node)

@@ -59,6 +59,15 @@ def min_max_normalize(x):
     return (x - np.min(x)) / (np.max(x) - np.min(x))
 
 
+def retain_top_n_elements(arr, n=10):
+    indices = np.argsort(arr)[-n:]
+
+    new_arr = np.zeros_like(arr)
+    new_arr[indices] = arr[indices]
+
+    return new_arr
+
+
 def softmax_with_zeros(logits):
     mask = (logits != 0)
 

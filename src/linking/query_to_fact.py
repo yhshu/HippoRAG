@@ -102,8 +102,31 @@ def query_to_fact_ensemble(hipporag, query, ppr_phrase_verify, ppr_doc_verify: b
             return sorted_doc_ids, sorted_scores, logs
 
 
+@deprecated
+def llm_verify(hipporag, logs, messages, query, sorted_doc_ids, sorted_scores):
+    completion = hipporag.client.invoke(messages.to_messages(), temperature=0, response_format={"type": "json_object"})
+    contents = completion.content
+    success = False
+    try:
+        response = json.loads(contents)
+        if response['relevance'] == 'fully':
+            success = True
+    except Exception as e:
+        response['relevance'] = 'error'
+        hipporag.logger.exception(f"Error parsing the response: {e}")
+    logs['verify'] = response
+    hipporag.logger.info(response['relevance'])
+    if success:
+        return sorted_doc_ids, sorted_scores, logs
+    else:
+        # go back to DPR results
+        hipporag.load_dpr_doc_embeddings()
+        dpr_sorted_doc_ids, dpr_sorted_scores, dpr_logs = dense_passage_retrieval(hipporag, query, False)
+        return dpr_sorted_doc_ids, dpr_sorted_scores, dpr_logs
+
+
 def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, fact_embeddings, link_top_k, graph_search=True, num_rerank_fact=30):
-    query_doc_scores = np.zeros(hipporag.docs_to_phrases_mat.shape[0])
+    query_doc_scores = np.zeros(hipporag.docs_to_phrases_mat.shape[0])  # (num_docs,)
     query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction(hipporag.embed_model, 'query_to_fact', hipporag.corpus_name),
                                                        return_cpu=True, return_numpy=True, norm=True)
     # rank and get link_top_k oracle facts given the query
@@ -148,7 +171,7 @@ def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, 
         logs = None
     else:  # graph search
         # from retrieved fact to nodes in the fact
-        sorted_doc_ids, sorted_scores, logs, ppr_phrase_probs, ppr_doc_prob = graph_search_with_fact_entities(hipporag, link_top_k, query_doc_scores, query_fact_scores,
+        sorted_doc_ids, sorted_scores, logs, ppr_phrase_probs, ppr_doc_prob = graph_search_with_fact_entities(hipporag, query, link_top_k, query_doc_scores, query_fact_scores,
                                                                                                               top_k_facts, top_k_fact_indicies, return_ppr=True)
 
     if hipporag.reranker is not None:
@@ -157,35 +180,14 @@ def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, 
     return sorted_doc_ids, sorted_scores, logs
 
 
-def llm_verify(hipporag, logs, messages, query, sorted_doc_ids, sorted_scores):
-    completion = hipporag.client.invoke(messages.to_messages(), temperature=0, response_format={"type": "json_object"})
-    contents = completion.content
-    success = False
-    try:
-        response = json.loads(contents)
-        if response['relevance'] == 'fully':
-            success = True
-    except Exception as e:
-        response['relevance'] = 'error'
-        hipporag.logger.exception(f"Error parsing the response: {e}")
-    logs['verify'] = response
-    hipporag.logger.info(response['relevance'])
-    if success:
-        return sorted_doc_ids, sorted_scores, logs
-    else:
-        # go back to DPR results
-        hipporag.load_dpr_doc_embeddings()
-        dpr_sorted_doc_ids, dpr_sorted_scores, dpr_logs = dense_passage_retrieval(hipporag, query, False)
-        return dpr_sorted_doc_ids, dpr_sorted_scores, dpr_logs
-
-
-def graph_search_with_fact_entities(hipporag: HippoRAG, link_top_k: int, query_doc_scores, query_fact_scores, top_k_facts, top_k_fact_indices, return_ppr=False):
+def graph_search_with_fact_entities(hipporag: HippoRAG, query: str, link_top_k: int, query_doc_scores, query_fact_scores, top_k_facts, top_k_fact_indices, return_ppr=False):
     """
 
     @param hipporag:
+    @param query: input query, used for potential DPR
     @param link_top_k:
-    @param query_doc_scores: Used for DPR or doc ensemble
-    @param query_fact_scores: query-fact scores
+    @param query_doc_scores: Used for DPR-only or doc-ensemble
+    @param query_fact_scores: query-fact scores for all facts
     @param top_k_facts:
     @param top_k_fact_indices:
     @return:
@@ -215,6 +217,19 @@ def graph_search_with_fact_entities(hipporag: HippoRAG, link_top_k: int, query_d
 
     if link_top_k:
         all_phrase_weights, linking_score_map = get_top_k_weights(hipporag, link_top_k, all_phrase_weights, linking_score_map)
+
+    if 'passage_node' in hipporag.graph_type:
+        hipporag.load_dpr_doc_embeddings()
+        dpr_sorted_doc_ids, dpr_sorted_scores, dpr_logs = dense_passage_retrieval(hipporag, query, False)
+        from src.processing import min_max_normalize
+        normalized_dpr_doc_scores = min_max_normalize(dpr_sorted_scores)
+
+        for doc_id in dpr_sorted_doc_ids[:5]:
+            text = hipporag.dataset_df.iloc[doc_id]['paragraph']
+            doc_score = normalized_dpr_doc_scores[doc_id]
+            doc_node_id = hipporag.kb_node_phrase_to_id.get(text, None)
+            all_phrase_weights[doc_node_id] = doc_score
+            linking_score_map[text] = doc_score
 
     assert sum(all_phrase_weights) > 0, f'No phrases found in the graph for the given facts: {top_k_facts}'
     sorted_doc_ids, sorted_scores, logs, ppr_phrase_probs, ppr_doc_prob = graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map,

@@ -63,7 +63,7 @@ def linking_by_passage_sentences(hipporag: HippoRAG, query: str, link_top_k: Uni
         top_k_fact_indicies = np.argsort(max_fact_scores)[::-1].tolist()
     top_k_facts = [facts[i] for i in top_k_fact_indicies]
 
-    sorted_doc_ids, sorted_doc_scores, logs = graph_search_with_fact_entities(hipporag, link_top_k, query_doc_scores, max_fact_scores, top_k_facts, top_k_fact_indicies)
+    sorted_doc_ids, sorted_doc_scores, logs = graph_search_with_fact_entities(hipporag, query, link_top_k, query_doc_scores, max_fact_scores, top_k_facts, top_k_fact_indicies)
     return sorted_doc_ids, sorted_doc_scores, logs
 
 
@@ -101,7 +101,7 @@ def linking_by_passage(hipporag: HippoRAG, query: str, link_top_k: Union[None, i
 
     query_fact_scores = np.array(query_fact_scores)
 
-    sorted_doc_ids, sorted_doc_scores, logs = graph_search_with_fact_entities(hipporag, link_top_k, query_doc_scores, query_fact_scores, facts, list(range(len(facts))))
+    sorted_doc_ids, sorted_doc_scores, logs = graph_search_with_fact_entities(hipporag, query, link_top_k, query_doc_scores, query_fact_scores, facts, list(range(len(facts))))
     return sorted_doc_ids, sorted_doc_scores, logs
 
 
@@ -162,5 +162,5 @@ def link_by_passage_fact(hipporag: HippoRAG, query: str, link_top_k: Union[None,
         top_k_fact_indicies = np.argsort(query_fact_scores)[::-1].tolist()
     top_k_facts = [facts[i] for i in top_k_fact_indicies]
 
-    sorted_doc_ids, sorted_doc_scores, logs = graph_search_with_fact_entities(hipporag, link_top_k, query_doc_scores, query_fact_scores, top_k_facts, top_k_fact_indicies)
+    sorted_doc_ids, sorted_doc_scores, logs = graph_search_with_fact_entities(hipporag, query, link_top_k, query_doc_scores, query_fact_scores, top_k_facts, top_k_fact_indicies)
     return sorted_doc_ids, sorted_doc_scores, logs

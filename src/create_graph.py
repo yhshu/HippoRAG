@@ -2,6 +2,8 @@ import copy
 
 import pandas as pd
 from scipy.sparse import csr_array
+from torch.cuda import graph
+
 from processing import *
 from glob import glob
 
@@ -15,7 +17,7 @@ os.environ['TOKENIZERS_PARALLELISM'] = 'FALSE'
 
 
 def create_graph(dataset: str, extraction_type: str, extraction_model: str, retriever_name: str, threshold: float = 0.9,
-                 create_graph_flag: bool = False, cosine_sim_edges: bool = False):
+                 create_graph_flag: bool = False, cosine_sim_edges: bool = False, passage_node: bool = False):
     processed_retriever_name = retriever_name.replace('/', '_').replace('.', '')
     version = 'v3'
     inter_triple_weight = 1.0
@@ -36,6 +38,8 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
         graph_type = 'facts_and_sim'  # extracted facts and similar phrases
     else:
         graph_type = 'facts'
+    if passage_node:
+        graph_type += '_passage_node'
 
     passage_json = []
     phrases = []
@@ -168,6 +172,15 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
 
         node_json = [{'idx': i, 'name': p} for i, p in enumerate(unique_phrases)]
         kb_phrase_to_id_dict = {p: i for i, p in enumerate(unique_phrases)}
+
+        if passage_node:
+            len_node = len(node_json)
+            # add all passages to node_json and kb_phrase_to_id_dict
+            for i, doc in enumerate(passage_json):
+                p = doc['passage']
+                node_idx = len_node + i
+                node_json.append({'idx': node_idx, 'name': p})
+                kb_phrase_to_id_dict[p] = node_idx
 
         extracted_triples = []
 
@@ -321,6 +334,27 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
         else:
             graph_with_synonym = graph
 
+        if passage_node:
+            # add edges between phrases and passages
+            for i, doc in enumerate(passage_json):
+                p = doc['passage']
+                p_id = kb_phrase_to_id_dict[p]
+                for phrase in doc['entities']:
+                    phrase_id = kb_phrase_to_id_dict[phrase]
+                    graph_with_synonym[(p_id, phrase_id)] = 1.0
+                    graph_with_synonym[(phrase_id, p_id)] = 1.0
+                    phrase_edges = graph_json.get(p, {})
+                    edge = phrase_edges.get(phrase, ('passage_has', 0))
+                    phrase_edges[phrase] = ('passage_has', edge[1] + 1)
+                    graph_json[p] = phrase_edges
+                    relations[(p, phrase)] = 'passage_has'
+
+                    phrase_edges = graph_json.get(phrase, {})
+                    edge = phrase_edges.get(p, ('in_passage', 0))
+                    phrase_edges[p] = ('in_passage', edge[1] + 1)
+                    graph_json[phrase] = phrase_edges
+                    relations[(phrase, p)] = 'in_passage'
+
         pickle.dump(relations,
                     open('output/{}_{}_graph_relation_dict_{}_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, processed_retriever_name, version),
                          'wb'))
@@ -328,18 +362,20 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
         print('Saving Graph')
 
         synonymy_edges = set([edge for edge in relations.keys() if relations[edge] == 'equivalent'])
+        passage_edges = set([edge for edge in relations.keys() if relations[edge] in ['passage_has', 'in_passage']])
 
         statistics_df = [('Total Phrases', len(phrases)),
-                   ('Unique Phrases', len(unique_phrases)),
-                   ('Number of Individual Triples', len(extracted_triples)),
-                   ('Number of Incorrectly Formatted Triples (LLM Error)', len(incorrectly_formatted_triples)),
-                   ('Number of Triples w/o NER Entities (LLM Error)', len(triples_wo_ner_entity)),
-                   ('Number of Unique Individual Triples', len(triplet_fact_to_id_dict)),
-                   ('Number of Entities', len(entities)),
-                   ('Number of Relations', len(relations)),
-                   ('Number of Unique Entities', len(np.unique(entities))),
-                   ('Number of Synonymy Edges', len(synonymy_edges)),
-                   ('Number of Unique Relations', len(unique_relations))]
+                         ('Unique Phrases', len(unique_phrases)),
+                         ('Number of Individual Triples', len(extracted_triples)),
+                         ('Number of Incorrectly Formatted Triples (LLM Error)', len(incorrectly_formatted_triples)),
+                         ('Number of Triples w/o NER Entities (LLM Error)', len(triples_wo_ner_entity)),
+                         ('Number of Unique Individual Triples', len(triplet_fact_to_id_dict)),
+                         ('Number of Entities', len(entities)),
+                         ('Number of Relations', len(relations)),
+                         ('Number of Unique Entities', len(np.unique(entities))),
+                         ('Number of Synonymy Edges', len(synonymy_edges)),
+                         ('Number of Passage Edges', len(passage_edges)),
+                         ('Number of Unique Relations', len(unique_relations))]
 
         print(pd.DataFrame(statistics_df).set_index(0))
 

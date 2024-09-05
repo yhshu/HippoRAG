@@ -85,9 +85,15 @@ def graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, 
         else:
             assert False, f'Graph Algorithm {hipporag.graph_alg} Not Implemented'
 
-        fact_prob = hipporag.triples_to_phrases_mat.dot(ppr_phrase_probs)
-        ppr_doc_prob = hipporag.docs_to_triples_mat.dot(fact_prob)
-        ppr_doc_prob = min_max_normalize(ppr_doc_prob)
+        if 'passage_node' in hipporag.graph_type:
+            # truncate the ppr_phrase_probs to the number of phrases in the graph
+            fact_prob = hipporag.triples_to_phrases_mat.dot(ppr_phrase_probs[:hipporag.triples_to_phrases_mat.shape[1]])
+            ppr_doc_prob = hipporag.docs_to_triples_mat.dot(fact_prob)
+            ppr_doc_prob += ppr_phrase_probs[hipporag.triples_to_phrases_mat.shape[1]:]
+        else:
+            fact_prob = hipporag.triples_to_phrases_mat.dot(ppr_phrase_probs)
+            ppr_doc_prob = hipporag.docs_to_triples_mat.dot(fact_prob)
+            ppr_doc_prob = min_max_normalize(ppr_doc_prob)
     # Combine Query-Doc and PPR Scores
     if hipporag.doc_ensemble or hipporag.dpr_only:
         # doc_prob = ppr_doc_prob * 0.5 + min_max_normalize(query_doc_scores) * 0.5

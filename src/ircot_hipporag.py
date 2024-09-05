@@ -130,6 +130,7 @@ if __name__ == '__main__':
     parser.add_argument('--doc_ensemble', type=str, default='t')
     parser.add_argument('--dpr_only', action='store_true')
     parser.add_argument('--graph_alg', type=str, default='ppr')
+    parser.add_argument('--graph_type', type=str, choices=['facts', 'facts_and_sim', 'facts_and_sim_passage_node'], default='facts_and_sim')
     parser.add_argument('--wo_node_spec', action='store_true')
     parser.add_argument('--sim_threshold', type=float, default=0.8)
     parser.add_argument('--recognition_threshold', type=float, default=0.9)
@@ -158,7 +159,7 @@ if __name__ == '__main__':
                         linker_name=args.linker,
                         doc_ensemble=doc_ensemble, node_specificity=not (args.wo_node_spec), sim_threshold=args.sim_threshold,
                         colbert_config=colbert_configs, dpr_only=args.dpr_only, graph_alg=args.graph_alg, damping=args.damping, recognition_threshold=args.recognition_threshold,
-                        reranker_name=args.reranker)
+                        reranker_name=args.reranker, graph_type=args.graph_type)
 
     data = json.load(open(f'data/{args.dataset}.json', 'r'))
     corpus = json.load(open(f'data/{args.dataset}_corpus.json', 'r'))
