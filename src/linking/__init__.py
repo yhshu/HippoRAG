@@ -87,10 +87,14 @@ def graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, 
 
         if 'passage_node' in hipporag.graph_type:
             # truncate the ppr_phrase_probs to the number of phrases in the graph
-            fact_prob = hipporag.triples_to_phrases_mat.dot(ppr_phrase_probs[:hipporag.triples_to_phrases_mat.shape[1]])
-            ppr_doc_prob = hipporag.docs_to_triples_mat.dot(fact_prob)
-            ppr_doc_prob += ppr_phrase_probs[hipporag.triples_to_phrases_mat.shape[1]:]
-        else:
+            scoring = 'sum'
+            if scoring == 'sum':
+                fact_prob = hipporag.triples_to_phrases_mat.dot(ppr_phrase_probs[:hipporag.triples_to_phrases_mat.shape[1]])
+                ppr_doc_prob = hipporag.docs_to_triples_mat.dot(fact_prob)
+                ppr_doc_prob += ppr_phrase_probs[hipporag.triples_to_phrases_mat.shape[1]:]
+            elif scoring == 'passage':
+                ppr_doc_prob = ppr_phrase_probs[hipporag.triples_to_phrases_mat.shape[1]:]
+        else:  # phrase prob -> fact prob -> doc prob
             fact_prob = hipporag.triples_to_phrases_mat.dot(ppr_phrase_probs)
             ppr_doc_prob = hipporag.docs_to_triples_mat.dot(fact_prob)
             ppr_doc_prob = min_max_normalize(ppr_doc_prob)

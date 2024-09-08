@@ -180,7 +180,8 @@ def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, 
     return sorted_doc_ids, sorted_scores, logs
 
 
-def graph_search_with_fact_entities(hipporag: HippoRAG, query: str, link_top_k: int, query_doc_scores, query_fact_scores, top_k_facts, top_k_fact_indices, return_ppr=False):
+def graph_search_with_fact_entities(hipporag: HippoRAG, query: str, link_top_k: int, query_doc_scores, query_fact_scores, top_k_facts, top_k_fact_indices,
+                                    return_ppr=False, score_filtering=False):
     """
 
     @param hipporag:
@@ -204,9 +205,9 @@ def graph_search_with_fact_entities(hipporag: HippoRAG, query: str, link_top_k: 
         for phrase in [subject_phrase, object_phrase]:
             phrase_id = hipporag.kb_node_phrase_to_id.get(phrase, None)
             if phrase_id is not None:
-                all_phrase_weights[phrase_id] = 1.0
+                all_phrase_weights[phrase_id] = fact_score
                 if hipporag.node_specificity and hipporag.phrase_to_num_doc[phrase_id] != 0:
-                    all_phrase_weights[phrase_id] = 1 / hipporag.phrase_to_num_doc[phrase_id]
+                    all_phrase_weights[phrase_id] /= hipporag.phrase_to_num_doc[phrase_id]
             if phrase not in phrase_scores:
                 phrase_scores[phrase] = []
             phrase_scores[phrase].append(fact_score)
@@ -228,7 +229,7 @@ def graph_search_with_fact_entities(hipporag: HippoRAG, query: str, link_top_k: 
             text = hipporag.dataset_df.iloc[doc_id]['paragraph']
             doc_score = normalized_dpr_doc_scores[doc_id]
             doc_node_id = hipporag.kb_node_phrase_to_id.get(text, None)
-            all_phrase_weights[doc_node_id] = doc_score
+            all_phrase_weights[doc_node_id] = doc_score * 1.5
             linking_score_map[text] = doc_score
 
     assert sum(all_phrase_weights) > 0, f'No phrases found in the graph for the given facts: {top_k_facts}'

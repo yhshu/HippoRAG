@@ -68,6 +68,39 @@ def retain_top_n_elements(arr, n=10):
     return new_arr
 
 
+def z_score_filtering(arr, threshold=-0.5):
+    """
+    Calculate the z-score of each **non-zero** element in the array, and filter out the elements with z-score less than the threshold
+    @param arr:
+    @param threshold:
+    @return:
+    """
+    mask = (arr != 0)
+    z_scores = np.zeros_like(arr)
+    z_scores[mask] = (arr[mask] - np.mean(arr[mask])) / np.std(arr[mask])
+
+    new_arr = np.zeros_like(arr)
+    new_arr[mask] = arr[mask] * (z_scores[mask] > threshold)
+
+    return new_arr
+
+
+def score_threshold_filtering(arr, threshold=0.1):
+    """
+    Filter out the elements with score less than the threshold
+    @param arr:
+    @param threshold:
+    @return:
+    """
+    mask = (arr > threshold)
+    new_arr = np.zeros_like(arr)
+    new_arr[mask] = arr[mask]
+
+    if np.sum(mask) == 0:
+        return arr
+    return new_arr
+
+
 def softmax_with_zeros(logits):
     mask = (logits != 0)
 

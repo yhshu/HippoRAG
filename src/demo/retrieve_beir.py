@@ -199,6 +199,7 @@ if __name__ == '__main__':
     parser.add_argument('--extractor', type=str, default='gpt-3.5-turbo')
     parser.add_argument('--retriever', type=str, help="Graph creating retriever name, e.g., 'facebook/contriever', 'colbertv2'")
     parser.add_argument('--linker', type=str, help="Node linking model name, e.g., 'facebook/contriever', 'colbertv2'")
+    parser.add_argument('--link_top_k', type=int, default=5)
     parser.add_argument('--reranker', type=str)
     parser.add_argument('--linking', type=str)
     parser.add_argument('--doc_ensemble', action='store_true')
@@ -206,6 +207,7 @@ if __name__ == '__main__':
     parser.add_argument('--oracle_ie', action='store_true')
     parser.add_argument('--num', help='the number of samples to evaluate')
     parser.add_argument('-rs', '--recognition_threshold', type=float, default=0.9)
+    parser.add_argument('--graph_type', type=str, choices=['facts', 'facts_and_sim', 'facts_and_sim_passage_node'], default='facts_and_sim')
     args = parser.parse_args()
 
     set_llm_cache(SQLiteCache(database_path=f".hipporag_{args.extractor}.db"))
@@ -233,15 +235,10 @@ if __name__ == '__main__':
         qrel = {key: qrel[key] for i, key in enumerate(qrel) if i < min(int(args.num), len(dataset))}
 
     hipporag = HippoRAG(args.dataset, 'openai', args.extractor, args.retriever, doc_ensemble=args.doc_ensemble,
-                        dpr_only=args.dpr_only, linker_name=args.linker, recognition_threshold=args.recognition_threshold, reranker_name=args.reranker)
+                        dpr_only=args.dpr_only, linker_name=args.linker, recognition_threshold=args.recognition_threshold, reranker_name=args.reranker,
+                        graph_type=args.graph_type)
 
-    if not args.dpr_only:
-        link_top_k_list = [5]
-        if args.linking == 'ner_to_node':
-            link_top_k_list = [None]
-        for link_top_k in link_top_k_list:
-            run_retrieve_beir(args.dataset, args.extractor, args.retriever, args.linker, args.linking,
-                              args.doc_ensemble, args.dpr_only, args.chunk, link_top_k=link_top_k, oracle_extraction=args.oracle_ie)
-    else:  # DPR only
-        run_retrieve_beir(args.dataset, args.extractor, args.retriever, args.linker, args.linking,
-                          args.doc_ensemble, args.dpr_only, args.chunk, link_top_k=1, oracle_extraction=args.oracle_ie)
+    if args.linking == 'ner_to_node':
+        link_top_k = None
+    run_retrieve_beir(args.dataset, args.extractor, args.retriever, args.linker, args.linking,
+                      args.doc_ensemble, args.dpr_only, args.chunk, link_top_k=args.link_top_k, oracle_extraction=args.oracle_ie)
