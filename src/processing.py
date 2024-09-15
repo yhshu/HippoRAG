@@ -59,7 +59,7 @@ def min_max_normalize(x):
     return (x - np.min(x)) / (np.max(x) - np.min(x))
 
 
-def retain_top_n_elements(arr, n=10):
+def retain_top_n_elements(arr: np.ndarray, n=10):
     indices = np.argsort(arr)[-n:]
 
     new_arr = np.zeros_like(arr)
@@ -68,7 +68,7 @@ def retain_top_n_elements(arr, n=10):
     return new_arr
 
 
-def z_score_filtering(arr, threshold=-0.5):
+def z_score_filtering(arr: np.ndarray, threshold=-0.5):
     """
     Calculate the z-score of each **non-zero** element in the array, and filter out the elements with z-score less than the threshold
     @param arr:
@@ -85,7 +85,7 @@ def z_score_filtering(arr, threshold=-0.5):
     return new_arr
 
 
-def score_threshold_filtering(arr, threshold=0.1):
+def score_threshold_filtering(arr: np.ndarray, threshold=0.1):
     """
     Filter out the elements with score less than the threshold
     @param arr:
@@ -99,6 +99,42 @@ def score_threshold_filtering(arr, threshold=0.1):
     if np.sum(mask) == 0:
         return arr
     return new_arr
+
+
+import numpy as np
+from scipy.stats import entropy
+
+
+def entropy_based_truncation(arr: np.ndarray):
+    """
+    Truncate the sparse array based on the entropy of the non-zero elements
+    @param arr:
+    @return:
+    """
+    non_zero_indices = arr != 0
+    non_zero_elements = arr[non_zero_indices]
+
+    if len(non_zero_elements) <= 1:
+        return arr
+
+    non_zero_sum = np.sum(non_zero_elements)
+    normalized_elements = non_zero_elements / non_zero_sum
+
+    score_entropy = entropy(normalized_elements)
+
+    truncation_factor = max(0.5, score_entropy / np.log(len(non_zero_elements)))
+
+    num_to_keep = int(truncation_factor * len(non_zero_elements))
+
+    sorted_indices = np.argsort(non_zero_elements)[::-1]
+    keep_indices = sorted_indices[:num_to_keep]
+
+    truncated_array = np.copy(arr)
+
+    drop_indices = sorted_indices[num_to_keep:]
+    truncated_array[non_zero_indices][drop_indices] = 0
+
+    return truncated_array
 
 
 def softmax_with_zeros(logits):

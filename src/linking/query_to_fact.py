@@ -8,6 +8,7 @@ from deprecated import deprecated
 from src.hipporag import HippoRAG, get_query_instruction
 from src.linking import graph_search_with_entities
 from src.linking.dpr_only import dense_passage_retrieval, rerank_system_prompt
+from src.processing import min_max_normalize
 
 verify_system_prompt = """Given a query and the top-k retrieved subgraphs from an open Knowledge Graph (KG), evaluate the relevance of these subgraphs to the query. Follow the guidelines below:
 
@@ -132,6 +133,7 @@ def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, 
     # rank and get link_top_k oracle facts given the query
     query_fact_scores = np.dot(fact_embeddings, query_embedding.T)  # (num_facts, dim) x (1, dim).T = (num_facts, 1)
     query_fact_scores = np.squeeze(query_fact_scores) if query_fact_scores.ndim == 2 else query_fact_scores
+    query_fact_scores = min_max_normalize(query_fact_scores)
 
     if hipporag.reranker is not None:
         candidate_fact_indices = np.argsort(query_fact_scores)[-num_rerank_fact:][::-1].tolist()
@@ -181,7 +183,7 @@ def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, 
 
 
 def graph_search_with_fact_entities(hipporag: HippoRAG, query: str, link_top_k: int, query_doc_scores, query_fact_scores, top_k_facts, top_k_fact_indices,
-                                    return_ppr=False, score_filtering=False):
+                                    return_ppr=False, use_phrase=True, use_passage=True, passage_filtering=False):
     """
 
     @param hipporag:
@@ -193,48 +195,60 @@ def graph_search_with_fact_entities(hipporag: HippoRAG, query: str, link_top_k: 
     @param top_k_fact_indices:
     @return:
     """
-    all_phrase_weights = np.zeros(len(hipporag.node_phrases))
     linking_score_map = {}
     phrase_scores = {}  # store all fact scores for each phrase
+    phrase_weights = np.zeros(len(hipporag.node_phrases))
+    passage_weights = np.zeros(len(hipporag.node_phrases))
 
-    for rank, f in enumerate(top_k_facts):
-        subject_phrase = f[0].lower()
-        predicate_phrase = f[1].lower()
-        object_phrase = f[2].lower()
-        fact_score = query_fact_scores[top_k_fact_indices[rank]] if query_fact_scores.ndim > 0 else query_fact_scores
-        for phrase in [subject_phrase, object_phrase]:
-            phrase_id = hipporag.kb_node_phrase_to_id.get(phrase, None)
-            if phrase_id is not None:
-                all_phrase_weights[phrase_id] = fact_score
-                if hipporag.node_specificity and hipporag.phrase_to_num_doc[phrase_id] != 0:
-                    all_phrase_weights[phrase_id] /= hipporag.phrase_to_num_doc[phrase_id]
-            if phrase not in phrase_scores:
-                phrase_scores[phrase] = []
-            phrase_scores[phrase].append(fact_score)
+    if use_phrase:
+        for rank, f in enumerate(top_k_facts):
+            subject_phrase = f[0].lower()
+            predicate_phrase = f[1].lower()
+            object_phrase = f[2].lower()
+            fact_score = query_fact_scores[top_k_fact_indices[rank]] if query_fact_scores.ndim > 0 else query_fact_scores
+            for phrase in [subject_phrase, object_phrase]:
+                phrase_id = hipporag.kb_node_phrase_to_id.get(phrase, None)
+                if phrase_id is not None:
+                    phrase_weights[phrase_id] = fact_score
+                    if hipporag.node_specificity and hipporag.phrase_to_num_doc[phrase_id] != 0:
+                        phrase_weights[phrase_id] /= hipporag.phrase_to_num_doc[phrase_id]
+                if phrase not in phrase_scores:
+                    phrase_scores[phrase] = []
+                phrase_scores[phrase].append(fact_score)
 
-    # calculate average fact score for each phrase
-    for phrase, scores in phrase_scores.items():
-        linking_score_map[phrase] = float(np.mean(scores))
+        # calculate average fact score for each phrase
+        for phrase, scores in phrase_scores.items():
+            linking_score_map[phrase] = float(np.mean(scores))
 
-    if link_top_k:
-        all_phrase_weights, linking_score_map = get_top_k_weights(hipporag, link_top_k, all_phrase_weights, linking_score_map)
+        if link_top_k:
+            phrase_weights, linking_score_map = get_top_k_weights(hipporag, link_top_k, phrase_weights, linking_score_map)
 
-    if 'passage_node' in hipporag.graph_type:
+    if 'passage_node' in hipporag.graph_type and use_passage:
         hipporag.load_dpr_doc_embeddings()
         dpr_sorted_doc_ids, dpr_sorted_scores, dpr_logs = dense_passage_retrieval(hipporag, query, False)
         from src.processing import min_max_normalize
         normalized_dpr_doc_scores = min_max_normalize(dpr_sorted_scores)
 
-        for doc_id in dpr_sorted_doc_ids[:5]:
+        for i, doc_id in enumerate(dpr_sorted_doc_ids.tolist()[:10]):  # entry point weights
             text = hipporag.dataset_df.iloc[doc_id]['paragraph']
-            doc_score = normalized_dpr_doc_scores[doc_id]
+            doc_score = normalized_dpr_doc_scores[i]
             doc_node_id = hipporag.kb_node_phrase_to_id.get(text, None)
-            all_phrase_weights[doc_node_id] = doc_score * 1.5
+            passage_weights[doc_node_id] = doc_score
             linking_score_map[text] = doc_score
 
-    assert sum(all_phrase_weights) > 0, f'No phrases found in the graph for the given facts: {top_k_facts}'
-    sorted_doc_ids, sorted_scores, logs, ppr_phrase_probs, ppr_doc_prob = graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map,
+    if passage_filtering:
+        from src.processing import entropy_based_truncation
+        passage_weights = entropy_based_truncation(passage_weights)
+        # only keep keys in linking_score_map that have non-zero weights in all_phrase_weights
+        linking_score_map = {k: v for k, v in linking_score_map.items() if passage_weights[hipporag.kb_node_phrase_to_id[k]] > 0}
+
+    node_weights = phrase_weights + passage_weights
+
+    assert sum(node_weights) > 0, f'No phrases found in the graph for the given facts: {top_k_facts}'
+    sorted_doc_ids, sorted_scores, logs, ppr_phrase_probs, ppr_doc_prob = graph_search_with_entities(hipporag, node_weights, linking_score_map,
                                                                                                      query_doc_scores=query_doc_scores, return_ppr=return_ppr)
+
+    logs['linked_facts'] = json.dumps(top_k_facts[:10])
     if return_ppr is False:
         return sorted_doc_ids, sorted_scores, logs
     return sorted_doc_ids, sorted_scores, logs, ppr_phrase_probs, ppr_doc_prob

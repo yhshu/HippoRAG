@@ -10,6 +10,7 @@ import igraph as ig
 import numpy as np
 import pandas as pd
 import torch
+from scipy.sparse import csr_matrix
 
 from tqdm import tqdm
 
@@ -19,7 +20,7 @@ from src.lm_wrapper.gritlm import GritLMWrapper
 from src.lm_wrapper.sentence_transformers_util import SentenceTransformersWrapper
 from src.lm_wrapper.util import init_embedding_model
 from src.named_entity_extraction_parallel import named_entity_recognition
-from src.processing import processing_phrases, softmax_with_zeros, eval_json_str
+from src.processing import processing_phrases, softmax_with_zeros, eval_json_str, min_max_normalize
 
 os.environ['TOKENIZERS_PARALLELISM'] = 'FALSE'
 
@@ -63,7 +64,7 @@ class HippoRAG:
                  sim_threshold=0.8, node_specificity=True,
                  doc_ensemble=False, colbert_config=None, dpr_only=False,
                  graph_alg='ppr', damping=0.1, recognition_threshold=0.9, corpus_path=None,
-                 qa_model: LangChainModel = None, linker_name=None, reranker_name=None):
+                 qa_model: LangChainModel = None, linker_name=None, reranker_name=None, directed_graph=False):
         """
         @param corpus_name: Name of the dataset to use for retrieval
         @param extraction_model: LLM provider for query NER, e.g., 'openai' or 'together'
@@ -132,6 +133,8 @@ class HippoRAG:
         self.dpr_only = dpr_only
         self.doc_ensemble = doc_ensemble
         self.corpus_path = corpus_path
+        self.is_directed_graph = directed_graph
+        self.node_to_doc_strategy = 'multiply'  # 'multiply', 'map'
 
         # Loading Important Corpus Files
         if not self.dpr_only:
@@ -262,6 +265,22 @@ class HippoRAG:
             return self.g.shortest_paths(node1_id, node2_id)[0][0]
         except Exception as e:
             return -1
+
+    def convert_ppr_node_to_doc_score(self, ppr_node_probs):
+        num_phrases = len(ppr_node_probs)
+        if self.node_to_doc_strategy == 'multiply':
+            fact_prob = self.triples_to_phrases_mat.dot(ppr_node_probs)
+            ppr_doc_prob = self.docs_to_triples_mat.dot(fact_prob)
+        elif self.node_to_doc_strategy == 'map':
+            from scipy.sparse import csr_matrix
+            r_diag_csr = csr_matrix((ppr_node_probs, (np.arange(num_phrases), np.arange(num_phrases))), shape=(num_phrases, num_phrases))
+            edge_importance_csr = r_diag_csr.dot(self.normalized_transition_mat)
+            symetric_edge_importance_csr = edge_importance_csr + edge_importance_csr.T
+            new_fact_importance = symetric_edge_importance_csr[self.edge_source_nodes, self.edge_target_nodes]
+            ppr_doc_prob = self.docs_to_triples_mat.dot(new_fact_importance.T)[:, 0]
+        else:
+            raise ValueError('Invalid edge_to_fact_strategy')
+        return min_max_normalize(ppr_doc_prob)
 
     def rank_docs(self, query: str, doc_top_k=10, link_top_k=3, linking='ner_to_node', oracle_triples=None):
         """
@@ -563,6 +582,15 @@ class HippoRAG:
         else:
             self.logger.error('Graph file not found: ' + graph_file_path)
 
+        num_triple = self.docs_to_triples_mat.shape[1]
+        self.edge_source_nodes = np.zeros(num_triple, dtype=int)
+        self.edge_target_nodes = np.zeros(num_triple, dtype=int)
+        for t, t_id in self.triplet_to_id_dict.items():
+            start_id = self.kb_node_phrase_to_id[t[0]]
+            end_id = self.kb_node_phrase_to_id[t[2]]
+            self.edge_source_nodes[t_id] = start_id
+            self.edge_target_nodes[t_id] = end_id
+
     def get_phrases_in_doc_by_str(self, doc: str):
         # find doc id from self.dataset_df
         try:
@@ -605,10 +633,22 @@ class HippoRAG:
         edges = list(edges)
 
         n_vertices = len(self.kb_node_phrase_to_id)
-        self.g = ig.Graph(n_vertices, edges)
+        self.g = ig.Graph(n_vertices, edges, directed=self.is_directed_graph)
 
         self.g.es['weight'] = [self.graph_plus[(v1, v3)] for v1, v3 in edges]
         self.logger.info(f'Graph built: num vertices: {n_vertices}, num_edges: {len(edges)}')
+        
+        if self.node_to_doc_strategy == 'map':
+            num_phrase = self.triples_to_phrases_mat.shape[1]
+            phrase_edges = [e for e in edges if e[0] < num_phrase and e[1] < num_phrase]
+            transition_mat = csr_matrix((np.array([self.graph_plus[(v1, v3)] for v1, v3 in phrase_edges]),
+                                ([v1 for v1, v3 in phrase_edges], [v3 for v1, v3 in phrase_edges])), shape=(num_phrase, num_phrase))
+            # normalize the matrix
+            row_sums = np.array(transition_mat.sum(axis=1)).flatten()
+            inv_row_sums = np.reciprocal(row_sums, where=row_sums != 0)  # Avoid division by zero
+            inverse_degree_mat = csr_matrix((inv_row_sums, (np.arange(num_phrase), np.arange(num_phrase))),
+                               shape=(num_phrase, num_phrase))
+            self.normalized_transition_mat = inverse_degree_mat.dot(transition_mat)
 
     def load_triple_vectors(self):
         if self.triple_embeddings is not None:
@@ -701,7 +741,7 @@ class HippoRAG:
         pageranked_probabilities = []
         damping = self.damping if damping is None else damping
         for reset_prob in reset_prob_chunk:
-            pageranked_probs = self.g.personalized_pagerank(vertices=range(len(self.kb_node_phrase_to_id)), damping=damping, directed=False,
+            pageranked_probs = self.g.personalized_pagerank(vertices=range(len(self.kb_node_phrase_to_id)), damping=damping, directed=self.is_directed_graph,
                                                             weights=None, reset=reset_prob, implementation='prpack')
 
             pageranked_probabilities.append(np.array(pageranked_probs))

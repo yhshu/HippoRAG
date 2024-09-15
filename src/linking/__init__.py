@@ -86,14 +86,19 @@ def graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, 
             assert False, f'Graph Algorithm {hipporag.graph_alg} Not Implemented'
 
         if 'passage_node' in hipporag.graph_type:
-            # truncate the ppr_phrase_probs to the number of phrases in the graph
-            scoring = 'sum'
-            if scoring == 'sum':
-                fact_prob = hipporag.triples_to_phrases_mat.dot(ppr_phrase_probs[:hipporag.triples_to_phrases_mat.shape[1]])
-                ppr_doc_prob = hipporag.docs_to_triples_mat.dot(fact_prob)
-                ppr_doc_prob += ppr_phrase_probs[hipporag.triples_to_phrases_mat.shape[1]:]
-            elif scoring == 'passage':
-                ppr_doc_prob = ppr_phrase_probs[hipporag.triples_to_phrases_mat.shape[1]:]
+            num_phrase = hipporag.triples_to_phrases_mat.shape[1]
+            score_from_doc = ppr_phrase_probs[num_phrase:]
+            rank_scoring = 'sum'
+            if rank_scoring == 'sum':
+                score_from_phrase = hipporag.convert_ppr_node_to_doc_score(ppr_phrase_probs[:num_phrase])
+                ppr_doc_prob = min_max_normalize(score_from_doc) + min_max_normalize(score_from_phrase)
+            elif rank_scoring == 'passage':
+                ppr_doc_prob = score_from_doc
+            elif rank_scoring == 'phrase':
+                score_from_phrase = hipporag.convert_ppr_node_to_doc_score(ppr_phrase_probs[:num_phrase])
+                ppr_doc_prob = score_from_phrase
+            else:
+                raise NotImplementedError(f'Passage ranking strategy {rank_scoring} not implemented')
         else:  # phrase prob -> fact prob -> doc prob
             fact_prob = hipporag.triples_to_phrases_mat.dot(ppr_phrase_probs)
             ppr_doc_prob = hipporag.docs_to_triples_mat.dot(fact_prob)

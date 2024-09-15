@@ -145,6 +145,7 @@ def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: st
                         linked_nodes.add(item)
                     if link_top_k is not None and len(linked_nodes) >= link_top_k:
                         break
+                linked_nodes = set([node for node in linked_nodes if '\n' not in node])  # remove passage nodes
 
                 # calculate recall
                 node_precision = len(oracle_nodes.intersection(set(linked_nodes))) / len(linked_nodes) if len(linked_nodes) > 0 else 0
@@ -207,7 +208,9 @@ if __name__ == '__main__':
     parser.add_argument('--oracle_ie', action='store_true')
     parser.add_argument('--num', help='the number of samples to evaluate')
     parser.add_argument('-rs', '--recognition_threshold', type=float, default=0.9)
-    parser.add_argument('--graph_type', type=str, choices=['facts', 'facts_and_sim', 'facts_and_sim_passage_node'], default='facts_and_sim')
+    parser.add_argument('--graph_type', type=str, default='facts_and_sim')
+    parser.add_argument('--damping', type=float, default=0.1)
+    parser.add_argument('--directed', action='store_true')
     args = parser.parse_args()
 
     set_llm_cache(SQLiteCache(database_path=f".hipporag_{args.extractor}.db"))
@@ -236,7 +239,7 @@ if __name__ == '__main__':
 
     hipporag = HippoRAG(args.dataset, 'openai', args.extractor, args.retriever, doc_ensemble=args.doc_ensemble,
                         dpr_only=args.dpr_only, linker_name=args.linker, recognition_threshold=args.recognition_threshold, reranker_name=args.reranker,
-                        graph_type=args.graph_type)
+                        graph_type=args.graph_type, damping=args.damping, directed_graph=args.directed)
 
     if args.linking == 'ner_to_node':
         link_top_k = None

@@ -1,8 +1,9 @@
 import os
 import sys
-from typing import Union
 
 sys.path.append('.')
+
+from typing import Union
 
 from collections import defaultdict
 
@@ -130,13 +131,14 @@ if __name__ == '__main__':
     parser.add_argument('--doc_ensemble', type=str, default='t')
     parser.add_argument('--dpr_only', action='store_true')
     parser.add_argument('--graph_alg', type=str, default='ppr')
-    parser.add_argument('--graph_type', type=str, choices=['facts', 'facts_and_sim', 'facts_and_sim_passage_node'], default='facts_and_sim')
+    parser.add_argument('--graph_type', type=str, default='facts_and_sim')
     parser.add_argument('--wo_node_spec', action='store_true')
     parser.add_argument('--sim_threshold', type=float, default=0.8)
     parser.add_argument('--recognition_threshold', type=float, default=0.9)
     parser.add_argument('--damping', type=float, default=0.1)
     parser.add_argument('--force_retry', action='store_true')
     parser.add_argument('--do_eval', type=str, default='t')
+    parser.add_argument('--directed', action='store_true')
     args = parser.parse_args()
 
     # set langchain cache
@@ -159,7 +161,7 @@ if __name__ == '__main__':
                         linker_name=args.linker,
                         doc_ensemble=doc_ensemble, node_specificity=not (args.wo_node_spec), sim_threshold=args.sim_threshold,
                         colbert_config=colbert_configs, dpr_only=args.dpr_only, graph_alg=args.graph_alg, damping=args.damping, recognition_threshold=args.recognition_threshold,
-                        reranker_name=args.reranker, graph_type=args.graph_type)
+                        reranker_name=args.reranker, graph_type=args.graph_type, directed_graph=args.directed)
 
     data = json.load(open(f'data/{args.dataset}.json', 'r'))
     corpus = json.load(open(f'data/{args.dataset}_corpus.json', 'r'))
@@ -301,6 +303,7 @@ if __name__ == '__main__':
                     if isinstance(gold_passage, dict):
                         passage_content = gold_passage['text'] if 'text' in gold_passage else gold_passage['paragraph_text']
                         phrases_in_gold_docs.append(hipporag.get_phrases_in_doc_by_str(passage_content))
+                    # elif isinstance(gold_passage, list) and len(gold_passage) == 2 and isinstance(gold_passage[1], int):
 
             if args.dataset in ['hotpotqa', '2wikimultihopqa', 'hotpotqa_train']:
                 sample['supporting_docs'] = [item for item in sample['supporting_facts']]
@@ -335,6 +338,8 @@ if __name__ == '__main__':
             for passage_phrases in phrases_in_gold_docs:
                 for phrase in passage_phrases:
                     oracle_nodes.add(phrase)
+
+            linked_nodes = set([node for node in linked_nodes if '\n' not in node])  # remove passage nodes
             node_precision = len(linked_nodes.intersection(oracle_nodes)) / len(linked_nodes) if len(linked_nodes) > 0 else 0.0
             node_recall = len(linked_nodes.intersection(oracle_nodes)) / len(oracle_nodes) if len(oracle_nodes) > 0 else 0.0
             node_hit = 1.0 if len(linked_nodes.intersection(oracle_nodes)) > 0 else 0.0

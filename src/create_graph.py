@@ -17,7 +17,7 @@ os.environ['TOKENIZERS_PARALLELISM'] = 'FALSE'
 
 
 def create_graph(dataset: str, extraction_type: str, extraction_model: str, retriever_name: str, threshold: float = 0.9,
-                 create_graph_flag: bool = False, cosine_sim_edges: bool = False, passage_node: bool = False):
+                 create_graph_flag: bool = False, cosine_sim_edges: bool = False, passage_node=None):
     processed_retriever_name = retriever_name.replace('/', '_').replace('.', '')
     version = 'v3'
     inter_triple_weight = 1.0
@@ -38,8 +38,8 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
         graph_type = 'facts_and_sim'  # extracted facts and similar phrases
     else:
         graph_type = 'facts'
-    if passage_node:
-        graph_type += '_passage_node'
+    if passage_node is not None:
+        graph_type += f'_passage_node_{passage_node}'
 
     passage_json = []
     phrases = []
@@ -334,7 +334,7 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
         else:
             graph_with_synonym = graph
 
-        if passage_node:
+        if passage_node is not None:
             # add edges between phrases and passages
             for i, doc in enumerate(passage_json):
                 p = doc['passage']
@@ -342,18 +342,19 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
                 for phrase in doc['entities']:
                     phrase_id = kb_phrase_to_id_dict[phrase]
                     graph_with_synonym[(p_id, phrase_id)] = 1.0
-                    graph_with_synonym[(phrase_id, p_id)] = 1.0
                     phrase_edges = graph_json.get(p, {})
                     edge = phrase_edges.get(phrase, ('passage_has', 0))
                     phrase_edges[phrase] = ('passage_has', edge[1] + 1)
                     graph_json[p] = phrase_edges
                     relations[(p, phrase)] = 'passage_has'
 
-                    phrase_edges = graph_json.get(phrase, {})
-                    edge = phrase_edges.get(p, ('in_passage', 0))
-                    phrase_edges[p] = ('in_passage', edge[1] + 1)
-                    graph_json[phrase] = phrase_edges
-                    relations[(phrase, p)] = 'in_passage'
+                    if passage_node == 'bidirectional':
+                        graph_with_synonym[(phrase_id, p_id)] = 1.0
+                        phrase_edges = graph_json.get(phrase, {})
+                        edge = phrase_edges.get(p, ('in_passage', 0))
+                        phrase_edges[p] = ('in_passage', edge[1] + 1)
+                        graph_json[phrase] = phrase_edges
+                        relations[(phrase, p)] = 'in_passage'
 
         pickle.dump(relations,
                     open('output/{}_{}_graph_relation_dict_{}_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, processed_retriever_name, version),

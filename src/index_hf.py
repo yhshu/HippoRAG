@@ -40,8 +40,9 @@ if __name__ == '__main__':
     parser.add_argument('--retriever', type=str, default='facebook/contriever')
     parser.add_argument('--num_thread', type=int, default=10)
     parser.add_argument('--syn_thresh', type=float, default=0.8)
-    parser.add_argument('--passage_node', action='store_true')
+    parser.add_argument('--passage_node', type=str)
 
     args = parser.parse_args()
+    assert args.passage_node is None or args.passage_node in ['unidirectional', 'bidirectional']
     index_with_huggingface(args.dataset, args.run_ner, args.num_passages, args.llm, args.extractor, args.retriever, args.num_thread, args.syn_thresh,
                            skip_openie=args.skip_openie, passage_node=args.passage_node)
