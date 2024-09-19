@@ -124,7 +124,7 @@ def link_by_passage_fact(hipporag: HippoRAG, query: str, link_top_k: int, router
         if hipporag.reranker is not None:
             input_facts = candidate_facts
             input_indices = [i for i in range(len(input_facts))]
-            candidate_indices, candidate_facts = hipporag.reranker.rerank('fact_reranking', query, input_facts, input_indices, top_k=link_top_k)
+            candidate_indices, candidate_facts = hipporag.reranker.rerank('fact_reranking', query, input_facts, input_indices, len_after_rerank=link_top_k)
             if len(candidate_facts) == 0:
                 hipporag.load_dpr_doc_embeddings()
                 hipporag.logger.info('No facts found after reranking, return DPR results')

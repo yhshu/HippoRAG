@@ -126,7 +126,7 @@ def llm_verify(hipporag, logs, messages, query, sorted_doc_ids, sorted_scores):
         return dpr_sorted_doc_ids, dpr_sorted_scores, dpr_logs
 
 
-def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, fact_embeddings, link_top_k, graph_search=True, num_rerank_fact=30):
+def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, fact_embeddings, link_top_k, graph_search=True, num_rerank_fact=5):
     query_doc_scores = np.zeros(hipporag.docs_to_phrases_mat.shape[0])  # (num_docs,)
     query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction(hipporag.embed_model, 'query_to_fact', hipporag.corpus_name),
                                                        return_cpu=True, return_numpy=True, norm=True)
@@ -229,12 +229,12 @@ def graph_search_with_fact_entities(hipporag: HippoRAG, query: str, link_top_k: 
         from src.processing import min_max_normalize
         normalized_dpr_doc_scores = min_max_normalize(dpr_sorted_scores)
 
-        for i, doc_id in enumerate(dpr_sorted_doc_ids.tolist()[:10]):  # entry point weights
+        for i, doc_id in enumerate(dpr_sorted_doc_ids.tolist()[:100]):  # entry point weights
             text = hipporag.dataset_df.iloc[doc_id]['paragraph']
             doc_score = normalized_dpr_doc_scores[i]
             doc_node_id = hipporag.kb_node_phrase_to_id.get(text, None)
-            passage_weights[doc_node_id] = doc_score
-            linking_score_map[text] = doc_score
+            passage_weights[doc_node_id] = doc_score * 0.25
+            linking_score_map[text] = doc_score * 0.25
 
     if passage_filtering:
         from src.processing import entropy_based_truncation

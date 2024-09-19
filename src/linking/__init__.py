@@ -88,7 +88,7 @@ def graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, 
         if 'passage_node' in hipporag.graph_type:
             num_phrase = hipporag.triples_to_phrases_mat.shape[1]
             score_from_doc = ppr_phrase_probs[num_phrase:]
-            rank_scoring = 'sum'
+            rank_scoring = 'passage'
             if rank_scoring == 'sum':
                 score_from_phrase = hipporag.convert_ppr_node_to_doc_score(ppr_phrase_probs[:num_phrase])
                 ppr_doc_prob = min_max_normalize(score_from_doc) + min_max_normalize(score_from_phrase)

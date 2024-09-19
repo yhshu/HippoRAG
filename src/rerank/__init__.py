@@ -336,7 +336,7 @@ class HFLoRAModelGenerativeReranker(Reranker):
             self.model = AutoModelForCausalLM.from_pretrained(base_model, device_map='auto', return_dict=True)
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
 
-    def rerank(self, task: str, query: str, input_items: List[Tuple], input_indices, top_k=None):
+    def rerank(self, task: str, query: str, input_items: List[Tuple], input_indices, len_after_rerank=None):
         if task == 'fact_reranking':
             candidate_items, candidate_indices = retrieved_to_candidate_facts(input_items, input_indices, k=30)
 
@@ -370,7 +370,7 @@ class HFLoRAModelGenerativeReranker(Reranker):
 
             sorted_candidate_indices = [candidate_indices[i] for i in result_indices]
             sorted_candidate_items = [candidate_items[i] for i in result_indices]
-            return sorted_candidate_indices[:top_k], sorted_candidate_items[:top_k]
+            return sorted_candidate_indices[:len_after_rerank], sorted_candidate_items[:len_after_rerank]
 
 
 class RerankerPlaceholder(Reranker):

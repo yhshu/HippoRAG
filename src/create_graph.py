@@ -173,7 +173,7 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
         node_json = [{'idx': i, 'name': p} for i, p in enumerate(unique_phrases)]
         kb_phrase_to_id_dict = {p: i for i, p in enumerate(unique_phrases)}
 
-        if passage_node:
+        if passage_node is not None:
             len_node = len(node_json)
             # add all passages to node_json and kb_phrase_to_id_dict
             for i, doc in enumerate(passage_json):
@@ -367,6 +367,7 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
 
         statistics_df = [('Total Phrases', len(phrases)),
                          ('Unique Phrases', len(unique_phrases)),
+                         ('Number of Passages', len(passage_json)),
                          ('Number of Individual Triples', len(extracted_triples)),
                          ('Number of Incorrectly Formatted Triples (LLM Error)', len(incorrectly_formatted_triples)),
                          ('Number of Triples w/o NER Entities (LLM Error)', len(triples_wo_ner_entity)),
