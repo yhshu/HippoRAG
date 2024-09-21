@@ -540,7 +540,7 @@ class HippoRAG:
 
         self.triples: List = list(self.triplet_to_id_dict.keys())
         self.triples: List = [self.triples[i] for i in np.argsort(list(self.triplet_to_id_dict.values()))]
-        self.triples_str_list = [str(triple) for triple in self.triples]
+        self.triples_str_list: List = [str(triple) for triple in self.triples]
         self.node_phrases: np.ndarray = np.array(list(self.kb_node_phrase_to_id.keys()))[np.argsort(list(self.kb_node_phrase_to_id.values()))]
 
         self.doc_triple_to_freq: Dict = pickle.load(open(
@@ -637,17 +637,17 @@ class HippoRAG:
 
         self.g.es['weight'] = [self.graph_plus[(v1, v3)] for v1, v3 in edges]
         self.logger.info(f'Graph built: num vertices: {n_vertices}, num_edges: {len(edges)}')
-        
+
         if self.node_to_doc_strategy == 'map':
             num_phrase = self.triples_to_phrases_mat.shape[1]
             phrase_edges = [e for e in edges if e[0] < num_phrase and e[1] < num_phrase]
             transition_mat = csr_matrix((np.array([self.graph_plus[(v1, v3)] for v1, v3 in phrase_edges]),
-                                ([v1 for v1, v3 in phrase_edges], [v3 for v1, v3 in phrase_edges])), shape=(num_phrase, num_phrase))
+                                         ([v1 for v1, v3 in phrase_edges], [v3 for v1, v3 in phrase_edges])), shape=(num_phrase, num_phrase))
             # normalize the matrix
             row_sums = np.array(transition_mat.sum(axis=1)).flatten()
             inv_row_sums = np.reciprocal(row_sums, where=row_sums != 0)  # Avoid division by zero
             inverse_degree_mat = csr_matrix((inv_row_sums, (np.arange(num_phrase), np.arange(num_phrase))),
-                               shape=(num_phrase, num_phrase))
+                                            shape=(num_phrase, num_phrase))
             self.normalized_transition_mat = inverse_degree_mat.dot(transition_mat)
 
     def load_triple_vectors(self):

@@ -2,7 +2,6 @@ import copy
 
 import pandas as pd
 from scipy.sparse import csr_array
-from torch.cuda import graph
 
 from processing import *
 from glob import glob
@@ -12,6 +11,8 @@ import json
 from tqdm import tqdm
 import pickle
 import argparse
+
+from src.data_process.util import check_continuity
 
 os.environ['TOKENIZERS_PARALLELISM'] = 'FALSE'
 
@@ -172,16 +173,23 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
 
         node_json = [{'idx': i, 'name': p} for i, p in enumerate(unique_phrases)]
         kb_phrase_to_id_dict = {p: i for i, p in enumerate(unique_phrases)}
+        assert len(node_json) == len(kb_phrase_to_id_dict)
+        print('Number of phrase nodes: {}'.format(len(node_json)))
 
         if passage_node is not None:
             len_node = len(node_json)
             # add all passages to node_json and kb_phrase_to_id_dict
+            passage_node_idx = 0
             for i, doc in enumerate(passage_json):
                 p = doc['passage']
-                node_idx = len_node + i
-                node_json.append({'idx': node_idx, 'name': p})
-                kb_phrase_to_id_dict[p] = node_idx
+                if p not in kb_phrase_to_id_dict:
+                    node_idx = len_node + passage_node_idx
+                    passage_node_idx += 1
+                    node_json.append({'idx': node_idx, 'name': p})
+                    kb_phrase_to_id_dict[p] = node_idx
+                    assert node_idx < len(node_json), f'Node idx {node_idx} not smaller than length of nodes {len(node_json)}'
 
+        print('Number of passage nodes: {}'.format(len(node_json) - len(unique_phrases)))
         extracted_triples = []
 
         for triples in triples_by_passage:

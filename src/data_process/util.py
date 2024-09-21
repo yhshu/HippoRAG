@@ -99,3 +99,25 @@ def generate_hash(input_string, algorithm='sha224'):
         raise ValueError(f'Unsupported algorithm: {algorithm}')
     algo.update(input_string.encode('utf-8'))
     return algo.hexdigest()
+
+
+def check_continuity(data):
+    sorted_values = [v for k, v in data.items()]
+
+    breaks = []
+    continuous_ranges = []
+    start = 0
+
+    for i in range(1, len(sorted_values)):
+        if sorted_values[i] != sorted_values[i - 1] + 1:
+            breaks.append(i)
+            continuous_ranges.append((sorted_values[start], sorted_values[i - 1]))
+            start = i
+
+    continuous_ranges.append((sorted_values[start], sorted_values[-1]))
+
+    if len(breaks) > 0:
+        print(f"Breaks at indices: {breaks}")
+        print(f"Number of continuous subarrays: {len(continuous_ranges)}")
+        print(f"Continuous ranges (start, end): {continuous_ranges}")
+        exit(1)
