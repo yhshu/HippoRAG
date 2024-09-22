@@ -4,6 +4,8 @@ import re
 import numpy as np
 import torch
 
+from src.data_process.util import generate_hash
+
 
 def get_file_name(path):
     return path.split('/')[-1].replace('.jsonl', '').replace('.json', '')
@@ -175,3 +177,16 @@ def eval_json_str(json_str):
             return eval(fix_broken_generated_json(json_str))
         except Exception as e2:
             return ''
+
+def check_corpus_duplication(corpus: list):
+    hash_set = set()
+    for item in corpus:
+        content = item['title'] + '\n' + item['text']
+        content_hash = generate_hash(content)
+        if content_hash not in hash_set:
+            hash_set.add(content_hash)
+            continue
+        else:
+            print('Duplicated content hash:', content_hash)
+            return False
+    return True
