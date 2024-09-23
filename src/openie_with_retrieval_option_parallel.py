@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 from src.langchain_util import init_langchain_model
 from src.openie_extraction_instructions import ner_prompts, openie_post_ner_prompts
-from src.processing import extract_json_dict, deduplicate_triples, fix_broken_generated_json, check_corpus_duplication
+from src.processing import extract_json_dict, deduplicate_triples, fix_broken_generated_json, corpus_has_duplication
 
 
 def print_messages(messages):
@@ -229,7 +229,7 @@ def openie_for_corpus(dataset_name: str, run_ner: bool, num_passages, llm: str, 
 def load_corpus(dataset_name: str, model_name: str, num_passages, run_ner):
     model_name_processed = model_name.replace('/', '_')
     corpus = json.load(open(f'data/{dataset_name}_corpus.json', 'r'))
-    assert check_corpus_duplication(corpus)
+    assert corpus_has_duplication(corpus) is False
     if 'hotpotqa' in dataset_name:
         keys = list(corpus.keys())
         retrieval_corpus = [{'idx': i, 'passage': key + '\n' + ''.join(corpus[key])} for i, key in enumerate(keys)]

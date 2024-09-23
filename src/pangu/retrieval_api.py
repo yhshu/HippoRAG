@@ -36,7 +36,7 @@ class TextRetriever(ABC):
             unique_top_k_indices = []
             for i in top_k_indices:
                 if self.corpus[i] not in seen_sentences:
-                    unique_top_k_indices.append(i)
+                    unique_top_k_indices.append(int(i))
                     seen_sentences.add(self.corpus[i])
 
                     if len(unique_top_k_indices) == k:

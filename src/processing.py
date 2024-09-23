@@ -178,15 +178,22 @@ def eval_json_str(json_str):
         except Exception as e2:
             return ''
 
-def check_corpus_duplication(corpus: list):
-    hash_set = set()
-    for item in corpus:
+
+def corpus_has_duplication(corpus: list):
+    hash_to_content = dict()
+    hash_to_idx = dict()  # passage index, not identifier
+
+    duplication = False
+    for idx, item in enumerate(corpus):
         content = item['title'] + '\n' + item['text']
         content_hash = generate_hash(content)
-        if content_hash not in hash_set:
-            hash_set.add(content_hash)
-            continue
+        if content_hash not in hash_to_content:
+            hash_to_content[content_hash] = content
+            hash_to_idx[content_hash] = idx
         else:
             print('Duplicated content hash:', content_hash)
-            return False
-    return True
+            print('Duplicated content:', content)
+            print('Duplicated idx:', idx, hash_to_idx[content_hash])
+            duplication = True
+
+    return duplication

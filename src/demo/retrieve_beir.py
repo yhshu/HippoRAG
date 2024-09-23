@@ -80,6 +80,7 @@ def detailed_log(dataset: list, run_dict, eval_res, chunk=False, threshold=None,
             'entities_in_supporting_passage': gold_passage_extracted_entities,
             'triples_in_supporting_passage': gold_passage_extracted_triples,
         })
+    # end for each query
     return logs
 
 
@@ -135,7 +136,7 @@ def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: st
 
             # get linked nodes
             linked_nodes = set()
-            if log is not None and len(log):
+            if log is not None and len(log) and 'linked_node_scores' in log:
                 log['nodes_in_supporting_doc'] = list(oracle_nodes)
                 for item in log['linked_node_scores']:
                     assert isinstance(item, list) or isinstance(item, str)
@@ -191,6 +192,7 @@ def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: st
     with open(detailed_log_output_path, 'w') as f:
         json.dump(logs, f)
     print(f'Detailed log saved to {detailed_log_output_path}')
+    print(hipporag.statistics)
 
 
 if __name__ == '__main__':

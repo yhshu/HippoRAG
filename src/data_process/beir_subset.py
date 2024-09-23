@@ -3,6 +3,10 @@ import sys
 
 sys.path.append('.')
 
+from tqdm import tqdm
+
+from src.processing import corpus_has_duplication
+
 import argparse
 import json
 import os.path
@@ -24,7 +28,7 @@ def get_sampled_query_ids(qrels, sample):
     return sampled_query_ids
 
 
-def generate_dataset_with_relevant_corpus(split: str, qrels_path: str, chunk=False, num_query_sample=None, num_passage_sample=None):
+def generate_dataset_with_relevant_corpus(split: str, qrels_path: str, full_corpus, chunk=False, num_query=None, passage_per_query=None):
     """
 
     @param split: split name, e.g., 'train', 'test'
@@ -38,15 +42,17 @@ def generate_dataset_with_relevant_corpus(split: str, qrels_path: str, chunk=Fal
     print(f'#{split}', len(qrels))
     split_passage_hash_to_id = dict()
     split_query_ids = set()
+    full_corpus_ids = set()  # all passage ids in qrels
     split_corpus = []  # output 1
     split_queries = []  # output 2
     query_to_corpus = {}  # output 3, query_id -> [corpus_id]
 
-    sampled_query_ids = get_sampled_query_ids(qrels, num_query_sample)
+    sampled_query_ids = get_sampled_query_ids(qrels, num_query)
 
     for idx, item in enumerate(qrels):  # for each line in qrels
         query_id = item[0]
         corpus_id = item[1]
+        full_corpus_ids.add(corpus_id)
         score = item[2]
         if int(score) == 0:
             continue
@@ -54,7 +60,7 @@ def generate_dataset_with_relevant_corpus(split: str, qrels_path: str, chunk=Fal
             continue
 
         try:
-            corpus_item = corpus[corpus_id]
+            corpus_item = full_corpus[corpus_id]
         except KeyError:
             print(f'corpus_id {corpus_id} not found')
             continue
@@ -76,29 +82,38 @@ def generate_dataset_with_relevant_corpus(split: str, qrels_path: str, chunk=Fal
     for query in split_queries:
         query['paragraphs'] = []
         for c in query_to_corpus[query['_id']]:
-            corpus_item = corpus[c]
+            corpus_item = full_corpus[c]
             passage_content = corpus_item['title'] + '\n' + corpus_item['text']
             passage_hash = generate_hash(passage_content)
             assert passage_hash in split_passage_hash_to_id, f'passage_hash {passage_hash} not found'
             passage_id = split_passage_hash_to_id[passage_hash]
             query['paragraphs'].append({'title': corpus_item['title'], 'text': corpus_item['text'], 'idx': passage_id})
 
+    assert corpus_has_duplication(split_corpus) is False, "Duplicated passages found in split_corpus"
+
     # add sampled passages to corpus if num_passage_sample is larger than the num of collected passages
-    if num_passage_sample is not None:
-        assert 0 < num_passage_sample
-        if len(split_corpus) < num_passage_sample:
-            sampled_passage_ids = random.sample(list(corpus.keys()), num_passage_sample)
-            sampled_passage_ids = set(sampled_passage_ids) # make each passage unique
-            # add each passage to split_corpus if it is not already in split_corpus
-            for c in sampled_passage_ids:
-                corpus_item = corpus[c]
-                passage_content = corpus_item['title'] + '\n' + corpus_item['text']
+    if passage_per_query is not None:
+        assert 0 < passage_per_query <= len(full_corpus_ids), f'passage_per_query {passage_per_query} is invalid, check if it is in range (0, {len(full_corpus_ids)})'
+        from src.pangu.retrieval_api import BM25Retriever
+        full_corpus_values = list(full_corpus.values())
+        bm25_retriever = BM25Retriever([item['title'] + '\n' + item['text'] for item in full_corpus_values])
+        for query in tqdm(split_queries, desc='Sampling distractors'):
+            if len(query['paragraphs']) >= passage_per_query:
+                continue
+            query_text = query['text']
+            top_k_indices = bm25_retriever.get_top_k_indices(query_text, passage_per_query + 50, distinct=True)
+            num_distractor = 0
+            for i in top_k_indices:
+                passage_content = full_corpus_values[i]['title'] + '\n' + full_corpus_values[i]['text']
                 passage_hash = generate_hash(passage_content)
                 if passage_hash not in split_passage_hash_to_id:
-                    split_corpus.append({'title': corpus_item['title'], 'text': corpus_item['text'], 'idx': corpus_item['_id']})
-                    split_passage_hash_to_id[passage_hash] = corpus_item['_id']
-                    if len(split_corpus) == num_passage_sample:
-                        break
+                    # add to split_corpus as a distractor
+                    split_corpus.append({'title': full_corpus_values[i]['title'], 'text': full_corpus_values[i]['text'], 'idx': full_corpus_values[i]['_id']})
+                    split_passage_hash_to_id[passage_hash] = full_corpus_values[i]['_id']
+                    num_distractor += 1
+                if num_distractor == passage_per_query - len(query['paragraphs']):
+                    break
+            assert corpus_has_duplication(split_corpus) is False, "Duplicated passages found in split_corpus"
 
     if chunk:
         split_corpus = chunk_corpus(split_corpus)
@@ -204,8 +219,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', type=str, help='directory path to a BEIR subset')
     parser.add_argument('--corpus', type=str, choices=['full', 'relevant'], help='full or relevant corpus', default='full')
-    parser.add_argument('-qs', '--query_sample', type=int)
-    parser.add_argument('-ps', '--passage_sample', type=int)
+    parser.add_argument('-nq', '--num_query', type=int, help='number of queries to sample')
+    parser.add_argument('-pq', '--passage_per_query', type=int, help='number of passages per query to sample, only used when corpus is `relevant`')
     parser.add_argument('--chunk', action='store_true')
     parser.add_argument('--seed', type=int, default=1)
     args = parser.parse_args()
@@ -227,8 +242,8 @@ if __name__ == '__main__':
     for split in ['train', 'dev', 'test']:
         if os.path.isfile(os.path.join(args.data, f'qrels/{split}.tsv')):
             if args.corpus == 'relevant':
-                generate_dataset_with_relevant_corpus(split, os.path.join(args.data, f'qrels/{split}.tsv'), args.chunk, args.query_sample, args.passage_sample)
+                generate_dataset_with_relevant_corpus(split, os.path.join(args.data, f'qrels/{split}.tsv'), corpus, args.chunk, args.num_query, args.passage_per_query)
             elif args.corpus == 'full':
-                generate_dataest_with_full_corpus(split, os.path.join(args.data, f'qrels/{split}.tsv'), os.path.join(args.data, 'corpus.json'), args.chunk, args.query_sample)
+                generate_dataest_with_full_corpus(split, os.path.join(args.data, f'qrels/{split}.tsv'), os.path.join(args.data, 'corpus.json'), args.chunk, args.num_query)
         else:
             print(f'{split} not found, skipped')
