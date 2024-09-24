@@ -53,7 +53,7 @@ def format_candidates(candidates: list):
 class Reranker:
     def __init__(self, model_name):
         self.model_name = model_name
-        if model_name.startswith('gpt') or model_name.startswith('ft:gpt'):
+        if model_name.startswith('gpt') or model_name.startswith('ft:gpt') or model_name.startswith('o1-'):
             llm_provider = 'openai'
         elif model_name.lower().startswith('gritlm'):
             llm_provider = 'gritlm'
@@ -250,10 +250,19 @@ generative_cot_reranking_prompt = """You are an expert in ranking facts based on
 """
 
 
+def merge_messages(messages: List, model_name: str):
+    if model_name.startswith('o1-'):
+        # concatenate message contents and merge them into one HumanMessage
+        message_contents = '\n'.join([message.content for message in messages])
+        return [HumanMessage(message_contents)]
+    return messages
+
+
 class LLMGenerativeReranker(Reranker):
     def __init__(self, model_name):
         super().__init__(model_name)
-        if 'gpt' in model_name:
+        self.model_name = model_name
+        if model_name.startswith('gpt-') or model_name.startswith('ft:gpt') or model_name.startswith('o1-'):
             set_llm_cache(SQLiteCache(database_path=f".llm_{model_name}_rerank.db"))
 
     def rerank(self, task: str, query: str, candidate_items: List[Tuple], candidate_indices, top_k=None):
@@ -262,7 +271,10 @@ class LLMGenerativeReranker(Reranker):
 
         if task == 'fact_reranking':
             messages = self.write_rerank_prompt(query, candidate_items)
-            completion = self.model.invoke(messages, temperature=0, response_format={"type": "json_object"})
+            if self.model_name.startswith('o1-'):
+                completion = self.model.invoke(messages, temperature=None, response_format={"type": "json_object"})
+            else:
+                completion = self.model.invoke(messages, temperature=0, response_format={"type": "json_object"})
             content = completion.content
             try:
                 response = json.loads(content)
@@ -307,6 +319,7 @@ class LLMGenerativeReranker(Reranker):
             SystemMessage(generative_reranking_prompt),
             HumanMessage(user_prompt),
         ]
+        messages = merge_messages(messages, self.model_name)
         return messages
 
 

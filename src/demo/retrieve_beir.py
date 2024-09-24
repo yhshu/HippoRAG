@@ -69,7 +69,7 @@ def detailed_log(dataset: list, run_dict, eval_res, chunk=False, threshold=None,
         if chunk:
             pred_passages = merge_chunks(pred_passages)
 
-        logs.append({
+        log = {
             'query': dataset[idx]['text'],
             'ndcg': eval_res[query_id]['ndcg'],
             'gold_passages': gold_passages,
@@ -79,7 +79,11 @@ def detailed_log(dataset: list, run_dict, eval_res, chunk=False, threshold=None,
             'avg_distance': sum([sum(d) for d in distances]) / num_dis if num_dis > 0 else None,
             'entities_in_supporting_passage': gold_passage_extracted_entities,
             'triples_in_supporting_passage': gold_passage_extracted_triples,
-        })
+        }
+        for key in run_dict['log'][query_id]:
+            if key not in log:
+                log[key] = run_dict['log'][query_id][key]
+        logs.append(log)
     # end for each query
     return logs
 

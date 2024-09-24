@@ -29,7 +29,9 @@ def init_langchain_model(llm: str, model_name: str, temperature: float = 0.0, ma
     if llm == 'openai':
         # https://python.langchain.com/v0.1/docs/integrations/chat/openai/
         from langchain_openai import ChatOpenAI
-        assert model_name.startswith('gpt-') or model_name.startswith('ft:gpt-')
+        assert model_name.startswith('gpt-') or model_name.startswith('ft:gpt-') or model_name.startswith('o1-')
+        if model_name.startswith('o1-'):
+            return ChatOpenAI(api_key=os.environ.get("OPENAI_API_KEY"), model=model_name, max_retries=max_retries, timeout=timeout, **kwargs)
         return ChatOpenAI(api_key=os.environ.get("OPENAI_API_KEY"), model=model_name, temperature=temperature, max_retries=max_retries, timeout=timeout, **kwargs)
     elif llm == 'together':
         # https://python.langchain.com/v0.1/docs/integrations/chat/together/

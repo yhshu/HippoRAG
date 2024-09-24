@@ -20,7 +20,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     set_llm_cache(SQLiteCache(database_path=f".llm_{args.model}_rerank.db"))
-    if args.model.startswith('gpt-') or args.model.startswith('ft:gpt-'):
+    if args.model.startswith('gpt-') or args.model.startswith('ft:gpt-') or args.model.startswith('o1-'):
         model = init_langchain_model(args.llm, args.model)
 
     selected_datasets = args.datasets
