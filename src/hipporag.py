@@ -10,6 +10,7 @@ import igraph as ig
 import numpy as np
 import pandas as pd
 import torch
+from networkx.classes.filters import hide_nodes
 from scipy.sparse import csr_matrix
 
 from tqdm import tqdm
@@ -187,12 +188,13 @@ class HippoRAG:
                 # reranker = RankGPT(rerank_model_name)
                 from src.rerank import LLMGenerativeReranker
                 self.reranker = LLMGenerativeReranker(reranker_name)
-            elif reranker_name == 'placeholder':
-                from src.rerank import RerankerPlaceholder
-                self.reranker = RerankerPlaceholder(reranker_name)
+            elif reranker_name in ['oracle_triple']:
+                from src.rerank import OracleTripleFiltering
+                self.reranker = OracleTripleFiltering(reranker_name)
             else:  # load Llama 3.1 model with LoRA
                 from src.rerank import HFLoRAModelGenerativeReranker
                 self.reranker = HFLoRAModelGenerativeReranker(reranker_name)
+            self.reranker_name = reranker_name
             self.statistics['num_dpr'] = 0
 
     def get_passage_by_idx(self, passage_idx):
@@ -234,6 +236,15 @@ class HippoRAG:
 
         return triples, triple_ids
 
+    def get_triples_and_triple_ids_by_passage_content(self, passage_content):
+        """
+
+        Get the triples in the knowledge graph for a specific passage.
+        """
+        corpus_idx = self.get_corpus_idx_by_passage_content(passage_content)
+        assert corpus_idx is not None, 'Passage not found in the corpus'
+        return self.get_triples_and_triple_ids_by_corpus_idx(corpus_idx)
+
     def get_corpus_idx_by_passage_idx(self, passage_idx):
         """
         Get the corpus index by the passage index
@@ -242,6 +253,17 @@ class HippoRAG:
         """
         for corpus_idx, item in enumerate(self.corpus):
             if item['idx'] == passage_idx:
+                return corpus_idx
+        return None
+
+    def get_corpus_idx_by_passage_content(self, passage_content):
+        """
+        Get the corpus index by the passage content
+        @param passage_content: the passage content
+        @return: the corpus index
+        """
+        for corpus_idx, item in enumerate(self.corpus):
+            if (item['title'] + '\n' + item['text']) == passage_content:
                 return corpus_idx
         return None
 
@@ -357,7 +379,7 @@ class HippoRAG:
                 linking_score_map = {oracle_node_phrases[i]: query_node_scores[i] for i in top_k_indices}
                 sorted_doc_ids, sorted_scores, doc_rank_logs = graph_search_with_entities(self, all_phrase_weights, linking_score_map, None)
 
-        elif oracle_triples and linking == 'query_to_fact':
+        elif oracle_triples and linking == 'query_to_fact' and self.reranker_name != 'oracle_triple':
             from src.linking.query_to_fact import oracle_query_to_fact
             sorted_doc_ids, sorted_scores, logs = oracle_query_to_fact(self, query, oracle_triples, link_top_k)
             return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], logs
@@ -408,7 +430,7 @@ class HippoRAG:
                 pass
             else:  # huggingface dense retrieval
                 self.load_triple_vectors()
-                sorted_doc_ids, sorted_scores, log = link_fact_by_dpr(self, query, link_top_k=link_top_k)
+                sorted_doc_ids, sorted_scores, log = link_fact_by_dpr(self, query, link_top_k=link_top_k, oracle_triples=oracle_triples)
                 return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], log
 
         elif linking == 'query_to_passage':

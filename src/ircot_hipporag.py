@@ -52,8 +52,8 @@ def parse_prompt(file_path):
     return parsed_data
 
 
-def retrieve_step(query: str, corpus, top_k: int, hipporag: HippoRAG, dataset_name: str, link_top_k: Union[None, int], linking='ner_to_node'):
-    ranks, scores, logs = hipporag.rank_docs(query, doc_top_k=top_k, link_top_k=link_top_k, linking=linking)
+def retrieve_step(query: str, corpus, top_k: int, hipporag: HippoRAG, dataset_name: str, link_top_k: Union[None, int], linking='ner_to_node', oracle_triples=None):
+    ranks, scores, logs = hipporag.rank_docs(query, doc_top_k=top_k, link_top_k=link_top_k, linking=linking, oracle_triples=oracle_triples)
     if dataset_name in ['hotpotqa', 'hotpotqa_train']:
         retrieved_passages = []
         for rank in ranks:
@@ -251,7 +251,25 @@ if __name__ == '__main__':
         query = sample['question']
         logs_for_all_steps = {}
 
-        retrieved_passages, scores, logs = retrieve_step(query, corpus, args.top_k, hipporag, args.dataset, args.link_top_k, args.linking)
+        gold_docs = []
+        if args.dataset in ['2wikimultihopqa']:
+            for item in sample['supporting_facts']:
+                title = item[0]
+                for c in sample['context']:
+                    if c[0] == title:
+                        gold_docs.append(c[0] + '\n' + ' '.join(c[1]))
+                        break
+        elif args.dataset in ['musique']:
+            gold_docs = [item['title'] + '\n' + item['paragraph_text'] for item in sample['paragraphs'] if item['is_supporting']]
+
+        oracle_triples = None
+        if hipporag.reranker_name in ['oracle_triple']:
+            assert len(gold_docs) > 0
+            oracle_triples = []
+            for p in gold_docs:
+                assert len(p) > 0 and '\n' in p
+                oracle_triples += hipporag.get_triples_and_triple_ids_by_passage_content(p)[0]
+        retrieved_passages, scores, logs = retrieve_step(query, corpus, args.top_k, hipporag, args.dataset, args.link_top_k, args.linking, oracle_triples)
 
         it = 1
         logs_for_all_steps[it] = logs
@@ -266,7 +284,7 @@ if __name__ == '__main__':
                 break
             it += 1
 
-            new_retrieved_passages, new_scores, logs = retrieve_step(new_thought, corpus, args.top_k, hipporag, args.dataset, args.link_top_k, args.linking)
+            new_retrieved_passages, new_scores, logs = retrieve_step(new_thought, corpus, args.top_k, hipporag, args.dataset, args.link_top_k, args.linking, oracle_triples)
             logs_for_all_steps[it] = logs
 
             for passage, score in zip(new_retrieved_passages, new_scores):

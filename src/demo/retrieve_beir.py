@@ -119,7 +119,7 @@ def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: st
         # if query_id in run_dict['retrieved']:
         #     continue
         supporting_docs = sample['paragraphs']
-        if oracle_extraction:
+        if oracle_extraction or hipporag.reranker_name in ['oracle_triple']:
             oracle_triples = []
             for p in supporting_docs:
                 oracle_triples += hipporag.get_triples_and_triple_ids_by_corpus_idx(hipporag.get_corpus_idx_by_passage_idx(p['idx']))[0]

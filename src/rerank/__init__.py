@@ -386,9 +386,19 @@ class HFLoRAModelGenerativeReranker(Reranker):
             return sorted_candidate_indices[:len_after_rerank], sorted_candidate_items[:len_after_rerank]
 
 
-class RerankerPlaceholder(Reranker):
-    def __init__(self, model_name):
+class OracleTripleFiltering(Reranker):
+    def __init__(self, model_name: str):
         self.model_name = model_name
 
-    def rerank(self, task: str, query, input_items, input_indices, top_k=None):
-        return input_indices[:top_k], input_items[:top_k]
+    def rerank(self, task: str, query: str, input_items: List, input_indices: List, oracle_triples: List):
+        """
+        Take the intersection of input_items and oracle_triples
+        """
+        if task == 'fact_reranking':
+            filtered_indices = []
+            filtered_items = []
+            for i, item in zip(input_indices, input_items):
+                if item in oracle_triples:
+                    filtered_indices.append(i)
+                    filtered_items.append(item)
+            return filtered_indices, filtered_items

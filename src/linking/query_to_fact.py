@@ -126,7 +126,7 @@ def llm_verify(hipporag, logs, messages, query, sorted_doc_ids, sorted_scores):
         return dpr_sorted_doc_ids, dpr_sorted_scores, dpr_logs
 
 
-def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, fact_embeddings, link_top_k, graph_search=True, num_rerank_fact=5):
+def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, fact_embeddings, link_top_k, graph_search=True, num_rerank_fact=5, oracle_triples=None):
     query_doc_scores = np.zeros(hipporag.docs_to_phrases_mat.shape[0])  # (num_docs,)
     query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction(hipporag.embed_model, 'query_to_fact', hipporag.corpus_name),
                                                        return_cpu=True, return_numpy=True, norm=True)
@@ -138,7 +138,10 @@ def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, 
     if hipporag.reranker is not None:
         candidate_fact_indices = np.argsort(query_fact_scores)[-num_rerank_fact:][::-1].tolist()
         candidate_facts = [candidate_triples[i] for i in candidate_fact_indices]
-        top_k_fact_indicies, top_k_facts = hipporag.reranker.rerank('fact_reranking', query, candidate_facts, candidate_fact_indices, link_top_k)
+        if hipporag.reranker_name in ['oracle_triple']:
+            top_k_fact_indicies, top_k_facts = hipporag.reranker.rerank('fact_reranking', query, candidate_facts, candidate_fact_indices, oracle_triples=oracle_triples)
+        else:
+            top_k_fact_indicies, top_k_facts = hipporag.reranker.rerank('fact_reranking', query, candidate_facts, candidate_fact_indices, len_after_rerank=link_top_k)
         rerank_log = {'facts_before_rerank': candidate_facts, 'facts_after_rerank': top_k_facts}
 
         if len(top_k_facts) == 0:
@@ -275,7 +278,7 @@ def oracle_query_to_fact(hipporag: HippoRAG, query: str, oracle_triples: list, l
     return link_query_to_fact_core(hipporag, query, oracle_triples, fact_embeddings, link_top_k, graph_search)
 
 
-def link_fact_by_dpr(hipporag: HippoRAG, query: str, link_top_k=10, graph_search=True):
+def link_fact_by_dpr(hipporag: HippoRAG, query: str, link_top_k=10, graph_search=True, oracle_triples=None):
     """
     Retrieve the most similar facts given the query
     @param hipporag: HippoRAG object
@@ -283,4 +286,4 @@ def link_fact_by_dpr(hipporag: HippoRAG, query: str, link_top_k=10, graph_search
     @param link_top_k:
     @return: sorted_doc_ids (np.ndarray), sorted_scores (np.ndarray)
     """
-    return link_query_to_fact_core(hipporag, query, hipporag.triples, hipporag.triple_embeddings, link_top_k, graph_search)
+    return link_query_to_fact_core(hipporag, query, hipporag.triples, hipporag.triple_embeddings, link_top_k, graph_search, oracle_triples=oracle_triples)
