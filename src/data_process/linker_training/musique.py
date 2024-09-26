@@ -5,6 +5,10 @@ import random
 from tqdm import tqdm
 
 if __name__ == '__main__':
+    """
+    Collect queries samples by train/dev split and the corpus for the musique dataset.
+    """
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--dir', type=str, default='data/raw/musique')
     args = parser.parse_args()
@@ -14,7 +18,7 @@ if __name__ == '__main__':
     corpus_dict = {}
     full_text_to_id = {}
     corpus_id = 0
-    num_sample = {'train': 'all', 'dev': 'all'}
+    num_sample = {'train': 'all', 'dev': 'all'}  # specify the number of samples for each split
     random.seed(1)
 
     for split in num_sample.keys():
@@ -26,11 +30,12 @@ if __name__ == '__main__':
             for line in raw:
                 split_data.append(json.loads(line))
 
-        if num_sample[split] is not None and isinstance(num_sample[split], int):
+        if num_sample[split] is not None and isinstance(num_sample[split], int):  # sample data
             assert 0 <= num_sample[split] <= len(split_data)
             split_data = random.sample(split_data, min(num_sample[split], len(split_data)))
 
         print(f'Processing {split} ({len(split_data)})')
+
         # add passages to corpus
         corpus = []
         for sample in tqdm(split_data, total=len(split_data), desc=f'Processing {split}'):

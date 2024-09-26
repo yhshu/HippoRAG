@@ -1,8 +1,8 @@
 import sys
 
-from src.lm_wrapper.util import openai_batch_create_api
-
 sys.path.append('.')
+
+from src.lm_wrapper.util import openai_batch_create_api
 
 import argparse
 import json
@@ -101,7 +101,7 @@ if __name__ == '__main__':
     parser.add_argument('--datasets', nargs='+', type=str, help='A list of datasets')
     args = parser.parse_args()
 
-    cache_path = 'data/linker_training/sentence_triple_cache.pkl'
+    cache_path = 'data/linker_training/sentence_triple_cache.pkl'  # load existing cache
     if os.path.exists(cache_path):
         cache = pickle.load(open(cache_path, 'rb'))
     else:
@@ -109,15 +109,15 @@ if __name__ == '__main__':
 
     jsonl_contents = []
 
-    for path in os.listdir(args.dir):
-        if not os.path.isfile(os.path.join(args.dir, path)):
+    for path in os.listdir(args.dir):  # iterate over each query file
+        if not os.path.isfile(os.path.join(args.dir, path)):  # it should be a file
             continue
-        if args.datasets is not None and not any(dataset in path for dataset in args.datasets):
+        if args.datasets is not None and not any(dataset in path for dataset in args.datasets):  # filter by dataset
             continue
 
         data = json.load(open(os.path.join(args.dir, path), 'r'))
         dataset_label = path.split('.')[0]
-        for sample in data:
+        for sample in data:  # for each sample in the query file
             custom_id = f"{dataset_label}_{sample['id']}"
             if custom_id in cache:
                 continue

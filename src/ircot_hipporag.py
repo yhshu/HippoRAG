@@ -188,9 +188,16 @@ if __name__ == '__main__':
         dpr_only_str = 'hipporag'
 
     os.makedirs(f'output/ircot_retrieval/{args.dataset}', exist_ok=True)
+    rerank_str = f'_RE_{args.reranker}' if args.reranker else ''
+    graph_type_str = ''
+    if 'passage_node' in args.graph_type:
+        graph_type_str = '_GT_pn'
+        if 'unidirectional' in args.graph_type:
+            graph_type_str += 'u'
+
     output_path = (
-        f'output/ircot_retrieval/{args.dataset}/{args.dataset}_{dpr_only_str}_R_{hipporag.graph_creating_retriever_name_processed}_L_{hipporag.linking_retriever_name_processed}_{args.linking}'
-        f'_demo_{args.num_demo}_E_{llm_model_name_processed}_{doc_ensemble_str}_step_{max_steps}_top_{args.top_k}_{args.graph_alg}_damping_{args.damping}_sim_thresh_{args.sim_threshold}')
+        f'output/ircot_retrieval/{args.dataset}/{args.dataset}_{dpr_only_str}{graph_type_str}_E_{llm_model_name_processed}_R_{hipporag.graph_creating_retriever_name_processed}_L_{hipporag.linking_retriever_name_processed}_{args.linking}{rerank_str}'
+        f'_demo_{args.num_demo}_step_{max_steps}_top_{args.top_k}_{args.graph_alg}_damp_{args.damping}_sim_{args.sim_threshold}')
 
     if args.wo_node_spec:
         output_path += 'wo_node_spec'
@@ -199,7 +206,7 @@ if __name__ == '__main__':
     output_path += '.json'
     print('Log file will be saved to', output_path)
 
-    k_list = [1, 2, 5, 10, 20]
+    k_list = [1, 2, 5, 10]
     metrics_sum = defaultdict(float)  # the sum of metrics for all samples
 
     force_retry = args.force_retry

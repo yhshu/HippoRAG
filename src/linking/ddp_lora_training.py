@@ -76,9 +76,9 @@ def load_custom_dataset(tokenizer):
             # order retrieved facts by subject
             retrieved = sorted(retrieved, key=lambda x: x[0])
 
-            from src.rerank import generative_reranking_prompt
+            from src.rerank.prompt import generative_multi_hop_filter_prompt
             messages = [
-                {'role': 'system', 'content': generative_reranking_prompt},
+                {'role': 'system', 'content': generative_multi_hop_filter_prompt},
                 {'role': 'user', 'content': f'\nQuery: {query}\nCandidate facts:\n' + '\n'.join([json.dumps(triple).lower() for triple in retrieved])},
                 {'role': 'assistant', 'content': json.dumps({"fact": labels}).lower()}
             ]

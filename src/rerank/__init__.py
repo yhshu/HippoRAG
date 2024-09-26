@@ -64,7 +64,7 @@ class Reranker:
             raise NotImplementedError(f"Model {model_name} not implemented for reranker.")
         self.model = init_langchain_model(llm_provider, model_name)
 
-    def rerank(self, task: str, query, candidate_indices, candidate_items, top_k=None):
+    def rerank(self, task: str, query, candidate_indices, candidate_items, len_after_rerank=None):
         pass
 
 
@@ -74,7 +74,7 @@ class LLMLogitsReranker(Reranker):
         super().__init__(model_name)
         llm_logits_cache.set_model_name(model_name)
 
-    def rerank(self, task, query, candidate_items, candidate_indices=None, passage='', top_k=None):
+    def rerank(self, task, query, candidate_items, candidate_indices=None, passage='', len_after_rerank=None):
         if candidate_indices is None:
             candidate_indices = list(range(len(candidate_items)))
         if task == 'fact_reranking':
@@ -149,7 +149,7 @@ class LLMLogitsReranker(Reranker):
         sorted_scores = [top_scores[item] for item in sorted_candidate_items]
 
         # return top_k indices and items
-        return sorted_candidate_indices[:top_k], sorted_candidate_items[:top_k]  # sorted_scores[:top_k]
+        return sorted_candidate_indices[:len_after_rerank], sorted_candidate_items[:len_after_rerank]  # sorted_scores[:top_k]
 
 
 class RankGPT(Reranker):
@@ -161,7 +161,7 @@ class RankGPT(Reranker):
         super().__init__(model_name)
         set_llm_cache(SQLiteCache(database_path=f".llm_{model_name}_rerank.db"))
 
-    def rerank(self, task: str, query, candidate_items, candidate_indices, top_k=None, window_size=4, step_size=2):
+    def rerank(self, task: str, query, candidate_items, candidate_indices, len_after_rerank=None, window_size=4, step_size=2):
         if candidate_indices is None:
             candidate_indices = list(range(len(candidate_items)))
 
@@ -203,7 +203,7 @@ class RankGPT(Reranker):
             sorted_candidate_indices = [candidate_indices[i] for i in result_indices]
             sorted_candidate_items = [candidate_items[i] for i in result_indices]
 
-            return sorted_candidate_indices[:top_k], sorted_candidate_items[:top_k]
+            return sorted_candidate_indices[:len_after_rerank], sorted_candidate_items[:len_after_rerank]
 
     def write_rerank_prompt(self, query, window_items):
         messages = [
@@ -222,34 +222,6 @@ class RankGPT(Reranker):
         return messages
 
 
-generative_reranking_prompt = """You are an expert in ranking facts based on their relevance to the query. 
-
-- Multi-hop reasoning may be required, meaning you might need to combine multiple facts to form a complete response.
-- If the query is a claim, relevance means the fact supports or contradicts it. For queries seeking specific information, relevance means the fact aids in reasoning and providing an answer.
-- Select up to 4 relevant facts from the candidate list and output in JSON format without any other words, e.g., 
-
-```json
-{"fact": [["s1", "p1", "o1"], ["s2", "p2", "o2"]]}.
-```
-
-- If no facts are relevant, return an empty list, e.g., {"fact": []}.
-- Only use facts from the candidate list; do NOT generate new facts.
-"""
-generative_cot_reranking_prompt = """You are an expert in ranking facts based on their relevance to the query. 
-
-- Multi-hop reasoning **may be** required, meaning you might need to combine multiple facts to form a complete response.
-- If the query is a claim, relevance means the fact supports or contradicts it. For queries seeking specific information, relevance means the fact aids in reasoning and providing an answer.
-- Provide a rationale and select up to 4 relevant facts from the candidate list, output in JSON format without any other words, e.g., 
-
-```json
-{"thought": "Fact (s1, p1, o1) and (s2, p2, o2) support this query.", "fact": [["s1", "p1", "o1"], ["s2", "p2", "o2"]]}.
-```
-
-- If no facts are relevant, return an empty list, e.g., {"thought": "No fact is relevant to this query.", "fact": []}.
-- Only use facts from the candidate list; do NOT generate new facts.
-"""
-
-
 def merge_messages(messages: List, model_name: str):
     if model_name.startswith('o1-'):
         # concatenate message contents and merge them into one HumanMessage
@@ -265,7 +237,7 @@ class LLMGenerativeReranker(Reranker):
         if model_name.startswith('gpt-') or model_name.startswith('ft:gpt') or model_name.startswith('o1-'):
             set_llm_cache(SQLiteCache(database_path=f".llm_{model_name}_rerank.db"))
 
-    def rerank(self, task: str, query: str, candidate_items: List[Tuple], candidate_indices, top_k=None):
+    def rerank(self, task: str, query: str, candidate_items: List[Tuple], candidate_indices, len_after_rerank=None):
         if candidate_indices is None:
             candidate_indices = list(range(len(candidate_items)))
 
@@ -292,7 +264,7 @@ class LLMGenerativeReranker(Reranker):
 
             sorted_candidate_indices = [candidate_indices[i] for i in result_indices]
             sorted_candidate_items = [candidate_items[i] for i in result_indices]
-            return sorted_candidate_indices[:top_k], sorted_candidate_items[:top_k]
+            return sorted_candidate_indices[:len_after_rerank], sorted_candidate_items[:len_after_rerank]
 
     def write_rerank_prompt(self, query: str, candidates: List[Tuple], group_by_subject=False):
         user_prompt = 'Query: ' + query
@@ -315,8 +287,11 @@ class LLMGenerativeReranker(Reranker):
             for i, candidates in enumerate(candidates_group_by_subject):  # write each subject group in one line
                 user_prompt += f'- {json.dumps([list(candidate) for candidate in candidates])}\n'
 
+        from src.rerank.prompt import generative_multi_hop_filter_prompt, input_demo1, output_demo1
         messages = [
-            SystemMessage(generative_reranking_prompt),
+            SystemMessage(generative_multi_hop_filter_prompt),
+            # HumanMessage(input_demo1),
+            # AIMessage(output_demo1),
             HumanMessage(user_prompt),
         ]
         messages = merge_messages(messages, self.model_name)
@@ -353,7 +328,8 @@ class HFLoRAModelGenerativeReranker(Reranker):
         if task == 'fact_reranking':
             candidate_items, candidate_indices = retrieved_to_candidate_facts(input_items, input_indices, k=30)
 
-            messages = [{'role': 'system', 'content': generative_reranking_prompt},
+            from src.rerank.prompt import generative_multi_hop_filter_prompt
+            messages = [{'role': 'system', 'content': generative_multi_hop_filter_prompt},
                         {'role': 'user', 'content': f'\nQuery: {query}\nCandidate facts:\n' + '\n'.join([json.dumps(triple).lower() for triple in candidate_items])}]
 
             with torch.no_grad():

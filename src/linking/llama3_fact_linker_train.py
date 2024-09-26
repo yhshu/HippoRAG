@@ -25,7 +25,7 @@ from src.pangu.retrieval_api import GritLMRetriever
 fact_retriever_instruction = 'Given a query, retrieve relevant facts that contribute to answering this query.'
 
 
-def load_custom_dataset(tokenizer=None, data_dir='data/linker_training/queries', selected_datasets=None):
+def load_custom_dataset(tokenizer=None, data_dir='data/linker_training/queries', selected_datasets=None, num_candidate_fact=30):
     cache = pickle.load(open('data/linker_training/sentence_triple_cache.pkl', 'rb'))
     gritlm_model = GritLM('GritLM/GritLM-7B', torch_dtype='auto')
     datasets = {}
@@ -43,7 +43,7 @@ def load_custom_dataset(tokenizer=None, data_dir='data/linker_training/queries',
             split = 'validation'
         else:
             split = 'test'
-        split_data = load_dataset_split(cache, data_dir, file_name, gritlm_model, tokenizer, dataset_label)
+        split_data = load_dataset_split(cache, data_dir, file_name, gritlm_model, tokenizer, dataset_label, num_candidate_fact)
         if len(split_data) > 0:
             datasets[split] = Dataset.from_list(split_data)
     # end for each dataset file
@@ -52,7 +52,7 @@ def load_custom_dataset(tokenizer=None, data_dir='data/linker_training/queries',
     return dataset_dict
 
 
-def retrieved_to_candidate_facts(retrieved, labels, k=30):
+def retrieved_items_to_candidate_facts(retrieved, labels, k=30):
     retrieved = [eval(triple) for triple in retrieved]
     labels_dict = {(t[0], t[2]): t for t in labels if len(t) == 3}
 
@@ -90,7 +90,7 @@ def load_triples(cache: dict, dataset_label: str, sample: dict):
     return []
 
 
-def load_dataset_split(cache, data_dir: str, file_name: str, gritlm_model, tokenizer, dataset_label: str):
+def load_dataset_split(cache, data_dir: str, file_name: str, gritlm_model, tokenizer, dataset_label: str, num_candidate_fact=30):
     os.makedirs('data/linker_training/samples', exist_ok=True)
     tokenization_str = 'tokenized' if tokenizer is not None else 'chatml'
     linking_data_file_name = 'data/linker_training/samples/' + dataset_label + f'_{tokenization_str}.json'
@@ -118,12 +118,12 @@ def load_dataset_split(cache, data_dir: str, file_name: str, gritlm_model, token
         if custom_id in cache:
             labels = cache[custom_id]['triples']
 
-        retrieved = retriever.get_top_k_sentences(query, k=30)
-        retrieved = retrieved_to_candidate_facts(retrieved, labels, k=30)
+        retrieved = retriever.get_top_k_sentences(query, k=num_candidate_fact)
+        retrieved = retrieved_items_to_candidate_facts(retrieved, labels, k=num_candidate_fact)
 
-        from src.rerank import generative_reranking_prompt
+        from src.rerank.prompt import generative_multi_hop_filter_prompt
         messages = [
-            SystemMessage(generative_reranking_prompt),
+            SystemMessage(generative_multi_hop_filter_prompt),
             HumanMessage(f'\nQuery: {query}\nCandidate facts:\n' + '\n'.join([json.dumps(triple).lower() for triple in retrieved])),
             AIMessage(json.dumps({'fact': labels}).lower())
         ]
@@ -148,6 +148,7 @@ if __name__ == '__main__':
     parser.add_argument('--datasets', nargs='+', type=str, help='A list of datasets')
     parser.add_argument('--exp', type=str, help='Experiment name', default='fact_linker')
     parser.add_argument('--use_peft', action='store_true')
+    parser.add_argument('-nc', '--num_candidate_fact', type=int, default=5)
     args = parser.parse_args()
 
     os.makedirs(f"exp/{args.exp}", exist_ok=True)
@@ -161,7 +162,7 @@ if __name__ == '__main__':
     )
 
     tokenizer = AutoTokenizer.from_pretrained(args.model)
-    dataset = load_custom_dataset(tokenizer, selected_datasets=args.datasets)
+    dataset = load_custom_dataset(tokenizer, selected_datasets=args.datasets, num_candidate_fact=args.num_candidate_fact)
 
     model = AutoModelForCausalLM.from_pretrained(args.model, device_map='auto')
     if args.use_peft:
