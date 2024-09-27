@@ -89,7 +89,7 @@ def detailed_log(dataset: list, run_dict, eval_res, chunk=False, threshold=None,
 
 
 def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: str, linker_name: str, linking: str,
-                      doc_ensemble: bool, dpr_only: bool, chunk: bool, link_top_k: Union[int, None] = 3, oracle_extraction=False):
+                      doc_ensemble: bool, dpr_only: bool, chunk: bool, link_top_k: Union[int, None] = 3, oracle_extraction=False, reranker_name=None):
     doc_ensemble_str = 'doc_ensemble' if doc_ensemble else 'no_ensemble'
     extraction_str = extractor_name.replace('/', '_').replace('.', '_')
     graph_creating_str = retriever_name.replace('/', '_').replace('.', '_')
@@ -99,8 +99,9 @@ def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: st
     if oracle_extraction:
         linking_str += '_oracle_ie'
     dpr_only_str = '_dpr_only' if dpr_only else ''
+    reranker_str = f'_RE_{reranker_name}' if reranker_name is not None else ''
     os.makedirs(f'output/retrieval/{dataset_name}', exist_ok=True)
-    run_output_path = f'output/retrieval/{dataset_name}/{dataset_name}_run_{doc_ensemble_str}_{extraction_str}_{graph_creating_str}_{linking_str}{dpr_only_str}.json'
+    run_output_path = f'output/retrieval/{dataset_name}/{dataset_name}_run_{doc_ensemble_str}_E_{extraction_str}_R_{graph_creating_str}_L_{linking_str}{dpr_only_str}{reranker_str}.json'
     print(f'Log will be saved to {run_output_path}')  # this file is used for pytrec_eval, another log file will be saved for details
 
     pytrec_metrics = {'map', 'ndcg'}
@@ -192,7 +193,7 @@ def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: st
 
     logs = detailed_log(dataset, run_dict, eval_res, chunk, dpr_only=dpr_only)
     os.makedirs(f'output/retrieval/{dataset_name}', exist_ok=True)
-    detailed_log_output_path = f'output/retrieval/{dataset_name}/{dataset_name}_log_{doc_ensemble_str}_{extraction_str}_{graph_creating_str}_{linking_str}{dpr_only_str}.json'
+    detailed_log_output_path = f'output/retrieval/{dataset_name}/{dataset_name}_log_{doc_ensemble_str}_E_{extraction_str}_R_{graph_creating_str}_L_{linking_str}{dpr_only_str}{reranker_str}.json'
     with open(detailed_log_output_path, 'w') as f:
         json.dump(logs, f)
     print(f'Detailed log saved to {detailed_log_output_path}')
@@ -250,4 +251,4 @@ if __name__ == '__main__':
     if args.linking == 'ner_to_node':
         link_top_k = None
     run_retrieve_beir(args.dataset, args.extractor, args.retriever, args.linker, args.linking,
-                      args.doc_ensemble, args.dpr_only, args.chunk, link_top_k=args.link_top_k, oracle_extraction=args.oracle_ie)
+                      args.doc_ensemble, args.dpr_only, args.chunk, link_top_k=args.link_top_k, oracle_extraction=args.oracle_ie, reranker_name=args.reranker)

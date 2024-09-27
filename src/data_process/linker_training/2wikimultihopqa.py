@@ -65,9 +65,9 @@ if __name__ == '__main__':
         with open(output_path, 'w') as f:
             json.dump(split_data, f)
         print(f'Saving {split} ({len(split_data)}) to {output_path}')
-# end for each split
+    # end for each split
 
-corpus_output_path = 'data/linker_training/corpus/2wikimultihopqa_corpus.json'
-with open(corpus_output_path, 'w') as f:
-    json.dump(corpus_dict, f)
-print(f'Saving corpus ({len(corpus_dict)}) to {corpus_output_path}')
+    corpus_output_path = 'data/linker_training/corpus/2wikimultihopqa_corpus.json'
+    with open(corpus_output_path, 'w') as f:
+        json.dump(corpus_dict, f)
+    print(f'Saving corpus ({len(corpus_dict)}) to {corpus_output_path}')

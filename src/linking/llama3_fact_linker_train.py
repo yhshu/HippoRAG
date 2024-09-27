@@ -80,7 +80,7 @@ def load_triples(cache: dict, dataset_label: str, sample: dict):
     from src.data_process.util import generate_hash
     if 'msmacro' in dataset_label:
         for candidate in sample['candidates']:
-            custom_id = f"{dataset_label}_{sample['id']}_{generate_hash(candidate['sentence'])}"
+            custom_id = f"{dataset_label}_{sample['id']}_{generate_hash(candidate['sentence'])}"  # dataset split, query id, sentence hash
             if custom_id in cache:
                 return cache[custom_id]['triples']
     else:

@@ -33,7 +33,7 @@ if __name__ == '__main__':
             print('Error:', response)
             continue
         custom_id = response['custom_id']
-        cache[custom_id] = content
+        cache[custom_id] = content  # write to cache: extracted triples
 
     pickle.dump(cache, open(cache_path, 'wb'))
     print('Cache saved to', cache_path)
