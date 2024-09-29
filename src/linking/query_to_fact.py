@@ -186,7 +186,7 @@ def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, 
 
 
 def graph_search_with_fact_entities(hipporag: HippoRAG, query: str, link_top_k: int, query_doc_scores, query_fact_scores, top_k_facts, top_k_fact_indices,
-                                    return_ppr=False, use_phrase=True, use_passage=True, passage_filtering=False):
+                                    return_ppr=False, use_phrase=True, use_passage=True, passage_truncation=False, num_passage_node=None, passage_node_weight=0.25):
     """
 
     @param hipporag:
@@ -232,14 +232,14 @@ def graph_search_with_fact_entities(hipporag: HippoRAG, query: str, link_top_k: 
         from src.processing import min_max_normalize
         normalized_dpr_doc_scores = min_max_normalize(dpr_sorted_scores)
 
-        for i, doc_id in enumerate(dpr_sorted_doc_ids.tolist()[:100]):  # entry point weights
+        for i, doc_id in enumerate(dpr_sorted_doc_ids.tolist()[:num_passage_node]):  # entry point weights
             text = hipporag.dataset_df.iloc[doc_id]['paragraph']
             doc_score = normalized_dpr_doc_scores[i]
             doc_node_id = hipporag.kb_node_phrase_to_id.get(text, None)
-            passage_weights[doc_node_id] = doc_score * 0.25
-            linking_score_map[text] = doc_score * 0.25
+            passage_weights[doc_node_id] = doc_score * passage_node_weight
+            linking_score_map[text] = doc_score * passage_node_weight
 
-    if passage_filtering:
+    if passage_truncation:
         from src.processing import entropy_based_truncation
         passage_weights = entropy_based_truncation(passage_weights)
         # only keep keys in linking_score_map that have non-zero weights in all_phrase_weights

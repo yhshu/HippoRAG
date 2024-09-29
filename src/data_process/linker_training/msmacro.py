@@ -27,7 +27,7 @@ if __name__ == '__main__':
     num_sample = {'train': 20000, 'dev': 1000}
     random.seed(1)
 
-    dataset = load_dataset('ms_marco', 'v2.1')
+    dataset = load_dataset('ms_marco', 'v2.1')  # Hugging Face dataset
 
     train_dataset = dataset['train']
     validation_dataset = dataset['validation']
