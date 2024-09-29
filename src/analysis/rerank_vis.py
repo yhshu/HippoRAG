@@ -14,6 +14,7 @@ if __name__ == '__main__':
     num_triple_after = 0
     num_no_triple_after = 0
 
+    outputs = []
     for sample in tqdm(log):
         question = sample['question'] if 'question' in sample else sample['query']
         gold_doc = None
@@ -33,10 +34,15 @@ if __name__ == '__main__':
         num_triple_after += len(fact_after_rerank)
         num_no_triple_after += 1 if len(fact_after_rerank) == 0 else 0
 
-        print(f"{question}\t{fact_before_rerank}\t{fact_after_rerank}\t{gold_doc}")
+        outputs.append(f"{question}\t{fact_before_rerank}\t{fact_after_rerank}\t{gold_doc}")
 
     print(f"Num samples: {len(log)}")
     print(f"Num same: {num_same / len(log)}")
     print(f"Num triple before filter: {num_triple_before / len(log)}")
     print(f"Num triple after filter: {num_triple_after / len(log)}")
     print(f"Num no triple after filter: {num_no_triple_after / len(log)}")
+
+    output_path = args.log.replace('.json', '_rerank.tsv')
+    with open(output_path, 'w') as f:
+        f.write('\n'.join(outputs))
+    print(f"Saved to {output_path}")
