@@ -35,7 +35,7 @@ def named_entity_recognition_for_corpus_openai_batch(dataset_name: str, num_pass
     print("Total prompt tokens:", total_tokens)
     print("Approximate costs for prompt tokens using GPT-4o-mini Batch API:", round(0.075 * total_tokens / 1e6, 3))
     print("Approximate costs for prompt tokens using GPT-3.5-turbo-0125 Batch API", round(0.25 * total_tokens / 1e6, 3))
-    print("Approximate costs for prompt tokens using GPT-4o Batch API:", round(2.5 * total_tokens / 1e6, 3))
+    print("Approximate costs for prompt tokens using GPT-4o Batch API:", round(1.25 * total_tokens / 1e6, 3))
 
     # Save to the batch file
     with open(corpus_jsonl_path, 'w') as f:

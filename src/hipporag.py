@@ -10,7 +10,6 @@ import igraph as ig
 import numpy as np
 import pandas as pd
 import torch
-from networkx.classes.filters import hide_nodes
 from scipy.sparse import csr_matrix
 
 from tqdm import tqdm
@@ -187,14 +186,14 @@ class HippoRAG:
                 # reranker = LLMLogitsReranker(fact_rerank_model_name)
                 # from src.rerank import RankGPT
                 # reranker = RankGPT(rerank_model_name)
-                from src.rerank import LLMGenerativeReranker
-                self.reranker = LLMGenerativeReranker(reranker_name)
+                from src.rerank import LLMFilter
+                self.reranker = LLMFilter(reranker_name)
             elif reranker_name in ['oracle_triple']:
-                from src.rerank import OracleTripleFiltering
-                self.reranker = OracleTripleFiltering(reranker_name)
+                from src.rerank import OracleTripleFilter
+                self.reranker = OracleTripleFilter(reranker_name)
             else:  # load Llama 3.1 model with LoRA
-                from src.rerank import HFLoRAModelGenerativeReranker
-                self.reranker = HFLoRAModelGenerativeReranker(reranker_name)
+                from src.rerank import HFLoRAFilter
+                self.reranker = HFLoRAFilter(reranker_name)
             self.reranker_name = reranker_name
             self.statistics['num_dpr'] = 0
 
@@ -474,6 +473,25 @@ class HippoRAG:
                 self.logger.error('Error in Query NER')
                 query_ner_list = []
         return query_ner_list
+
+    def query_to_fact(self, query: str, top_k=10):
+        if self.dpr_only:
+            return []
+        else:
+            self.load_triple_vectors()
+            query_embedding = self.embed_model.encode_text(query, instruction=get_query_instruction(self.embed_model, 'query_to_fact', self.corpus_name),
+                                                               return_cpu=True, return_numpy=True, norm=True)
+            # rank and get link_top_k oracle facts given the query
+            query_fact_scores = np.dot(self.triple_embeddings, query_embedding.T)  # (num_facts, dim) x (1, dim).T = (num_facts, 1)
+            query_fact_scores = np.squeeze(query_fact_scores) if query_fact_scores.ndim == 2 else query_fact_scores
+            query_fact_scores = min_max_normalize(query_fact_scores)
+
+            if top_k is not None:
+                top_k_fact_indicies = np.argsort(query_fact_scores)[-top_k:][::-1].tolist()
+            else:
+                top_k_fact_indicies = np.argsort(query_fact_scores)[::-1].tolist()
+            top_k_facts = [self.triples[i] for i in top_k_fact_indicies]
+        return top_k_facts[:top_k]
 
     def get_neighbors(self, prob_vector, max_depth=1):
 

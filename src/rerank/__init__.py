@@ -230,12 +230,19 @@ def merge_messages(messages: List, model_name: str):
     return messages
 
 
-class LLMGenerativeReranker(Reranker):
-    def __init__(self, model_name):
+class LLMFilter(Reranker):
+    def __init__(self, model_name, demo_path="data/fact_filter/beir_msmarco_train_200.json"):
         super().__init__(model_name)
         self.model_name = model_name
         if model_name.startswith('gpt-') or model_name.startswith('ft:gpt') or model_name.startswith('o1-'):
             set_llm_cache(SQLiteCache(database_path=f".llm_{model_name}_rerank.db"))
+
+        self.demo_retriever = None
+        if os.path.isfile(demo_path):
+            self.demos = json.load(open(demo_path, 'r'))
+            if self.demos is not None and len(self.demos) > 0:
+                from src.pangu.retrieval_api import BM25Retriever
+                self.demo_retriever = BM25Retriever([item['question'] for item in self.demos])
 
     def rerank(self, task: str, query: str, candidate_items: List[Tuple], candidate_indices, len_after_rerank=None):
         if candidate_indices is None:
@@ -287,14 +294,20 @@ class LLMGenerativeReranker(Reranker):
             for i, candidates in enumerate(candidates_group_by_subject):  # write each subject group in one line
                 user_prompt += f'- {json.dumps([list(candidate) for candidate in candidates])}\n'
 
-        from src.rerank.prompt import generative_multi_hop_filter_prompt, input_demo1, output_demo1
-        messages = [
-            SystemMessage(generative_multi_hop_filter_prompt),
-            # HumanMessage(input_demo1),
-            # AIMessage(output_demo1),
-            HumanMessage(user_prompt),
-        ]
-        messages = merge_messages(messages, self.model_name)
+        from src.rerank.prompt import generative_multi_hop_filter_prompt
+        messages = [SystemMessage(generative_multi_hop_filter_prompt)]
+        retrieved_demo_indices = self.demo_retriever.get_top_k_indices(query, 3)
+        for idx in retrieved_demo_indices:
+            d = self.demos[idx]
+            demo_input = f"Query: {d['question']}\nCandidate facts:\n"
+            for candidate in d['fact_before_filter']:
+                demo_input += f"- {json.dumps(candidate)}\n"
+            messages.append(HumanMessage(demo_input))
+            fact_str = json.dumps(d['fact_after_filter'])
+            demo_output = "{\"fact\": " + fact_str  + "}"
+            messages.append(AIMessage(demo_output))
+        messages.append(HumanMessage(user_prompt))
+        # messages = merge_messages(messages, self.model_name)  # for o1 models
         return messages
 
 
@@ -314,7 +327,7 @@ def retrieved_to_candidate_facts(candidate_items, candidate_indices, k=30):
     return sorted_candidate_items[:k], sorted_candidate_indices[:k]
 
 
-class HFLoRAModelGenerativeReranker(Reranker):
+class HFLoRAFilter(Reranker):
     def __init__(self, model_path, base_model='meta-llama/Meta-Llama-3.1-8B-Instruct'):
         if 'adapter_config.json' in os.listdir(model_path):
             base_model = AutoModelForCausalLM.from_pretrained(base_model, device_map='auto', return_dict=True)
@@ -362,7 +375,7 @@ class HFLoRAModelGenerativeReranker(Reranker):
             return sorted_candidate_indices[:len_after_rerank], sorted_candidate_items[:len_after_rerank]
 
 
-class OracleTripleFiltering(Reranker):
+class OracleTripleFilter(Reranker):
     def __init__(self, model_name: str):
         self.model_name = model_name
 

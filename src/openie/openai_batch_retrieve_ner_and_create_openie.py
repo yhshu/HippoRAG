@@ -79,7 +79,7 @@ if __name__ == '__main__':
         print("Total prompt tokens:", total_tokens)
         print("Approximate costs for prompt tokens using GPT-4o-mini Batch API:", round(0.075 * total_tokens / 1e6, 3))
         print("Approximate costs for prompt tokens using GPT-3.5-turbo-0125 Batch API", round(0.25 * total_tokens / 1e6, 3))
-        print("Approximate costs for prompt tokens using GPT-4o Batch API:", round(2.5 * total_tokens / 1e6, 3))
+        print("Approximate costs for prompt tokens using GPT-4o Batch API:", round(1.25 * total_tokens / 1e6, 3))
 
         # Save to the batch file
         with open(openie_submission_jsonl_path, 'w') as f:
