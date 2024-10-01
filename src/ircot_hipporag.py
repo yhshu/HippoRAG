@@ -270,7 +270,7 @@ if __name__ == '__main__':
             gold_docs = [item['title'] + '\n' + item['paragraph_text'] for item in sample['paragraphs'] if item['is_supporting']]
 
         oracle_triples = None
-        if hipporag.reranker_name in ['oracle_triple']:
+        if hipporag.reranker_name is not None and hipporag.reranker_name in ['oracle_triple']:
             assert len(gold_docs) > 0
             oracle_triples = []
             for p in gold_docs:

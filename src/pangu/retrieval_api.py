@@ -149,7 +149,9 @@ class DPR(TextRetriever):
         self.passage_embeddings = self._preprocess()
 
     def _preprocess(self):
-        return self.passage_encoder.encode(self.corpus)
+        res = self.passage_encoder.encode(self.corpus)
+        print("Passage embedded")
+        return res
 
     def scores_on_corpus(self, query):
         from sentence_transformers import util

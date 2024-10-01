@@ -24,7 +24,7 @@ if __name__ == '__main__':
     corpus_dict = {}
     full_text_to_id = {}
     corpus_id = 0
-    num_sample = {'train': 20000, 'dev': 1000}
+    split_num_sample = {'train': 20000, 'dev': 1000}
     random.seed(1)
 
     dataset = load_dataset('ms_marco', 'v2.1')  # Hugging Face dataset
@@ -33,7 +33,7 @@ if __name__ == '__main__':
     validation_dataset = dataset['validation']
     test_dataset = dataset['test']
 
-    for split in num_sample.keys():
+    for split in split_num_sample.keys():
         if split == 'train':
             split_data = train_dataset
         elif split == 'dev':
@@ -43,7 +43,7 @@ if __name__ == '__main__':
         else:
             raise ValueError(f"Invalid split: {split}")
 
-        assert 0 <= num_sample[split] <= len(split_data)
+        assert 0 <= split_num_sample[split] <= len(split_data)
         split_data = split_data.shuffle(seed=1)
 
         corpus = []
@@ -79,7 +79,7 @@ if __name__ == '__main__':
             if len(evidence_candidates) > 0:  # if the query has at least one positive sample
                 new_sample['candidates'] = evidence_candidates
                 split_data_list.append(new_sample)
-                if num_sample[split] is not None and isinstance(num_sample[split], int) and len(split_data_list) >= num_sample[split]:
+                if split_num_sample[split] is not None and isinstance(split_num_sample[split], int) and len(split_data_list) >= split_num_sample[split]:
                     break
         # end of for each sample
 

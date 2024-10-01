@@ -18,10 +18,10 @@ if __name__ == '__main__':
     corpus_dict = {}
     full_text_to_id = {}
     corpus_id = 0
-    num_sample = {'train': 'all', 'dev': 'all'}  # specify the number of samples for each split
+    split_num_sample = {'train': 'all', 'dev': 'all'}  # specify the number of samples for each split
     random.seed(1)
 
-    for split in num_sample.keys():
+    for split in split_num_sample.keys():
         path = os.path.join(args.dir, f'musique_ans_v1.0_{split}.jsonl')
         # read musique raw jsonl file
         split_data = []
@@ -30,9 +30,9 @@ if __name__ == '__main__':
             for line in raw:
                 split_data.append(json.loads(line))
 
-        if num_sample[split] is not None and isinstance(num_sample[split], int):  # sample data
-            assert 0 <= num_sample[split] <= len(split_data)
-            split_data = random.sample(split_data, min(num_sample[split], len(split_data)))
+        if split_num_sample[split] is not None and isinstance(split_num_sample[split], int):  # sample data
+            assert 0 <= split_num_sample[split] <= len(split_data)
+            split_data = random.sample(split_data, min(split_num_sample[split], len(split_data)))
 
         print(f'Processing {split} ({len(split_data)})')
 
@@ -43,9 +43,9 @@ if __name__ == '__main__':
             for passage in sample['paragraphs']:
                 # add to query data
                 is_supporting = passage['is_supporting']
-                full_text = passage['title'] + '\n' + passage['paragraph_text']
                 if is_supporting is False:
                     continue
+                full_text = passage['title'] + '\n' + passage['paragraph_text']
 
                 evidence_candidates.append({'passage_id': full_text_to_id.get(full_text, str(corpus_id)),
                                             'sentence': passage['paragraph_text'], 'triples': '', 'relevance': 'support'})

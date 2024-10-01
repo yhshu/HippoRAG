@@ -14,16 +14,16 @@ if __name__ == '__main__':
     corpus_dict = {}
     full_text_to_id = {}
     corpus_id = 0
-    num_sample = {'train': 20000, 'dev': 2000}
+    split_num_sample = {'train': 20000, 'dev': 2000}
     random.seed(1)
 
-    for split in num_sample.keys():
+    for split in split_num_sample.keys():
         path = os.path.join(args.dir, f'{split}.json')
         split_data = json.load(open(path, 'r'))
 
-        if num_sample[split] is not None and isinstance(num_sample[split], int):
-            assert 0 <= num_sample[split] <= len(split_data)
-            split_data = random.sample(split_data, min(num_sample[split], len(split_data)))
+        if split_num_sample[split] is not None and isinstance(split_num_sample[split], int):
+            assert 0 <= split_num_sample[split] <= len(split_data)
+            split_data = random.sample(split_data, min(split_num_sample[split], len(split_data)))
 
         print(f'Processing {split} ({len(split_data)})')
         corpus = []

@@ -12,7 +12,7 @@ from src.pangu.language.openkg_language import OpenKGLanguage
 from src.pangu.language.plan_wrapper import Plan
 from src.pangu.openkg_agent import OpenKGAgent
 from src.pangu.query_util import execute_query_with_virtuoso, lisp_to_repr
-from src.pangu.retrieval_api import SentenceTransformerRetriever, BM25Retriever, Colbertv2Retrieval, GritLMRetriever
+from src.pangu.retrieval_api import SentenceTransformerRetriever
 
 
 def format_candidates(plans):

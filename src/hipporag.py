@@ -179,6 +179,7 @@ class HippoRAG:
         self.qa_model = init_langchain_model(qa_model.provider, qa_model.model_name)
 
         self.reranker = None
+        self.reranker_name = None
         if reranker_name is not None:
             if (reranker_name.startswith('gpt') or reranker_name.startswith('ft:gpt')
                     or reranker_name.startswith('o1-') or reranker_name in ['llama_cpp_server']):
