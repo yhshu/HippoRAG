@@ -231,14 +231,14 @@ def merge_messages(messages: List, model_name: str):
 
 
 class LLMFilter(Reranker):
-    def __init__(self, model_name, demo_path="data/fact_filter/beir_msmarco_train_200.json"):
+    def __init__(self, model_name, demo_path=None):
         super().__init__(model_name)
         self.model_name = model_name
         if model_name.startswith('gpt-') or model_name.startswith('ft:gpt') or model_name.startswith('o1-'):
             set_llm_cache(SQLiteCache(database_path=f".llm_{model_name}_rerank.db"))
 
         self.demo_retriever = None
-        if os.path.isfile(demo_path):
+        if demo_path is not None and os.path.isfile(demo_path):
             self.demos = json.load(open(demo_path, 'r'))
             if self.demos is not None and len(self.demos) > 0:
                 from src.pangu.retrieval_api import BM25Retriever
@@ -296,16 +296,22 @@ class LLMFilter(Reranker):
 
         from src.rerank.prompt import generative_multi_hop_filter_prompt
         messages = [SystemMessage(generative_multi_hop_filter_prompt)]
-        retrieved_demo_indices = self.demo_retriever.get_top_k_indices(query, 3)
-        for idx in retrieved_demo_indices:
-            d = self.demos[idx]
-            demo_input = f"Query: {d['question']}\nCandidate facts:\n"
-            for candidate in d['fact_before_filter']:
-                demo_input += f"- {json.dumps(candidate)}\n"
-            messages.append(HumanMessage(demo_input))
-            fact_str = json.dumps(d['fact_after_filter'])
-            demo_output = "{\"fact\": " + fact_str  + "}"
-            messages.append(AIMessage(demo_output))
+        if self.demo_retriever is not None:
+            retrieved_demo_indices = self.demo_retriever.get_top_k_indices(query, 3)
+            for idx in retrieved_demo_indices:
+                d = self.demos[idx]
+                demo_input = f"Query: {d['question']}\nCandidate facts:\n"
+                for candidate in d['fact_before_filter']:
+                    demo_input += f"- {json.dumps(candidate)}\n"
+                messages.append(HumanMessage(demo_input))
+                fact_str = json.dumps(d['fact_after_filter'])
+                demo_output = "{\"fact\": " + fact_str + "}"
+                messages.append(AIMessage(demo_output))
+        # else:  # no demo retrieval
+        #     from src.rerank.prompt import msmarco_demo1_input, msmarco_demo1_output, msmarco_demo2_input, msmarco_demo2_output, msmarco_demo3_input, msmarco_demo3_output
+        #     messages.extend([HumanMessage(msmarco_demo1_input), AIMessage(msmarco_demo1_output),
+        #                      HumanMessage(msmarco_demo2_input), AIMessage(msmarco_demo2_output),
+        #                      HumanMessage(msmarco_demo3_input), AIMessage(msmarco_demo3_output)])
         messages.append(HumanMessage(user_prompt))
         # messages = merge_messages(messages, self.model_name)  # for o1 models
         return messages

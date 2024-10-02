@@ -12,7 +12,7 @@ generative_multi_hop_filter_prompt = """You are an expert in ranking facts based
 - Only use facts from the candidate list; do NOT generate new facts.
 """
 
-input_demo1 = """Query: Who is the spouse of the director of film Days And Hours?
+twowiki_demo1_input = """Query: Who is the spouse of the director of film Days And Hours?
 Candidate facts:
 - ["days and hours", "directed by", "pjer alica"]
 - ["days and hours", "is a", "2004 bosnian film"]
@@ -21,7 +21,40 @@ Candidate facts:
 - ["andr cayatte", "directed", "fran oise ou la vie conjugale"]
 """
 
-output_demo1 = """{"fact": [["days and hours", "directed by", "pjer alica"]]}"""
+twowiki_demo1_output = """{"fact": [["days and hours", "directed by", "pjer alica"]]}"""
+
+msmarco_demo1_input = """Query: definition of square rooting
+Candidate facts:
+- ["words", "includes", "rootinesses"]
+- ["words", "contain", "root"]
+- ["presence of roots", "resists", "tug"]
+- ["class of materials", "includes", "roots"]
+- ["any number", "multiplied to", "itself"]
+"""
+
+msmarco_demo1_output = """{"fact": []}"""
+
+msmarco_demo2_input = """Query: where is lake city florida
+Candidate facts:
+- ["lake city", "is the county seat of", "columbia county"]
+- ["city of leesburg", "is in", "lake county"]
+- ["columbia county", "is located in", "florida"]
+- ["lake harris", "located in", "lake county"]
+- ["leon county", "is located in", "florida"]
+"""
+
+msmarco_demo2_output = """{"fact": [["lake city", "is the county seat of", "columbia county"], ["columbia county", "is located in", "florida"]]}"""
+
+msmarco_demo3_input = """Query: describe what is a mse
+Candidate facts:
+- ["microsoft security essentials", "is also known as", "mse"]
+- ["mse", "ran on", "windows xp"]
+- ["mse", "ran on", "windows vista"]
+- ["mse", "ran on", "windows 7"]
+- ["mse", "did not run on", "windows 8"]
+"""
+
+msmarco_demo3_output = """{"fact": ["microsoft security essentials", "is also known as", "mse"], ["mse", "ran on", "windows xp"], ["mse", "ran on", "windows vista"], ["mse", "ran on", "windows 7"], ["mse", "did not run on", "windows 8"]}"""
 
 generative_multi_hop_filter_cot_prompt = """You are an expert in ranking facts based on their relevance to the query. 
 
