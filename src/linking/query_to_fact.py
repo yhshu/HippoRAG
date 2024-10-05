@@ -186,7 +186,7 @@ def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, 
 
 
 def graph_search_with_fact_entities(hipporag: HippoRAG, query: str, link_top_k: int, query_doc_scores, query_fact_scores, top_k_facts, top_k_fact_indices,
-                                    return_ppr=False, use_phrase=True, use_passage=True, passage_truncation=False, num_passage_node=None, passage_node_weight=0.25):
+                                    return_ppr=False, use_phrase=True, use_passage=True, passage_truncation=False, num_passage_node=None, passage_node_weight=0.25, filter_phrase_by_passage=False):
     """
 
     @param hipporag:
@@ -238,6 +238,24 @@ def graph_search_with_fact_entities(hipporag: HippoRAG, query: str, link_top_k: 
             doc_node_id = hipporag.kb_node_phrase_to_id.get(text, None)
             passage_weights[doc_node_id] = doc_score * passage_node_weight
             linking_score_map[text] = doc_score * passage_node_weight
+
+        if filter_phrase_by_passage:
+            for phrase in linking_score_map.keys():
+                if '\n' in phrase:
+                    continue
+                phrase_not_in_passage = True
+                for doc_id in dpr_sorted_doc_ids.tolist()[:10]:
+                    triples_in_doc = hipporag.get_triples_and_triple_ids_by_corpus_idx(doc_id)[0]
+                    for t in triples_in_doc:
+                        if phrase in t:
+                            phrase_not_in_passage = False
+                            break
+                    if phrase_not_in_passage is False:
+                        break
+                if phrase_not_in_passage:
+                    phrase_weights[hipporag.kb_node_phrase_to_id[phrase]] = 0.0
+                    linking_score_map[phrase] = 0.0
+            linking_score_map = {k: v for k, v in linking_score_map.items() if v > 0}
 
     if passage_truncation:
         from src.processing import entropy_based_truncation

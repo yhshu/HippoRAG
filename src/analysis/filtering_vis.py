@@ -24,10 +24,13 @@ if __name__ == '__main__':
             gold_doc = sample['gold_passages']
         fact_before_rerank = []
         fact_after_rerank = []
+        differences = []
+        metric = sample['ndcg'] if 'ndcg' in sample else ''
         if 'rerank' in sample:
             fact_before_rerank = sample['rerank']['facts_before_rerank']
             fact_after_rerank = sample['rerank']['facts_after_rerank']
             differences = set([tuple(item) for item in fact_before_rerank]) - set([tuple(item) for item in fact_after_rerank])
+            differences = list(differences)
 
         if set([tuple(item) for item in fact_before_rerank]) == set([tuple(item) for item in fact_after_rerank]):
             num_same += 1
@@ -35,7 +38,7 @@ if __name__ == '__main__':
         num_triple_after += len(fact_after_rerank)
         num_no_triple_after += 1 if len(fact_after_rerank) == 0 else 0
 
-        outputs.append(f"{question}\t{fact_before_rerank}\t{fact_after_rerank}\t{differences}\t{gold_doc}")
+        outputs.append(f"{question}\t{fact_before_rerank}\t{fact_after_rerank}\t{differences}\t{metric}\t{gold_doc}")
 
     print(f"Num samples: {len(log)}")
     print(f"Num same: {num_same / len(log)}")
