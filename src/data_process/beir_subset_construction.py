@@ -18,13 +18,18 @@ def get_sampled_query_ids(qrels, num_sample):
     sampled_query_ids = None
     if num_sample is not None:
         sampled_query_ids = set()
-        assert isinstance(num_sample, int)
         for item in qrels:
             query_id = item[0]
             sampled_query_ids.add(query_id)
-        assert 0 < num_sample <= len(sampled_query_ids), f'sample size {num_sample} is invalid, check if it is in range (0, {len(sampled_query_ids)}]'
-        sampled_query_ids = random.sample(list(sampled_query_ids), num_sample)
-        print(f'{len(sampled_query_ids)} queries are sampled')
+
+        if isinstance(num_sample, int):
+            assert 0 < num_sample <= len(sampled_query_ids), f'sample size {num_sample} is invalid, check if it is in range (0, {len(sampled_query_ids)}]'
+            sampled_query_ids = random.sample(list(sampled_query_ids), num_sample)
+            print(f'{len(sampled_query_ids)} queries are sampled')
+        elif num_sample == 'all':
+            print('All queries are sampled')
+        else:
+            raise ValueError(f'Invalid sample size: {num_sample}')
     return sampled_query_ids
 
 
@@ -96,7 +101,7 @@ def generate_dataset_with_relevant_corpus(split: str, qrels_path: str, full_corp
     if passage_per_query is not None:
         assert 0 < passage_per_query <= len(full_corpus_ids), f'passage_per_query {passage_per_query} is invalid, check if it is in range (0, {len(full_corpus_ids)})'
         full_corpus_values = list(full_corpus.values())
-        sampled_corpus_values = random.sample(full_corpus_values, max(len(full_corpus_values), 100 * len(split_queries)))
+        sampled_corpus_values = random.sample(full_corpus_values, min(len(full_corpus_values), 100 * len(split_queries)))
         corpus_contents = [item['title'] + '\n' + item['text'] for item in sampled_corpus_values]
 
         if retriever_name == 'bm25':
@@ -152,7 +157,7 @@ def generate_dataest_with_full_corpus(split: str, qrels_path: str, corpus_path: 
     with open(qrels_path) as f:
         qrels = f.readlines()
     qrels = [q.split() for q in qrels[1:]]
-    print(f'#{split}', len(qrels))
+    print(f'#{split} qrels', len(qrels))
     split_query_ids = set()
     passage_hash_to_id = dict()  # To make unique corpus, use content hash rather than the original BEIR doc ID to avoid duplication
     full_corpus = []  # output 1
@@ -230,9 +235,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', type=str, help='directory path to a BEIR subset')
     parser.add_argument('--corpus', type=str, choices=['full', 'relevant'], help='full or relevant corpus', default='full')
-    parser.add_argument('-ntrain', '--num_train', type=int, help='number of training samples')
-    parser.add_argument('-ndev', '--num_dev', type=int, help='number of dev samples')
-    parser.add_argument('-ntest', '--num_test', type=int, help='number of test samples')
+    parser.add_argument('-ntrain', '--num_train', help='number of training samples')
+    parser.add_argument('-ndev', '--num_dev', help='number of dev samples')
+    parser.add_argument('-ntest', '--num_test', help='number of test samples')
     parser.add_argument('-pq', '--passage_per_query', type=int, help='number of passages per query to sample, only used when corpus is `relevant`')
     parser.add_argument('--chunk', action='store_true')
     parser.add_argument('--seed', type=int, default=1)

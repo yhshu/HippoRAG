@@ -230,13 +230,9 @@ def load_corpus(dataset_name: str, model_name: str, num_passages, run_ner):
     model_name_processed = model_name.replace('/', '_')
     corpus = json.load(open(f'data/{dataset_name}_corpus.json', 'r'))
     assert corpus_has_duplication(corpus) is False
-    if 'hotpotqa' in dataset_name:
-        keys = list(corpus.keys())
-        retrieval_corpus = [{'idx': i, 'passage': key + '\n' + ''.join(corpus[key])} for i, key in enumerate(keys)]
-    else:
-        retrieval_corpus = corpus
-        for document in retrieval_corpus:
-            document['passage'] = document['title'] + '\n' + document['text']
+    retrieval_corpus = corpus
+    for document in retrieval_corpus:
+        document['passage'] = document['title'] + '\n' + document['text']
     dataset_name = '_' + dataset_name
     if num_passages == 'all':
         num_passages = len(retrieval_corpus)

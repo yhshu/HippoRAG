@@ -54,13 +54,7 @@ def parse_prompt(file_path):
 
 def retrieve_step(query: str, corpus, top_k: int, hipporag: HippoRAG, dataset_name: str, link_top_k: Union[None, int], linking='ner_to_node', oracle_triples=None):
     ranks, scores, logs = hipporag.rank_docs(query, doc_top_k=top_k, link_top_k=link_top_k, linking=linking, oracle_triples=oracle_triples)
-    if dataset_name in ['hotpotqa', 'hotpotqa_train']:
-        retrieved_passages = []
-        for rank in ranks:
-            key = list(corpus.keys())[rank]
-            retrieved_passages.append(key + '\n' + ''.join(corpus[key]))
-    else:
-        retrieved_passages = [corpus[rank]['title'] + '\n' + corpus[rank]['text'] for rank in ranks]
+    retrieved_passages = [corpus[rank]['title'] + '\n' + corpus[rank]['text'] for rank in ranks]
     return retrieved_passages, scores, logs
 
 

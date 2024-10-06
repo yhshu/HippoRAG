@@ -190,6 +190,7 @@ def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: st
         metrics[key] /= len(dataset) if len(dataset) > 0 else 1
         metrics[key] = round(metrics[key], 3)
     print(f'Metrics: {metrics}')
+    print(hipporag.statistics)
 
     logs = detailed_log(dataset, run_dict, eval_res, chunk, dpr_only=dpr_only)
     os.makedirs(f'output/retrieval/{dataset_name}', exist_ok=True)
@@ -197,7 +198,6 @@ def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: st
     with open(detailed_log_output_path, 'w') as f:
         json.dump(logs, f)
     print(f'Detailed log saved to {detailed_log_output_path}')
-    print(hipporag.statistics)
 
 
 if __name__ == '__main__':
