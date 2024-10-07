@@ -71,7 +71,7 @@ def detailed_log(dataset: list, run_dict, eval_res, chunk=False, threshold=None,
 
         log = {
             'query': dataset[idx]['text'],
-            'ndcg': eval_res[query_id]['ndcg'],
+            'ndcg@10': eval_res[query_id]['ndcg_cut_10'],
             'gold_passages': gold_passages,
             'pred_passages': pred_passages,
             'log': run_dict['log'][query_id],
@@ -104,7 +104,7 @@ def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: st
     run_output_path = f'output/retrieval/{dataset_name}/{dataset_name}_run_{doc_ensemble_str}_E_{extraction_str}_R_{graph_creating_str}_L_{linking_str}{dpr_only_str}{reranker_str}.json'
     print(f'Log will be saved to {run_output_path}')  # this file is used for pytrec_eval, another log file will be saved for details
 
-    pytrec_metrics = {'map', 'ndcg'}
+    pytrec_metrics = {'map_cut_10', 'ndcg_cut_10'}
     metrics = defaultdict(float)
     evaluator = pytrec_eval.RelevanceEvaluator(qrel, pytrec_metrics)
     if os.path.isfile(run_output_path):

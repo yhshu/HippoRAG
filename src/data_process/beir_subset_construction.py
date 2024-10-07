@@ -22,7 +22,8 @@ def get_sampled_query_ids(qrels, num_sample):
             query_id = item[0]
             sampled_query_ids.add(query_id)
 
-        if isinstance(num_sample, int):
+        if num_sample.isdigit() or isinstance(num_sample, int):
+            num_sample = int(num_sample)
             assert 0 < num_sample <= len(sampled_query_ids), f'sample size {num_sample} is invalid, check if it is in range (0, {len(sampled_query_ids)}]'
             sampled_query_ids = random.sample(list(sampled_query_ids), num_sample)
             print(f'{len(sampled_query_ids)} queries are sampled')
@@ -195,6 +196,7 @@ def generate_dataest_with_full_corpus(split: str, qrels_path: str, corpus_path: 
             if passage_hash not in passage_hash_to_id:
                 full_corpus.append({'title': item['title'], 'text': item['text'], 'idx': item['_id']})
                 passage_hash_to_id[passage_hash] = item['_id']
+        print(f'#{split} corpus', len(full_corpus))
 
     # add supporting passages to query info
     for query in split_queries:

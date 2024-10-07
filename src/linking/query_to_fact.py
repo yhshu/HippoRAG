@@ -265,6 +265,10 @@ def graph_search_with_fact_entities(hipporag: HippoRAG, query: str, link_top_k: 
 
     node_weights = phrase_weights + passage_weights
 
+    # only record top 30 in linking_score_map
+    if len(linking_score_map) > 30:
+        linking_score_map = dict(sorted(linking_score_map.items(), key=lambda x: x[1], reverse=True)[:30])
+
     assert sum(node_weights) > 0, f'No phrases found in the graph for the given facts: {top_k_facts}'
     sorted_doc_ids, sorted_scores, logs, ppr_phrase_probs, ppr_doc_prob = graph_search_with_entities(hipporag, node_weights, linking_score_map,
                                                                                                      query_doc_scores=query_doc_scores, return_ppr=return_ppr)

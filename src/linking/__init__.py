@@ -133,7 +133,10 @@ def graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, 
     if not hipporag.dpr_only:
         # logs
         phrase_one_hop_triples = []
-        for phrase_id in np.where(all_phrase_weights > 0.001)[0]:
+        top_phrase_ids = np.argsort(all_phrase_weights)[-30:][::-1]
+        for phrase_id in top_phrase_ids:
+            if not all_phrase_weights[phrase_id] > 0.01:
+                continue
             # get all the triples that contain the phrase from self.graph_plus
             for t in list(hipporag.kg_adj_list[phrase_id].items())[:20]:
                 phrase_one_hop_triples.append([hipporag.node_phrases[t[0]], t[1]])
