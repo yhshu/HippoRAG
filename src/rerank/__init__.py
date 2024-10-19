@@ -9,7 +9,6 @@ from langchain.globals import set_llm_cache
 from langchain_community.cache import SQLiteCache
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate
-from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from src.langchain_util import init_langchain_model
@@ -335,6 +334,7 @@ def retrieved_to_candidate_facts(candidate_items, candidate_indices, k=30):
 
 class HFLoRAFilter(Reranker):
     def __init__(self, model_path, base_model='meta-llama/Meta-Llama-3.1-8B-Instruct'):
+        from peft import PeftModel
         if 'adapter_config.json' in os.listdir(model_path):
             base_model = AutoModelForCausalLM.from_pretrained(base_model, device_map='auto', return_dict=True)
             model = PeftModel.from_pretrained(base_model, model_path)

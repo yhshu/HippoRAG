@@ -1,3 +1,5 @@
+import argparse
+
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
@@ -21,7 +23,11 @@ class SentenceTransformersWrapper(EmbeddingModelWrapper):
 
 
 if __name__ == '__main__':
-    model = SentenceTransformersWrapper("Alibaba-NLP/gte-Qwen2-7B-instruct")
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--model', type=str, default="Alibaba-NLP/gte-Qwen2-7B-instruct")
+    args = parser.parse_args()
+
+    model = SentenceTransformersWrapper(args.model)
 
     queries = [
         "how much protein should a female eat",

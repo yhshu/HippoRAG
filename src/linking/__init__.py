@@ -103,6 +103,9 @@ def graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, 
             fact_prob = hipporag.triples_to_phrases_mat.dot(ppr_phrase_probs)
             ppr_doc_prob = hipporag.docs_to_triples_mat.dot(fact_prob)
             ppr_doc_prob = min_max_normalize(ppr_doc_prob)
+
+        assert len(ppr_doc_prob) == len(hipporag.corpus), f"Doc prob length {len(ppr_doc_prob)} != corpus length {len(hipporag.corpus)}"
+
     # Combine Query-Doc and PPR Scores
     if hipporag.doc_ensemble or hipporag.dpr_only:
         # doc_prob = ppr_doc_prob * 0.5 + min_max_normalize(query_doc_scores) * 0.5
@@ -127,6 +130,7 @@ def graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, 
             hipporag.statistics['ppr_doc_ensemble'] = hipporag.statistics.get('ppr_doc_ensemble', 0) + 1
     else:
         doc_prob = ppr_doc_prob
+
     # Return ranked docs and ranked scores
     sorted_doc_ids = np.argsort(doc_prob, kind='mergesort')[::-1]
     sorted_scores = doc_prob[sorted_doc_ids]
@@ -160,6 +164,9 @@ def graph_search_with_entities(hipporag, all_phrase_weights, linking_score_map, 
                 'top_ranked_nodes': json.dumps(top_ranked_nodes), 'nodes_in_retrieved_doc': json.dumps(nodes_in_retrieved_doc)}
     else:
         logs = {}
+
+    # check all doc ids are <= len(corpus)
+    assert np.all(sorted_doc_ids < len(hipporag.corpus)), f"Ranked doc IDs are not within the corpus size: {len(hipporag.corpus)}"
 
     if return_ppr is False:
         return sorted_doc_ids, sorted_scores, logs

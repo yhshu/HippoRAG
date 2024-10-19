@@ -34,7 +34,7 @@ def get_sampled_query_ids(qrels, num_sample):
     return sampled_query_ids
 
 
-def generate_dataset_with_relevant_corpus(split: str, qrels_path: str, full_corpus, chunk=False, num_query=None, passage_per_query=None, retriever_name='bm25'):
+def generate_dataset_with_relevant_corpus(split: str, qrels_path: str, full_corpus, chunk=False, num_query=None, passage_per_query=None, retriever_name='bm25', dataset_name=None):
     """
 
     @param split: split name, e.g., 'train', 'test'
@@ -45,7 +45,7 @@ def generate_dataset_with_relevant_corpus(split: str, qrels_path: str, full_corp
     with open(qrels_path) as f:
         qrels = f.readlines()
     qrels = [q.split() for q in qrels[1:]]  # skip the first line
-    print(f'#{split}', len(qrels))
+    print(f'#{split} qrels', len(qrels))
     split_passage_hash_to_id = dict()
     split_query_ids = set()
     full_corpus_ids = set()  # all passage ids in qrels
@@ -102,12 +102,13 @@ def generate_dataset_with_relevant_corpus(split: str, qrels_path: str, full_corp
     if passage_per_query is not None:
         assert 0 < passage_per_query <= len(full_corpus_ids), f'passage_per_query {passage_per_query} is invalid, check if it is in range (0, {len(full_corpus_ids)})'
         full_corpus_values = list(full_corpus.values())
-        sampled_corpus_values = random.sample(full_corpus_values, min(len(full_corpus_values), 100 * len(split_queries)))
-        corpus_contents = [item['title'] + '\n' + item['text'] for item in sampled_corpus_values]
+        # sampled_corpus_values = random.sample(full_corpus_values, min(len(full_corpus_values), 100 * len(split_queries)))
+        corpus_contents = [item['title'] + '\n' + item['text'] for item in full_corpus_values]
+        print(f'#{split} retrieving from corpus', len(corpus_contents))
 
         if retriever_name == 'bm25':
-            from src.pangu.retrieval_api import BM25Retriever
-            retriever = BM25Retriever(corpus_contents)
+            from src.pangu.retrieval_api import BM25SparseRetriever
+            retriever = BM25SparseRetriever(corpus_contents, f"{dataset_name}_{split}_{len(corpus_contents)}")
         elif 'GritLM' in retriever_name:
             from src.pangu.retrieval_api import GritLMRetriever
             gritlm_model = GritLM(retriever_name, torch_dtype='auto')
@@ -244,6 +245,7 @@ if __name__ == '__main__':
     parser.add_argument('--chunk', action='store_true')
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--retriever', type=str, default='bm25', help='retrieve for sampling distractors')
+    parser.add_argument('--dataset', type=str, help='dataset name')
     args = parser.parse_args()
 
     random.seed(args.seed)
@@ -269,7 +271,7 @@ if __name__ == '__main__':
         if os.path.isfile(os.path.join(args.data, f'qrels/{split}.tsv')):
             if args.corpus == 'relevant':
                 generate_dataset_with_relevant_corpus(split, os.path.join(args.data, f'qrels/{split}.tsv'), corpus, args.chunk, num_sample,
-                                                      args.passage_per_query, args.retriever)
+                                                      args.passage_per_query, args.retriever, args.dataset)
             elif args.corpus == 'full':
                 generate_dataest_with_full_corpus(split, os.path.join(args.data, f'qrels/{split}.tsv'), os.path.join(args.data, 'corpus.json'),
                                                   args.chunk, num_sample)

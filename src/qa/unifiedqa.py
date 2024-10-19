@@ -1,6 +1,5 @@
 import argparse
 import json
-from collections import defaultdict
 
 import evaluate
 import tensorflow as tf
@@ -32,6 +31,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--unifiedqa_model', default='allenai/unifiedqa-v2-t5-3b-1251000', type=str)
     parser.add_argument('--context', type=str, help='the file path to retrieval context')
+    parser.add_argument('-nr', '--no_retrieval', action='store_true', help='whether to use retrieval')
     args = parser.parse_args()
 
     device = 'cuda'
@@ -51,6 +51,8 @@ if __name__ == '__main__':
         gold_ans = sample['answer']
 
         retrieved = sample['retrieved']
+        if args.no_retrieval:
+            retrieved = []
         prediction = run_model(format_input(question, retrieved), device=device)
         predictions.append(prediction[0])
         references.append(gold_ans)

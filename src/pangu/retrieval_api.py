@@ -1,3 +1,4 @@
+import os
 from abc import abstractmethod, ABC
 
 import numpy as np
@@ -61,6 +62,86 @@ class BM25Retriever(TextRetriever):
         tokenized_query = query.split(" ")
         scores = self.bm25.get_scores(tokenized_query)
         return scores
+
+
+class BM25SparseRetriever(TextRetriever):
+    """
+    https://github.com/xhluca/bm25s
+
+    pip install bm25s
+
+    # Install all extra dependencies
+    pip install bm25s[full]
+
+    # If you want to use stemming for better results, you can install a stemmer
+    pip install PyStemmer
+
+    # To speed up the top-k selection process, you can install `jax`
+    pip install jax[cpu]
+    pip install jax[cuda]
+    """
+
+    def __init__(self, corpus, index_path=None, stopwords='en', use_stemmer=True, stemmer_lang='english'):
+        super().__init__(corpus)
+
+        self.stemmer = None
+        self.stopwords = stopwords
+        if use_stemmer:
+            import Stemmer
+            self.stemmer = Stemmer.Stemmer(stemmer_lang)
+        self.corpus_tokens = None
+
+        self.index_path = index_path
+        if index_path is not None:
+            self.retriever = self.load(index_path)
+            if self.retriever is None:
+                self._preprocess()
+        else:
+            self._preprocess()
+
+    def _preprocess(self):
+        # Tokenize the corpus and keep only ids (optimized for speed and memory)
+        from bm25s import BM25
+        import bm25s
+        self.retriever = BM25()
+        self.corpus_tokens = bm25s.tokenize(self.corpus, stopwords=self.stopwords, stemmer=self.stemmer)
+        self.retriever.index(self.corpus_tokens)
+        self.save(self.index_path)
+
+    def get_top_k_indices(self, query, k=10, distinct=True):
+        import bm25s
+        query_tokens = bm25s.tokenize(query, stemmer=self.stemmer)
+        results, scores = self.retriever.retrieve(query_tokens, corpus=self.corpus, k=k)
+        # for each result, get the index of the passage
+        indices = []
+        for result in results[0]:
+            i = self.corpus.index(result)
+            if i is not None:
+                indices.append(i)
+        return indices
+
+    def scores_on_corpus(self, query):
+        print("BM25SparseRetriever does not support scores_on_corpus method. Use get_top_k_indices instead.")
+        pass
+
+    def save(self, index_path, save_corpus=True):
+        self.retriever.save(index_path, corpus=self.corpus if save_corpus else None)
+        print(f"Index saved to {index_path}")
+
+    @staticmethod
+    def load(index_path, load_corpus=True):
+        if not os.path.exists(index_path):
+            print(f"Index path {index_path} does not exist")
+            return None
+
+        try:
+            reloaded_retriever = BM25SparseRetriever([])
+            import bm25s
+            reloaded_retriever.retriever = bm25s.BM25.load(index_path, load_corpus=load_corpus)
+            return reloaded_retriever
+        except Exception as e:
+            print(e)
+            return None
 
 
 class TfidfRetriever(TextRetriever):

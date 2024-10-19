@@ -315,7 +315,6 @@ class HippoRAG:
         @param oracle_triples: the oracle extraction results, used for upper bound evaluation
         @return: the ranked document ids and their scores
         """
-
         assert isinstance(query, str), 'Query must be a string'
         query_doc_scores = None
 
@@ -480,7 +479,7 @@ class HippoRAG:
         else:
             self.load_triple_vectors()
             query_embedding = self.embed_model.encode_text(query, instruction=get_query_instruction(self.embed_model, 'query_to_fact', self.corpus_name),
-                                                               return_cpu=True, return_numpy=True, norm=True)
+                                                           return_cpu=True, return_numpy=True, norm=True)
             # rank and get link_top_k oracle facts given the query
             query_fact_scores = np.dot(self.triple_embeddings, query_embedding.T)  # (num_facts, dim) x (1, dim).T = (num_facts, 1)
             query_fact_scores = np.squeeze(query_fact_scores) if query_fact_scores.ndim == 2 else query_fact_scores
