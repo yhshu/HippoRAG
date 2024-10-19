@@ -19,6 +19,7 @@ os.environ['TOKENIZERS_PARALLELISM'] = 'FALSE'
 
 def create_graph(dataset: str, extraction_type: str, extraction_model: str, retriever_name: str, threshold: float = 0.9,
                  create_graph_flag: bool = False, cosine_sim_edges: bool = False, passage_node=None):
+    corpus = json.load(open(f'data/{dataset}_corpus.json', 'r'))
     processed_retriever_name = retriever_name.replace('/', '_').replace('.', '')
     version = 'v3'
     inter_triple_weight = 1.0
@@ -26,12 +27,15 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
     possible_file_path = f'output/openie_{dataset}_results_{extraction_type}_{extraction_model}_*.json'
     possible_files = glob(possible_file_path)
     assert len(possible_files) > 0, f'No files found for {possible_file_path}'
+    if len(possible_files) > 1:
+        print(f'[WARN] Note that multiple files found for {possible_file_path}')
     max_samples = np.max([int(file.split('{}_'.format(extraction_model))[1].split('.json')[0]) for file in possible_files])
 
     extracted_file_path = f'output/openie_{dataset}_results_{extraction_type}_{extraction_model}_{max_samples}.json'
     extracted_file = json.load(open(extracted_file_path, 'r'))
 
     extracted_triples = extracted_file['docs']
+    assert len(extracted_triples) == len(corpus), f'Length of extracted triples {len(extracted_triples)} != length of corpus {len(corpus)}'
     if not extraction_model.startswith('gpt-3.5-turbo'):
         extraction_type = extraction_type + '_' + extraction_model
     phrase_type = 'ents_only_lower_preprocess'  # entities only, lower case, preprocessed
@@ -273,6 +277,8 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
                                       shape=(len(triples_by_passage), len(extracted_triples)))
         facts_to_phrases_mat = csr_array(([int(v) for v in facts_to_phrases.values()], ([e[0] for e in facts_to_phrases.keys()], [e[1] for e in facts_to_phrases.keys()])),
                                          shape=(len(extracted_triples), len(unique_phrases)))
+
+        assert docs_to_facts_mat.shape[0] == len(corpus), f"docs_to_facts_mat.shape[0] {docs_to_facts_mat.shape[0]} != len(corpus) {len(corpus)}"
 
         pickle.dump(docs_to_facts_mat, open('output/{}_{}_graph_doc_to_facts_csr_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, version), 'wb'))
         pickle.dump(facts_to_phrases_mat,
