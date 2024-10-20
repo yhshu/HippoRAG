@@ -49,9 +49,16 @@ def init_langchain_model(llm: str, model_name: str, temperature: float = 0.0, ma
         return LlamaCppWrapper()
     elif llm.lower() == 'gritlm':
         return GritLMLangchainWrapper(model_name=model_name)
+    # elif llm == 'vllm':
+    #     from langchain_community.llms.vllm import VLLM
+    #     return VLLM(model=model_name, trust_remote_code=True, max_new_tokens=512, temperature=0,
+    #                 tensor_parallel_size=4, seed=0)
+    # elif llm == 'vllm_openai':
+    #     from langchain_community.llms.vllm import VLLMOpenAI
+    #     return VLLMOpenAI(openai_api_key='osunlp', openai_api_base='http://localhost:8000/v1', model_name=model_name)
     elif llm == 'vllm':
-        from langchain_community.llms.vllm import VLLMOpenAI
-        return VLLMOpenAI(openai_api_key='osunlp', openai_api_base='http://localhost:8000/v1', model_name=model_name)
+        from vllm import LLM
+        return LLM(model=model_name, trust_remote_code=True, tensor_parallel_size=4, seed=0)
     else:
         # add any LLMs you want to use here using LangChain
         raise NotImplementedError(f"LLM '{llm}' not implemented yet.")

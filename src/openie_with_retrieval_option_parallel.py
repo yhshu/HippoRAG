@@ -1,11 +1,10 @@
 import sys
 
+import vllm
 
 sys.path.append('.')
 
 from concurrent.futures import ThreadPoolExecutor
-
-
 
 import argparse
 import json
@@ -20,12 +19,13 @@ from tqdm import tqdm
 from src.langchain_util import init_langchain_model
 from src.openie_extraction_instructions import ner_prompts, openie_post_ner_prompts
 from src.processing import extract_json_dict, deduplicate_triples, fix_broken_generated_json, corpus_has_duplication
-
-
+from pydantic import BaseModel
 def print_messages(messages):
     for message in messages:
         print(message['content'])
 
+class NamedEntitiesModel(BaseModel):
+    named_entities: list[str]
 
 def named_entity_recognition(passage: str, client, max_retry=5):
     ner_messages = ner_prompts.format_prompt(user_input=passage)
@@ -55,9 +55,21 @@ def named_entity_recognition(passage: str, client, max_retry=5):
                     prompt = langchain_message_to_llama_3_prompt(ner_messages.to_messages())
                 else:
                     prompt = ner_messages.to_string()
-                completion = client.invoke(prompt)
+                extra_body = {"response_format": {"type": "json_object"}}
+                completion = client.invoke(prompt, extra_body=extra_body)
                 response_content = extract_json_dict(completion)
                 total_tokens += len(completion.split())
+            elif isinstance(client, vllm.LLM):
+                from src.util.llama_cpp_service import langchain_message_to_llama_3_prompt
+                if client.llm_engine.model_config.model.startswith('meta-llama/Llama-3'):
+                    prompt = langchain_message_to_llama_3_prompt(ner_messages.to_messages())
+                else:
+                    prompt = ner_messages.to_string()
+                from outlines.processors import JSONLogitsProcessor
+                logits_processor = JSONLogitsProcessor(NamedEntitiesModel, client)
+                completion = client.generate(prompt,
+                                             sampling_params=vllm.SamplingParams(logits_processor=[logits_processor]))
+                response_content = completion.generations[0].text
             else:  # no JSON mode
                 completion = client.invoke(ner_messages.to_messages(), temperature=0)
                 response_content = completion.content
@@ -99,7 +111,8 @@ def openie_post_ner_extract(passage: str, entities: list, client):
                 prompt = langchain_message_to_llama_3_prompt(openie_messages.to_messages())
             else:
                 prompt = openie_messages.to_string()
-            chat_completion = client.invoke(prompt)
+            extra_body = {"response_format": {"type": "json_object"}}
+            chat_completion = client.invoke(prompt, extra_body=extra_body)
             response_content = extract_json_dict(chat_completion)
             response_content = str(response_content)
             total_tokens = len(chat_completion.split())
