@@ -1,10 +1,11 @@
 import sys
+
+
 sys.path.append('.')
 
 from concurrent.futures import ThreadPoolExecutor
 
 
-from langchain_community.chat_models import ChatOllama
 
 import argparse
 import json
@@ -12,7 +13,8 @@ from glob import glob
 
 import numpy as np
 from langchain_openai import ChatOpenAI
-from multiprocessing import Pool
+from langchain_community.llms.vllm import VLLMOpenAI
+from langchain_community.chat_models import ChatOllama
 from tqdm import tqdm
 
 from src.langchain_util import init_langchain_model
@@ -47,6 +49,15 @@ def named_entity_recognition(passage: str, client, max_retry=5):
                 response_content = client.invoke(ner_messages.to_messages())
                 response_content = extract_json_dict(response_content)
                 total_tokens += len(response_content.split())
+            elif isinstance(client, VLLMOpenAI):
+                from src.util.llama_cpp_service import langchain_message_to_llama_3_prompt
+                if client.model_name.startswith('meta-llama/Llama-3'):
+                    prompt = langchain_message_to_llama_3_prompt(ner_messages.to_messages())
+                else:
+                    prompt = ner_messages.to_string()
+                completion = client.invoke(prompt)
+                response_content = extract_json_dict(completion)
+                total_tokens += len(completion.split())
             else:  # no JSON mode
                 completion = client.invoke(ner_messages.to_messages(), temperature=0)
                 response_content = completion.content
@@ -82,6 +93,16 @@ def openie_post_ner_extract(passage: str, entities: list, client):
             response_content = extract_json_dict(response_content)
             response_content = str(response_content)
             total_tokens = len(response_content.split())
+        elif isinstance(client, VLLMOpenAI):
+            if client.model_name.startswith('meta-llama/Llama-3'):
+                from src.util.llama_cpp_service import langchain_message_to_llama_3_prompt
+                prompt = langchain_message_to_llama_3_prompt(openie_messages.to_messages())
+            else:
+                prompt = openie_messages.to_string()
+            chat_completion = client.invoke(prompt)
+            response_content = extract_json_dict(chat_completion)
+            response_content = str(response_content)
+            total_tokens = len(chat_completion.split())
         else:  # no JSON mode
             chat_completion = client.invoke(openie_messages.to_messages(), temperature=0, max_tokens=4096)
             response_content = chat_completion.content
@@ -125,8 +146,12 @@ def extract_openie_from_triples(client, existing_json, auxiliary_file_exists, en
             sample['extracted_entities'] = doc_entities
 
             try:
-                sample['extracted_triples'] = eval(triples)["triples"]
-                sample['extracted_triples'] = deduplicate_triples(sample['extracted_triples'])
+                if triples == '':
+                    sample['extracted_triples'] = []
+                    print('Got empty triples from openie_post_ner_extract')
+                else:
+                    sample['extracted_triples'] = eval(triples)["triples"]
+                    sample['extracted_triples'] = deduplicate_triples(sample['extracted_triples'])
             except Exception as e:
                 print('extracting OpenIE from triples exception', e)
                 print(triples)

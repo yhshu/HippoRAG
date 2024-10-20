@@ -3,7 +3,7 @@ import os
 
 import tiktoken
 
-from src.lm_wrapper.gritlm import GritLMLangchainWrapper, GritLMLangchainWrapper
+from src.lm_wrapper.gritlm import GritLMLangchainWrapper
 from src.util.llama_cpp_service import LlamaCppWrapper
 
 enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
@@ -49,6 +49,9 @@ def init_langchain_model(llm: str, model_name: str, temperature: float = 0.0, ma
         return LlamaCppWrapper()
     elif llm.lower() == 'gritlm':
         return GritLMLangchainWrapper(model_name=model_name)
+    elif llm == 'vllm':
+        from langchain_community.llms.vllm import VLLMOpenAI
+        return VLLMOpenAI(openai_api_key='osunlp', openai_api_base='http://localhost:8000/v1', model_name=model_name)
     else:
         # add any LLMs you want to use here using LangChain
         raise NotImplementedError(f"LLM '{llm}' not implemented yet.")
