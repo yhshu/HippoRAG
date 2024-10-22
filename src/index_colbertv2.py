@@ -27,7 +27,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     print(args)
 
-    if args.llm != 'vllm':
+    if args.llm not in ['vllm']:
         set_llm_cache(SQLiteCache(database_path=".langchain.db"))
     extraction_type = 'ner'
 
