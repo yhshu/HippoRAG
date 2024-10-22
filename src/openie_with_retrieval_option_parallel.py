@@ -143,7 +143,7 @@ def extract_openie_from_triples(client, existing_json, auxiliary_file_exists, en
                                 extractor_name=None):
     extractions = []
     all_entities = []
-    chatgpt_total_tokens = 0
+    llm_total_tokens = 0
 
     for i, sample in tqdm(corpus_json, total=len(corpus_json), desc='Extracting OpenIE triples'):
 
@@ -158,13 +158,13 @@ def extract_openie_from_triples(client, existing_json, auxiliary_file_exists, en
                 doc_entities, total_ner_tokens = named_entity_recognition(passage, client, extractor_name=extractor_name)
 
                 doc_entities = list(np.unique(doc_entities))
-                chatgpt_total_tokens += total_ner_tokens
+                llm_total_tokens += total_ner_tokens
 
                 ents_by_doc.append(doc_entities)
 
             triples, total_tokens = openie_post_ner_extract(passage, doc_entities, client, extractor_name)
 
-            chatgpt_total_tokens += total_tokens
+            llm_total_tokens += total_tokens
 
             sample['extracted_entities'] = doc_entities
 
@@ -183,7 +183,7 @@ def extract_openie_from_triples(client, existing_json, auxiliary_file_exists, en
             extractions.append(sample)
             all_entities.extend(doc_entities)
 
-    return (extractions, all_entities, chatgpt_total_tokens)
+    return (extractions, all_entities, llm_total_tokens)
 
 
 def openie_for_corpus(dataset_name: str, run_ner: bool, num_passages, llm: str, model_name: str, num_processes: int):

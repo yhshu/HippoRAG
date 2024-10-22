@@ -24,6 +24,7 @@ if __name__ == '__main__':
     parser.add_argument('--skip_openie', action='store_true')
     parser.add_argument('--skip_graph', action='store_true')
     args = parser.parse_args()
+    print(args)
 
     set_llm_cache(SQLiteCache(database_path=".langchain.db"))
     extraction_type = 'ner'

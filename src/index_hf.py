@@ -45,6 +45,8 @@ if __name__ == '__main__':
     parser.add_argument('--passage_node', type=str)
 
     args = parser.parse_args()
+    print(args)
+
     assert args.passage_node is None or args.passage_node in ['unidirectional', 'bidirectional']
     index_with_huggingface(args.dataset, args.run_ner, args.num_passages, args.llm, args.extractor, args.retriever, args.num_thread, args.syn_thresh,
                            skip_openie=args.skip_openie, skip_graph=args.skip_graph, passage_node=args.passage_node)
