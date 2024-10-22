@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import pandas as pd
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate
 from langchain_openai import ChatOpenAI
 
 from tqdm import tqdm
@@ -93,25 +93,66 @@ def run_ner_on_texts(client, texts: list):
 
     return ner_output, total_tokens
 
+import vllm
+from src.util.llama_cpp_service import langchain_message_to_llama_3_prompt, PROMPT_JSON_TEMPLATE
 
-def query_ner_parallel(dataset: str, llm: str, model_name: str, num_processes):
-    client = init_langchain_model(llm, model_name)  # LangChain model
-    output_file = f'output/{dataset}_{model_name}_queries.named_entity_output.tsv'
+def run_ner_on_texts_vllm(client, all_queries):
+    assert isinstance(client, vllm.LLM)
+    query_ner_prompts = [
+        ChatPromptTemplate.from_messages([SystemMessage("You're a very effective entity extraction system."),
+                                                          HumanMessage(query_prompt_one_shot_input),
+                                                          AIMessage(query_prompt_one_shot_output),
+                                                          HumanMessage(query_prompt_template.format(text))]).format_prompt()
+        for text in all_queries
+    ]
+    print(client.llm_engine.model_config.served_model_name)
+    if 'meta-llama/Llama-3' in client.llm_engine.model_config.served_model_name:
+        prompts = [langchain_message_to_llama_3_prompt(ner_messages.to_messages()) for ner_messages in query_ner_prompts]
+    else:
+        prompts = [ner_messages.to_string() for ner_messages in query_ner_prompts]
+
+    vllm_output = client.generate(
+        prompts, 
+        sampling_params=vllm.SamplingParams(max_tokens=512, temperature=0),
+        guided_options_request=vllm.model_executor.guided_decoding.guided_fields.GuidedDecodingRequest(guided_json=PROMPT_JSON_TEMPLATE['ner'])
+    )
+    all_responses = [completion.outputs[0].text for completion in vllm_output]
+    # all_responses = [extract_json_dict(response) for response in all_responses]
+    all_total_tokens = [len(completion.outputs[0].token_ids) for completion in vllm_output]
+    return all_responses, all_total_tokens
+
+
+def query_ner_parallel(dataset: str, llm: str, model_name: str, num_processes: int, num_gpus: int = 4):
+    client = init_langchain_model(llm, model_name, num_gpus=num_gpus)  # LangChain model
+    output_file = f'output/{dataset}_{model_name.replace("/", "_")}_queries.named_entity_output.tsv'
+
+    queries_df = pd.read_json(f'data/{dataset}.json')
+
+    if 'hotpotqa' in dataset:
+        queries_df = queries_df[['question']]
+        queries_df['0'] = queries_df['question']
+        queries_df['query'] = queries_df['question']
+        query_name = 'query'
+    else:
+        query_name = 'question'
+
     try:
-        queries_df = pd.read_json(f'data/{dataset}.json')
+        output_df = pd.read_csv(output_file, sep='\t')
+    except:
+        output_df = []
 
-        if 'hotpotqa' in dataset:
-            queries_df = queries_df[['question']]
-            queries_df['0'] = queries_df['question']
-            queries_df['query'] = queries_df['question']
-            query_name = 'query'
-        else:
-            query_name = 'question'
-
-        try:
-            output_df = pd.read_csv(output_file, sep='\t')
-        except:
-            output_df = []
+    if isinstance(client, vllm.LLM):
+        all_queries = queries_df[query_name].values.tolist()
+        all_outputs, all_num_tokens = run_ner_on_texts_vllm(client, all_queries)
+        queries_df['triples'] = all_outputs
+        if isinstance(all_num_tokens, list):
+            all_num_tokens = sum(all_num_tokens)
+        queries_df['triples'] = all_outputs
+        queries_df.to_csv(output_file, sep='\t')
+        print('Passage NER saved to', output_file)
+        print('Total tokens:', all_num_tokens)
+        return
+    try:
 
         if len(queries_df) != len(output_df):
             queries = queries_df[query_name].values

@@ -4,6 +4,41 @@ import requests
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, BaseMessage
 
 
+
+PROMPT_JSON_TEMPLATE = {
+    "ner": {
+        "type": "object",
+        "properties": {
+            "named_entities": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                "minItems": 1
+            }
+        },
+        "required": ["named_entities"]
+    },
+    "triples": {
+        "type": "object",
+        "properties": {
+            "triples": {
+            "type": "array",
+            "items": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+            },
+            "minItems": 1
+            }
+        },
+        "required": ["triples"]
+        }
+}
+
 class LlamaCppWrapper:
 
     def __init__(self, url="http://localhost:8080/completion"):

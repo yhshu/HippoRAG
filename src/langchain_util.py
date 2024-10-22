@@ -58,7 +58,9 @@ def init_langchain_model(llm: str, model_name: str, temperature: float = 0.0, ma
     #     return VLLMOpenAI(openai_api_key='osunlp', openai_api_base='http://localhost:8000/v1', model_name=model_name)
     elif llm == 'vllm':
         from vllm import LLM
-        llm = LLM(model=model_name, trust_remote_code=True, tensor_parallel_size=4, seed=0, dtype='auto', max_seq_len_to_capture=4096)
+        tensor_parallel_size = kwargs.get('num_gpus', 4)
+        llm = LLM(model=model_name, tensor_parallel_size=tensor_parallel_size, seed=0, dtype='auto', max_seq_len_to_capture=4096, enable_prefix_caching=True,
+        enforce_eager=True,)
         return llm
     else:
         # add any LLMs you want to use here using LangChain
