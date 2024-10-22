@@ -1,9 +1,10 @@
 import sys
 
-import vllm
+from sympy.physics.units import temperature
 
 sys.path.append('.')
 
+import vllm
 from concurrent.futures import ThreadPoolExecutor
 
 import argparse
@@ -27,7 +28,10 @@ def print_messages(messages):
 class NamedEntitiesModel(BaseModel):
     named_entities: list[str]
 
-def named_entity_recognition(passage: str, client, max_retry=5):
+class OpenIEModel(BaseModel):
+    triples: list[list[str]]
+
+def named_entity_recognition(passage: str, client, max_retry=5, extractor_name=None):
     ner_messages = ner_prompts.format_prompt(user_input=passage)
 
     done = False
@@ -61,15 +65,19 @@ def named_entity_recognition(passage: str, client, max_retry=5):
                 total_tokens += len(completion.split())
             elif isinstance(client, vllm.LLM):
                 from src.util.llama_cpp_service import langchain_message_to_llama_3_prompt
-                if client.llm_engine.model_config.model.startswith('meta-llama/Llama-3'):
+                if extractor_name.startswith('meta-llama/Llama-3'):
                     prompt = langchain_message_to_llama_3_prompt(ner_messages.to_messages())
                 else:
                     prompt = ner_messages.to_string()
-                from outlines.processors import JSONLogitsProcessor
-                logits_processor = JSONLogitsProcessor(NamedEntitiesModel, client)
+                from outlines.serve.vllm import JSONLogitsProcessor
+                from vllm import SamplingParams
+                logits_processor = JSONLogitsProcessor(NamedEntitiesModel.model_json_schema(), client)
                 completion = client.generate(prompt,
-                                             sampling_params=vllm.SamplingParams(logits_processor=[logits_processor]))
-                response_content = completion.generations[0].text
+                                             sampling_params=SamplingParams(max_tokens=512, temperature=0,
+                                                                            logits_processors=[logits_processor]))
+                response_content = completion[0].outputs[0].text
+                response_content = extract_json_dict(response_content)
+                total_tokens += len(completion[0].outputs[0].token_ids)
             else:  # no JSON mode
                 completion = client.invoke(ner_messages.to_messages(), temperature=0)
                 response_content = completion.content
@@ -88,7 +96,7 @@ def named_entity_recognition(passage: str, client, max_retry=5):
     return named_entities, total_tokens
 
 
-def openie_post_ner_extract(passage: str, entities: list, client):
+def openie_post_ner_extract(passage: str, entities: list, client, extractor_name=None):
     try:
         named_entity_json = {"named_entities": entities}
         openie_messages = openie_post_ner_prompts.format_prompt(passage=passage, named_entity_json=json.dumps(named_entity_json))
@@ -105,17 +113,20 @@ def openie_post_ner_extract(passage: str, entities: list, client):
             response_content = extract_json_dict(response_content)
             response_content = str(response_content)
             total_tokens = len(response_content.split())
-        elif isinstance(client, VLLMOpenAI):
-            if client.model_name.startswith('meta-llama/Llama-3'):
-                from src.util.llama_cpp_service import langchain_message_to_llama_3_prompt
+        elif isinstance(client, vllm.LLM):
+            from src.util.llama_cpp_service import langchain_message_to_llama_3_prompt
+            if extractor_name.startswith('meta-llama/Llama-3'):
                 prompt = langchain_message_to_llama_3_prompt(openie_messages.to_messages())
             else:
                 prompt = openie_messages.to_string()
-            extra_body = {"response_format": {"type": "json_object"}}
-            chat_completion = client.invoke(prompt, extra_body=extra_body)
-            response_content = extract_json_dict(chat_completion)
-            response_content = str(response_content)
-            total_tokens = len(chat_completion.split())
+            from outlines.serve.vllm import JSONLogitsProcessor
+            from vllm import SamplingParams
+            logits_processor = JSONLogitsProcessor(OpenIEModel.model_json_schema(), client)
+            completion = client.generate(prompt,
+                                         sampling_params=SamplingParams(max_tokens=512, temperature=0,
+                                                                        logits_processors=[logits_processor]))
+            response_content = completion[0].outputs[0].text
+            total_tokens = len(completion[0].outputs[0].token_ids)
         else:  # no JSON mode
             chat_completion = client.invoke(openie_messages.to_messages(), temperature=0, max_tokens=4096)
             response_content = chat_completion.content
@@ -130,7 +141,8 @@ def openie_post_ner_extract(passage: str, entities: list, client):
     return response_content, total_tokens
 
 
-def extract_openie_from_triples(client, existing_json, auxiliary_file_exists, ents_by_doc, corpus_json):
+def extract_openie_from_triples(client, existing_json, auxiliary_file_exists, ents_by_doc, corpus_json,
+                                extractor_name=None):
     extractions = []
     all_entities = []
     chatgpt_total_tokens = 0
@@ -145,14 +157,14 @@ def extract_openie_from_triples(client, existing_json, auxiliary_file_exists, en
             if auxiliary_file_exists:
                 doc_entities = ents_by_doc[i]
             else:
-                doc_entities, total_ner_tokens = named_entity_recognition(passage, client)
+                doc_entities, total_ner_tokens = named_entity_recognition(passage, client, extractor_name=extractor_name)
 
                 doc_entities = list(np.unique(doc_entities))
                 chatgpt_total_tokens += total_ner_tokens
 
                 ents_by_doc.append(doc_entities)
 
-            triples, total_tokens = openie_post_ner_extract(passage, doc_entities, client)
+            triples, total_tokens = openie_post_ner_extract(passage, doc_entities, client, extractor_name)
 
             chatgpt_total_tokens += total_tokens
 
@@ -231,10 +243,13 @@ def openie_for_corpus(dataset_name: str, run_ner: bool, num_passages, llm: str, 
 
     if num_processes > 1:
         with ThreadPoolExecutor(max_workers=num_processes) as executor:
-            packed_args = [(client, existing_json, auxiliary_file_exists, ents_by_doc, triple_json) for triple_json in func_args]
+            packed_args = [(client, existing_json, auxiliary_file_exists, ents_by_doc, triple_json, model_name)
+                           for triple_json in func_args]
             outputs = list(executor.map(lambda args: extract_openie_from_triples(*args), packed_args))
     else:
-        outputs = [extract_openie_from_triples(client, existing_json, auxiliary_file_exists, ents_by_doc, corpus_json) for corpus_json in func_args]
+        outputs = [extract_openie_from_triples(client, existing_json, auxiliary_file_exists,
+                                               ents_by_doc, corpus_json, model_name)
+                   for corpus_json in func_args]
 
     extraction_by_doc = []
     all_entities = []
