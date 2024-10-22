@@ -7,8 +7,6 @@ import argparse
 from langchain.globals import set_llm_cache
 from langchain_community.cache import SQLiteCache
 
-from src.colbertv2_indexing import colbertv2_graph_indexing
-from src.colbertv2_knn import colbertv2_retrieve_knn
 from src.create_graph import create_graph
 from src.named_entity_extraction_parallel import query_ner_parallel
 from src.openie_with_retrieval_option_parallel import openie_for_corpus
@@ -24,6 +22,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_thread', type=int, default=10)
     parser.add_argument('--syn_thresh', type=float, default=0.8)
     parser.add_argument('--skip_openie', action='store_true')
+    parser.add_argument('--skip_graph', action='store_true')
     args = parser.parse_args()
 
     set_llm_cache(SQLiteCache(database_path=".langchain.db"))
@@ -34,14 +33,18 @@ if __name__ == '__main__':
         openie_for_corpus(args.dataset, args.run_ner, args.num_passages, args.llm, args.extractor, args.num_thread)
     query_ner_parallel(args.dataset, args.llm, args.extractor, args.num_thread)
 
-    # Creating ColBERT Graph
-    create_graph(args.dataset, extraction_type, args.extractor, args.retriever, args.syn_thresh, False, True)
+    if not args.skip_graph:
+        # Creating ColBERT Graph
+        create_graph(args.dataset, extraction_type, args.extractor, args.retriever, args.syn_thresh, False, True)
 
-    # Getting Nearest Neighbor Files
-    colbertv2_retrieve_knn('output/kb_to_kb.tsv')
-    colbertv2_retrieve_knn('output/query_to_kb.tsv')
+        from src.colbertv2_indexing import colbertv2_graph_indexing
+        from src.colbertv2_knn import colbertv2_retrieve_knn
 
-    create_graph(args.dataset, extraction_type, args.extractor, args.retriever, args.syn_thresh, True, True)
+        # Getting Nearest Neighbor Files
+        colbertv2_retrieve_knn('output/kb_to_kb.tsv')
+        colbertv2_retrieve_knn('output/query_to_kb.tsv')
 
-    # ColBERTv2 Indexing for Entity Retrieval & Ensembling
-    colbertv2_graph_indexing(args.dataset, f'data/{args.dataset}_corpus.json', f'output/{args.dataset}_facts_and_sim_graph_phrase_dict_ents_only_lower_preprocess_ner.v3.subset.p')
+        create_graph(args.dataset, extraction_type, args.extractor, args.retriever, args.syn_thresh, True, True)
+
+        # ColBERTv2 Indexing for Entity Retrieval & Ensembling
+        colbertv2_graph_indexing(args.dataset, f'data/{args.dataset}_corpus.json', f'output/{args.dataset}_facts_and_sim_graph_phrase_dict_ents_only_lower_preprocess_ner.v3.subset.p')

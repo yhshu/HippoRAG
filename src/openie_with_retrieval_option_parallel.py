@@ -1,7 +1,5 @@
 import sys
 
-from sympy.physics.units import temperature
-
 sys.path.append('.')
 
 import vllm
