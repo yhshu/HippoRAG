@@ -191,6 +191,9 @@ class HippoRAG:
             elif reranker_name in ['oracle_triple']:
                 from src.rerank import OracleTripleFilter
                 self.reranker = OracleTripleFilter(reranker_name)
+            elif reranker_name.startswith('meta-llama/Llama-'):
+                from src.rerank import VLLMFilter
+                self.reranker = VLLMFilter(reranker_name)
             else:  # load Llama 3.1 model with LoRA
                 from src.rerank import HFLoRAFilter
                 self.reranker = HFLoRAFilter(reranker_name)

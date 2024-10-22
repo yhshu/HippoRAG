@@ -147,7 +147,6 @@ if __name__ == '__main__':
     # Please set environment variable OPENAI_API_KEY
     doc_ensemble = string_to_bool(args.doc_ensemble)
 
-    client = init_langchain_model(args.llm, args.llm_model)
     llm_model_name_processed = args.llm_model.replace('/', '_').replace('.', '_')
     colbert_configs = {'root': f'data/lm_vectors/colbert/{args.dataset}', 'doc_index_name': 'nbits_2', 'phrase_index_name': 'nbits_2'}
 
@@ -279,7 +278,7 @@ if __name__ == '__main__':
         retrieved_passages_dict = {passage: score for passage, score in zip(retrieved_passages, scores)}
 
         while it < max_steps:  # for each iteration of IRCoT
-            new_thought = reason_step(args.dataset, few_shot_samples, query, retrieved_passages[:args.top_k], thoughts, client)
+            new_thought = reason_step(args.dataset, few_shot_samples, query, retrieved_passages[:args.top_k], thoughts, hipporag.client)
             thoughts.append(new_thought)
             if 'So the answer is:' in new_thought:
                 break

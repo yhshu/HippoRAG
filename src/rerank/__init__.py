@@ -9,9 +9,11 @@ from langchain.globals import set_llm_cache
 from langchain_community.cache import SQLiteCache
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate
+from pydantic import BaseModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from src.langchain_util import init_langchain_model
+from src.util.llama_cpp_service import langchain_message_to_llama_3_prompt
 
 
 class LLMLogitsCache:
@@ -314,6 +316,53 @@ class LLMFilter(Reranker):
         messages.append(HumanMessage(user_prompt))
         # messages = merge_messages(messages, self.model_name)  # for o1 models
         return messages
+
+
+class VLLMFilter(LLMFilter):
+    def __init__(self, model_name):
+        from vllm import LLM
+        llm = LLM(model=model_name, trust_remote_code=True, tensor_parallel_size=4, seed=0, dtype='auto', max_seq_len_to_capture=4096)
+        self.model = llm
+        self.model_name = model_name
+
+    def rerank(self, task: str, query: str, candidate_items: List[Tuple], candidate_indices, len_after_rerank=None):
+        if candidate_indices is None:
+            candidate_indices = list(range(len(candidate_items)))
+
+        if task == 'fact_reranking':
+            messages = self.write_rerank_prompt(query, candidate_items)
+            if self.model_name.startswith('meta-llama/Llama-3'):
+                prompt = langchain_message_to_llama_3_prompt(messages)
+            else:
+                prompt = messages.to_string()
+
+            from outlines.serve.vllm import JSONLogitsProcessor
+            from vllm import SamplingParams
+            class FactModel(BaseModel):
+                fact: List[List[str]]
+
+            logits_processor = JSONLogitsProcessor(FactModel.model_json_schema(), self.model)
+
+            completion = self.model.generate(prompt, sampling_params=SamplingParams(max_tokens=256, temperature=0, logits_processors=[logits_processor]))
+            content = completion[0].outputs[0].text
+
+            try:
+                response = json.loads(content)
+            except Exception as e:
+                print('json.load exception', e, 'output:', content)
+                response = {'fact': []}
+
+            result_indices = []
+            for generated_fact in response['fact']:
+                closest_matched_fact = difflib.get_close_matches(str(generated_fact), [str(i) for i in candidate_items], n=1, cutoff=0.0)[0]
+                try:
+                    result_indices.append(candidate_items.index(eval(closest_matched_fact)))
+                except Exception as e:
+                    print('result_indices exception', e)
+
+            sorted_candidate_indices = [candidate_indices[i] for i in result_indices]
+            sorted_candidate_items = [candidate_items[i] for i in result_indices]
+            return sorted_candidate_indices[:len_after_rerank], sorted_candidate_items[:len_after_rerank]
 
 
 def retrieved_to_candidate_facts(candidate_items, candidate_indices, k=30):
