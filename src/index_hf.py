@@ -12,13 +12,14 @@ from src.openie_with_retrieval_option_parallel import openie_for_corpus
 
 def index_with_huggingface(dataset_name: str, run_ner: bool, num_passages, llm_provider: str, extractor: str, retriever: str,
                            num_thread, syn_thresh=0.8, langchain_db='.langchain.db', skip_openie=False, skip_graph=False,
+                           num_gpus=4,
                            passage_node=False):
     # set_llm_cache(SQLiteCache(database_path=langchain_db))
     if skip_openie is False:
-        openie_for_corpus(dataset_name, run_ner, num_passages, llm_provider, extractor, num_thread)
+        openie_for_corpus(dataset_name, run_ner, num_passages, llm_provider, extractor, num_thread, num_gpus)
     else:
         print('Skipping OpenIE')
-    query_ner_parallel(dataset_name, llm_provider, extractor, num_thread)
+    query_ner_parallel(dataset_name, llm_provider, extractor, num_thread, num_gpus)
 
     extraction_type = 'ner'
     processed_extractor_name = extractor.replace('/', '_')
@@ -43,10 +44,11 @@ if __name__ == '__main__':
     parser.add_argument('--num_thread', type=int, default=10)
     parser.add_argument('--syn_thresh', type=float, default=0.8)
     parser.add_argument('--passage_node', type=str)
-
+    parser.add_argument('--num_gpus', type=int, default=4)
+    
     args = parser.parse_args()
     print(args)
 
     assert args.passage_node is None or args.passage_node in ['unidirectional', 'bidirectional']
     index_with_huggingface(args.dataset, args.run_ner, args.num_passages, args.llm, args.extractor, args.retriever, args.num_thread, args.syn_thresh,
-                           skip_openie=args.skip_openie, skip_graph=args.skip_graph, passage_node=args.passage_node)
+                           skip_openie=args.skip_openie, skip_graph=args.skip_graph, passage_node=args.passage_node, num_gpus=args.num_gpus)
