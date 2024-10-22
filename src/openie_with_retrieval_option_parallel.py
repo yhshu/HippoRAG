@@ -18,16 +18,12 @@ from tqdm import tqdm
 from src.langchain_util import init_langchain_model
 from src.openie_extraction_instructions import ner_prompts, openie_post_ner_prompts
 from src.processing import extract_json_dict, deduplicate_triples, fix_broken_generated_json, corpus_has_duplication
-from pydantic import BaseModel
+
+
 def print_messages(messages):
     for message in messages:
         print(message['content'])
 
-# class NamedEntitiesModel(BaseModel):
-#     named_entities: list[str]
-
-# class OpenIEModel(BaseModel):
-#     triples: list[list[str]]
 
 def named_entity_recognition(passage: str, client, max_retry=5, extractor_name=None):
     if isinstance(client, vllm.LLM):
@@ -63,21 +59,6 @@ def named_entity_recognition(passage: str, client, max_retry=5, extractor_name=N
                 completion = client.invoke(prompt, extra_body=extra_body)
                 response_content = extract_json_dict(completion)
                 total_tokens += len(completion.split())
-            # elif isinstance(client, vllm.LLM):
-            #     from src.util.llama_cpp_service import langchain_message_to_llama_3_prompt
-            #     if extractor_name.startswith('meta-llama/Llama-3'):
-            #         prompt = langchain_message_to_llama_3_prompt(ner_messages.to_messages())
-            #     else:
-            #         prompt = ner_messages.to_string()
-            #     from outlines.serve.vllm import JSONLogitsProcessor
-            #     from vllm import SamplingParams
-            #     logits_processor = JSONLogitsProcessor(NamedEntitiesModel.model_json_schema(), client)
-            #     completion = client.generate(prompt,
-            #                                  sampling_params=SamplingParams(max_tokens=512, temperature=0,
-            #                                                                 logits_processors=[logits_processor]))
-            #     response_content = completion[0].outputs[0].text
-            #     response_content = extract_json_dict(response_content)
-            #     total_tokens += len(completion[0].outputs[0].token_ids)
             else:  # no JSON mode
                 completion = client.invoke(ner_messages.to_messages(), temperature=0)
                 response_content = completion.content
@@ -155,7 +136,7 @@ def named_entity_recognition_batch_vllm(client, passages, extractor_name=None):
 
     print(all_prompts[0])
     vllm_output = client.generate(
-        all_prompts, 
+        all_prompts,
         sampling_params=SamplingParams(max_tokens=512, temperature=0),
         guided_options_request=GuidedDecodingRequest(guided_json=PROMPT_JSON_TEMPLATE['ner'])
     )
@@ -168,7 +149,8 @@ def named_entity_recognition_batch_vllm(client, passages, extractor_name=None):
 def openie_post_ner_extract_batch_vllm(client, passages, entities_list, extractor_name=None):
     assert isinstance(client, vllm.LLM)
     named_entity_json_list = [{"named_entities": entities} for entities in entities_list]
-    openie_messages = [openie_post_ner_prompts.format_prompt(passage=passage, named_entity_json=json.dumps(named_entity_json)) for passage, named_entity_json in zip(passages, named_entity_json_list)]
+    openie_messages = [openie_post_ner_prompts.format_prompt(passage=passage, named_entity_json=json.dumps(named_entity_json)) for passage, named_entity_json in
+                       zip(passages, named_entity_json_list)]
     from src.util.llama_cpp_service import langchain_message_to_llama_3_prompt, PROMPT_JSON_TEMPLATE
     if extractor_name.startswith('meta-llama/Llama-3'):
         all_prompts = [langchain_message_to_llama_3_prompt(prompt.to_messages()) for prompt in openie_messages]
@@ -179,14 +161,13 @@ def openie_post_ner_extract_batch_vllm(client, passages, entities_list, extracto
     from vllm.model_executor.guided_decoding.guided_fields import GuidedDecodingRequest
 
     vllm_output = client.generate(
-        all_prompts, 
+        all_prompts,
         sampling_params=SamplingParams(max_tokens=512, temperature=0),
         guided_options_request=GuidedDecodingRequest(guided_json=PROMPT_JSON_TEMPLATE['triples'])
     )
     all_responses = [completion.outputs[0].text for completion in vllm_output]
     all_total_tokens = [len(completion.outputs[0].token_ids) for completion in vllm_output]
     return all_responses, all_total_tokens
-
 
 
 def extract_openie_from_triples_batch_vllm(client, existing_json, auxiliary_file_exists, ents_by_doc, corpus_json, extractor_name=None):
@@ -223,7 +204,7 @@ def extract_openie_from_triples_batch_vllm(client, existing_json, auxiliary_file
             corpus_json[id][1]['extracted_entities'] = doc_entities
             all_entities.extend(doc_entities)
             post_ner_entities.append(doc_entities)
-        
+
     assert len(post_ner_passages) == len(post_ner_entities)
     if len(post_ner_passages) > 0:
         all_responses, all_total_tokens = openie_post_ner_extract_batch_vllm(client, post_ner_passages, post_ner_entities, extractor_name)
@@ -297,7 +278,7 @@ def extract_openie_from_triples(client, existing_json, auxiliary_file_exists, en
 def openie_for_corpus(dataset_name: str, run_ner: bool, num_passages, llm: str, model_name: str, num_processes: int, num_gpus: int = 4):
     arg_str, dataset_name, flags_present, num_passages, retrieval_corpus = load_corpus(dataset_name, model_name, num_passages, run_ner)
 
-    client = init_langchain_model(llm, model_name, num_gpus=num_gpus)# LangChain model
+    client = init_langchain_model(llm, model_name, num_gpus=num_gpus)  # LangChain model
     already_done = False
     try:
         # Get incomplete extraction output with same settings
