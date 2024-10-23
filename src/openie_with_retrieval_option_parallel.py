@@ -188,12 +188,18 @@ def extract_openie_from_triples_batch_vllm(client, existing_json, auxiliary_file
         all_responses, all_total_tokens = named_entity_recognition_batch_vllm(client, missing_entity_passages, extractor_name)
         llm_total_tokens += sum(all_total_tokens)
         for id, response in zip(missing_entity_doc_ids, all_responses):
-            doc_entities = response['named_entities']
-            doc_entities = list(np.unique(doc_entities))
-            ents_by_doc[id] = doc_entities
-            corpus_json[id][1]['extracted_entities'] = doc_entities
-            all_entities.extend(doc_entities)
-            post_ner_entities.append(doc_entities)
+            if isinstance(response, dict) and 'named_entities' in response:
+                doc_entities = response['named_entities']
+                doc_entities = list(np.unique(doc_entities))
+                ents_by_doc[id] = doc_entities
+                corpus_json[id][1]['extracted_entities'] = doc_entities
+                all_entities.extend(doc_entities)
+                post_ner_entities.append(doc_entities)
+            else:
+                print('Got empty NER response')
+                post_ner_entities.append([])
+                corpus_json[id][1]['extracted_entities'] = []
+                ents_by_doc[id] = []
 
     assert len(post_ner_passages) == len(post_ner_entities)
     if len(post_ner_passages) > 0:

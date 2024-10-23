@@ -87,9 +87,10 @@ class HippoRAG:
         """
 
         self.corpus_name = corpus_name
+        self.extraction_model = extraction_model  # LLM provider
         self.extraction_model_name = extractor_name
         self.extraction_model_name_processed = extractor_name.replace('/', '_')
-        self.client = init_langchain_model(extraction_model, extractor_name)
+        self._client = None
         assert graph_creating_retriever_name
         if linker_name is None:
             linker_name = graph_creating_retriever_name
@@ -199,6 +200,12 @@ class HippoRAG:
                 self.reranker = HFLoRAFilter(reranker_name)
             self.reranker_name = reranker_name
             self.statistics['num_dpr'] = 0
+
+    @property
+    def client(self):
+        if self._client is None:
+            self._client = init_langchain_model(self.extraction_model, self.extraction_model_name)
+        return self._client
 
     def get_passage_by_idx(self, passage_idx):
         """
