@@ -19,6 +19,7 @@ from langchain_openai import ChatOpenAI
 from tqdm import tqdm
 
 from src.langchain_util import init_langchain_model
+from src.util.llama_cpp_service import langchain_message_to_llama_3_prompt, PROMPT_JSON_TEMPLATE
 
 query_prompt_one_shot_input = """Please extract all named entities that are important for solving the questions below.
 Place the named entities in json format.
@@ -93,16 +94,15 @@ def run_ner_on_texts(client, texts: list):
 
     return ner_output, total_tokens
 
-import vllm
-from src.util.llama_cpp_service import langchain_message_to_llama_3_prompt, PROMPT_JSON_TEMPLATE
 
 def run_ner_on_texts_vllm(client, all_queries):
+    import vllm
     assert isinstance(client, vllm.LLM)
     query_ner_prompts = [
         ChatPromptTemplate.from_messages([SystemMessage("You're a very effective entity extraction system."),
-                                                          HumanMessage(query_prompt_one_shot_input),
-                                                          AIMessage(query_prompt_one_shot_output),
-                                                          HumanMessage(query_prompt_template.format(text))]).format_prompt()
+                                          HumanMessage(query_prompt_one_shot_input),
+                                          AIMessage(query_prompt_one_shot_output),
+                                          HumanMessage(query_prompt_template.format(text))]).format_prompt()
         for text in all_queries
     ]
     print(client.llm_engine.model_config.served_model_name)
@@ -112,7 +112,7 @@ def run_ner_on_texts_vllm(client, all_queries):
         prompts = [ner_messages.to_string() for ner_messages in query_ner_prompts]
 
     vllm_output = client.generate(
-        prompts, 
+        prompts,
         sampling_params=vllm.SamplingParams(max_tokens=512, temperature=0),
         guided_options_request=vllm.model_executor.guided_decoding.guided_fields.GuidedDecodingRequest(guided_json=PROMPT_JSON_TEMPLATE['ner'])
     )
@@ -141,6 +141,7 @@ def query_ner_parallel(dataset: str, llm: str, model_name: str, num_processes: i
     except:
         output_df = []
 
+    import vllm
     if isinstance(client, vllm.LLM):
         all_queries = queries_df[query_name].values.tolist()
         all_outputs, all_num_tokens = run_ner_on_texts_vllm(client, all_queries)
