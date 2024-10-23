@@ -2,7 +2,6 @@ import sys
 
 sys.path.append('.')
 
-import vllm
 from concurrent.futures import ThreadPoolExecutor
 
 import argparse
@@ -26,6 +25,7 @@ def print_messages(messages):
 
 
 def named_entity_recognition(passage: str, client, max_retry=5, extractor_name=None):
+    import vllm
     if isinstance(client, vllm.LLM):
         return named_entity_recognition_batch_vllm(passage, client, max_retry, extractor_name)
     ner_messages = ner_prompts.format_prompt(user_input=passage)
@@ -78,6 +78,7 @@ def named_entity_recognition(passage: str, client, max_retry=5, extractor_name=N
 
 
 def openie_post_ner_extract(passage: str, entities: list, client, extractor_name=None):
+    import vllm
     try:
         named_entity_json = {"named_entities": entities}
         openie_messages = openie_post_ner_prompts.format_prompt(passage=passage, named_entity_json=json.dumps(named_entity_json))
@@ -94,20 +95,6 @@ def openie_post_ner_extract(passage: str, entities: list, client, extractor_name
             response_content = extract_json_dict(response_content)
             response_content = str(response_content)
             total_tokens = len(response_content.split())
-        elif isinstance(client, vllm.LLM):
-            from src.util.llama_cpp_service import langchain_message_to_llama_3_prompt
-            if extractor_name.startswith('meta-llama/Llama-3'):
-                prompt = langchain_message_to_llama_3_prompt(openie_messages.to_messages())
-            else:
-                prompt = openie_messages.to_string()
-            from outlines.serve.vllm import JSONLogitsProcessor
-            from vllm import SamplingParams
-            logits_processor = JSONLogitsProcessor(OpenIEModel.model_json_schema(), client)
-            completion = client.generate(prompt,
-                                         sampling_params=SamplingParams(max_tokens=512, temperature=0,
-                                                                        logits_processors=[logits_processor]))
-            response_content = completion[0].outputs[0].text
-            total_tokens = len(completion[0].outputs[0].token_ids)
         else:  # no JSON mode
             chat_completion = client.invoke(openie_messages.to_messages(), temperature=0, max_tokens=4096)
             response_content = chat_completion.content
@@ -123,6 +110,7 @@ def openie_post_ner_extract(passage: str, entities: list, client, extractor_name
 
 
 def named_entity_recognition_batch_vllm(client, passages, extractor_name=None):
+    import vllm
     from src.util.llama_cpp_service import langchain_message_to_llama_3_prompt, PROMPT_JSON_TEMPLATE
     from vllm.model_executor.guided_decoding.guided_fields import GuidedDecodingRequest
     from vllm import SamplingParams
@@ -147,6 +135,7 @@ def named_entity_recognition_batch_vllm(client, passages, extractor_name=None):
 
 
 def openie_post_ner_extract_batch_vllm(client, passages, entities_list, extractor_name=None):
+    import vllm
     assert isinstance(client, vllm.LLM)
     named_entity_json_list = [{"named_entities": entities} for entities in entities_list]
     openie_messages = [openie_post_ner_prompts.format_prompt(passage=passage, named_entity_json=json.dumps(named_entity_json)) for passage, named_entity_json in
@@ -171,6 +160,7 @@ def openie_post_ner_extract_batch_vllm(client, passages, entities_list, extracto
 
 
 def extract_openie_from_triples_batch_vllm(client, existing_json, auxiliary_file_exists, ents_by_doc, corpus_json, extractor_name=None):
+    import vllm
     assert isinstance(client, vllm.LLM)
     extractions = []
     llm_total_tokens = 0
@@ -226,8 +216,8 @@ def extract_openie_from_triples_batch_vllm(client, existing_json, auxiliary_file
     return (extractions, all_entities, llm_total_tokens)
 
 
-def extract_openie_from_triples(client, existing_json, auxiliary_file_exists, ents_by_doc, corpus_json,
-                                extractor_name=None):
+def extract_openie_from_triples(client, existing_json, auxiliary_file_exists, ents_by_doc, corpus_json, extractor_name=None):
+    import vllm
     if isinstance(client, vllm.LLM):
         return extract_openie_from_triples_batch_vllm(client, existing_json, auxiliary_file_exists, ents_by_doc, corpus_json, extractor_name)
     extractions = []
