@@ -17,9 +17,9 @@ def index_with_huggingface(dataset_name: str, run_ner: bool, num_passages, llm_p
     # set_llm_cache(SQLiteCache(database_path=langchain_db))
     if skip_openie is False:
         openie_for_corpus(dataset_name, run_ner, num_passages, llm_provider, extractor, num_thread, num_gpus)
+        query_ner_parallel(dataset_name, llm_provider, extractor, num_thread, num_gpus)
     else:
         print('Skipping OpenIE')
-    query_ner_parallel(dataset_name, llm_provider, extractor, num_thread, num_gpus)
 
     extraction_type = 'ner'
     processed_extractor_name = extractor.replace('/', '_')

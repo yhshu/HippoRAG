@@ -3,8 +3,6 @@ from typing import List
 import requests
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, BaseMessage
 
-
-
 PROMPT_JSON_TEMPLATE = {
     "ner": {
         "type": "object",
@@ -23,21 +21,22 @@ PROMPT_JSON_TEMPLATE = {
         "type": "object",
         "properties": {
             "triples": {
-            "type": "array",
-            "items": {
                 "type": "array",
                 "items": {
-                    "type": "string"
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
                 },
-                "maxItems": 3,
-                "minItems": 3,
-            },
-            "minItems": 1
+                "minItems": 1
             }
         },
         "required": ["triples"]
-        }
+    }
 }
+
 
 class LlamaCppWrapper:
 

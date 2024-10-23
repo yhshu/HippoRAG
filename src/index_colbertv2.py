@@ -23,7 +23,7 @@ if __name__ == '__main__':
     parser.add_argument('--syn_thresh', type=float, default=0.8)
     parser.add_argument('--skip_openie', action='store_true')
     parser.add_argument('--skip_graph', action='store_true')
-    parser.add_argument('--num_gpus', type=int, default=4)
+    parser.add_argument('--num_gpus', type=int, default=1, help='Number of GPUs for local LLM')
     args = parser.parse_args()
     print(args)
 
@@ -34,7 +34,7 @@ if __name__ == '__main__':
     # Running Open Information Extraction
     if not args.skip_openie:
         openie_for_corpus(args.dataset, args.run_ner, args.num_passages, args.llm, args.extractor, args.num_thread, args.num_gpus)
-    query_ner_parallel(args.dataset, args.llm, args.extractor, args.num_thread, args.num_gpus)
+        query_ner_parallel(args.dataset, args.llm, args.extractor, args.num_thread, args.num_gpus)
 
     if not args.skip_graph:
         # Creating ColBERT Graph
