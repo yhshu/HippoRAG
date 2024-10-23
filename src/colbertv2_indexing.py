@@ -32,12 +32,8 @@ def colbertv2_index(corpus: list, dataset_name: str, exp_name: str, index_name='
 
 
 def colbertv2_graph_indexing(dataset_name: str, corpus_path: str, phrase_path: str, checkpoint_path: str = 'exp/colbertv2.0'):
-    corpus_path = json.load(open(corpus_path, 'r'))
-    # get corpus tsv
-    if 'hotpotqa' in dataset_name:
-        corpus_contents = [x[0] + ' ' + ''.join(x[1]) for x in corpus_path.items()]
-    else:
-        corpus_contents = [x['title'] + ' ' + x['text'].replace('\n', ' ') for x in corpus_path]
+    corpus = json.load(open(corpus_path, 'r'))
+    corpus_contents = [x['title'] + ' ' + x['text'].replace('\n', ' ') for x in corpus]
     colbertv2_index(corpus_contents, dataset_name, 'corpus', checkpoint_path, overwrite=True)
     kb_phrase_dict = pickle.load(open(phrase_path, 'rb'))
     phrases = np.array(list(kb_phrase_dict.keys()))[np.argsort(list(kb_phrase_dict.values()))]

@@ -19,25 +19,24 @@ os.environ['TOKENIZERS_PARALLELISM'] = 'FALSE'
 
 def create_graph(dataset: str, extraction_type: str, extraction_model: str, retriever_name: str, threshold: float = 0.9,
                  create_graph_flag: bool = False, cosine_sim_edges: bool = False, passage_node=None):
+    extraction_type_and_name = extraction_type + '_' + extraction_model
     corpus = json.load(open(f'data/{dataset}_corpus.json', 'r'))
     processed_retriever_name = retriever_name.replace('/', '_').replace('.', '')
     version = 'v3'
     inter_triple_weight = 1.0
     similarity_max = 1.0
-    possible_file_path = f'output/openie_{dataset}_results_{extraction_type}_{extraction_model}_*.json'
+    possible_file_path = f'output/openie_{dataset}_results_{extraction_type_and_name}_*.json'
     possible_files = glob(possible_file_path)
     assert len(possible_files) > 0, f'No files found for {possible_file_path}'
     if len(possible_files) > 1:
         print(f'[WARN] Note that multiple files found for {possible_file_path}')
     max_samples = np.max([int(file.split('{}_'.format(extraction_model))[1].split('.json')[0]) for file in possible_files])
 
-    extracted_file_path = f'output/openie_{dataset}_results_{extraction_type}_{extraction_model}_{max_samples}.json'
+    extracted_file_path = f'output/openie_{dataset}_results_{extraction_type_and_name}_{max_samples}.json'
     extracted_file = json.load(open(extracted_file_path, 'r'))
 
     extracted_triples = extracted_file['docs']
     assert len(extracted_triples) == len(corpus), f'Length of extracted triples {len(extracted_triples)} != length of corpus {len(corpus)}'
-    if not extraction_model.startswith('gpt-3.5-turbo'):
-        extraction_type = extraction_type + '_' + extraction_model
     phrase_type = 'ents_only_lower_preprocess'  # entities only, lower case, preprocessed
     if cosine_sim_edges:
         graph_type = 'facts_and_sim'  # extracted facts and similar phrases
@@ -203,17 +202,17 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
         triplet_fact_to_id_dict = {f: i for i, f in enumerate(extracted_triples)}
         fact_json_list = [{'idx': i, 'head': t[0], 'relation': t[1], 'tail': t[2]} for i, t in enumerate(extracted_triples)]
 
-        json.dump(passage_json, open('output/{}_{}_graph_passage_chatgpt_openIE.{}_{}.{}.subset.json'.format(dataset, graph_type, phrase_type, extraction_type, version), 'w'))
+        json.dump(passage_json, open('output/{}_{}_graph_passage_chatgpt_openIE.{}_{}.{}.subset.json'.format(dataset, graph_type, phrase_type, extraction_type_and_name, version), 'w'))
         # node_json: [{'idx': 0, 'name': 'phrase1'}, ...]
-        json.dump(node_json, open('output/{}_{}_graph_nodes_chatgpt_openIE.{}_{}.{}.subset.json'.format(dataset, graph_type, phrase_type, extraction_type, version), 'w'))
+        json.dump(node_json, open('output/{}_{}_graph_nodes_chatgpt_openIE.{}_{}.{}.subset.json'.format(dataset, graph_type, phrase_type, extraction_type_and_name, version), 'w'))
         # fact_json_list: [{'idx': 0, 'head': 'phrase1', 'relation': 'relation1', 'tail': 'phrase2'}, ...]
         json.dump(fact_json_list, open('output/{}_{}_graph_clean_facts_chatgpt_openIE.{}_{}.{}.subset.json'.format(
-            dataset, graph_type, phrase_type, extraction_type, version), 'w'))
+            dataset, graph_type, phrase_type, extraction_type_and_name, version), 'w'))
 
         # kb_phrase_to_id_dict: {'phrase1': 0, 'phrase2': 1, ...}
-        pickle.dump(kb_phrase_to_id_dict, open('output/{}_{}_graph_phrase_dict_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, version), 'wb'))
+        pickle.dump(kb_phrase_to_id_dict, open('output/{}_{}_graph_phrase_dict_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type_and_name, version), 'wb'))
         # triplet_fact_to_id_dict: {('phrase1', 'relation1', 'phrase2'): 0, ...}
-        pickle.dump(triplet_fact_to_id_dict, open('output/{}_{}_graph_fact_dict_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, version), 'wb'))
+        pickle.dump(triplet_fact_to_id_dict, open('output/{}_{}_graph_fact_dict_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type_and_name, version), 'wb'))
 
         graph_json = {}  # {phrase: {phrase2: ('triple'/'similarity', frequency/score)}}
 
@@ -271,8 +270,8 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
 
                             num_triple_edges += 1
 
-        pickle.dump(docs_to_facts, open('output/{}_{}_graph_doc_to_facts_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, version), 'wb'))
-        pickle.dump(facts_to_phrases, open('output/{}_{}_graph_facts_to_phrases_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, version), 'wb'))
+        pickle.dump(docs_to_facts, open('output/{}_{}_graph_doc_to_facts_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type_and_name, version), 'wb'))
+        pickle.dump(facts_to_phrases, open('output/{}_{}_graph_facts_to_phrases_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type_and_name, version), 'wb'))
 
         docs_to_facts_mat = csr_array(([int(v) for v in docs_to_facts.values()], ([int(e[0]) for e in docs_to_facts.keys()], [int(e[1]) for e in docs_to_facts.keys()])),
                                       shape=(len(triples_by_passage), len(extracted_triples)))
@@ -281,11 +280,11 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
 
         assert docs_to_facts_mat.shape[0] == len(corpus), f"docs_to_facts_mat.shape[0] {docs_to_facts_mat.shape[0]} != len(corpus) {len(corpus)}"
 
-        pickle.dump(docs_to_facts_mat, open('output/{}_{}_graph_doc_to_facts_csr_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, version), 'wb'))
+        pickle.dump(docs_to_facts_mat, open('output/{}_{}_graph_doc_to_facts_csr_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type_and_name, version), 'wb'))
         pickle.dump(facts_to_phrases_mat,
-                    open('output/{}_{}_graph_facts_to_phrases_csr_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, version), 'wb'))
+                    open('output/{}_{}_graph_facts_to_phrases_csr_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type_and_name, version), 'wb'))
 
-        pickle.dump(graph, open('output/{}_{}_graph_fact_doc_edges_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, version), 'wb'))
+        pickle.dump(graph, open('output/{}_{}_graph_fact_doc_edges_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type_and_name, version), 'wb'))
 
         print('Loading Vectors')
 
@@ -345,7 +344,7 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
                 synonym_candidates.append((phrase, synonyms))
 
             pickle.dump(synonym_candidates, open(
-                'output/{}_similarity_edges_mean_{}_thresh_{}_{}_{}.{}.subset.p'.format(dataset, threshold, phrase_type, extraction_type, processed_retriever_name, version), 'wb'))
+                'output/{}_similarity_edges_mean_{}_thresh_{}_{}_{}.{}.subset.p'.format(dataset, threshold, phrase_type, extraction_type_and_name, processed_retriever_name, version), 'wb'))
         else:
             graph_with_synonym = graph
 
@@ -372,7 +371,7 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
                         relations[(phrase, p)] = 'in_passage'
 
         pickle.dump(relations,
-                    open('output/{}_{}_graph_relation_dict_{}_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type, processed_retriever_name, version),
+                    open('output/{}_{}_graph_relation_dict_{}_{}_{}.{}.subset.p'.format(dataset, graph_type, phrase_type, extraction_type_and_name, processed_retriever_name, version),
                          'wb'))
 
         print('Saving Graph')
@@ -399,14 +398,14 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
         if similarity_max == 1.0:
             pickle.dump(graph_with_synonym, open(
                 'output/{}_{}_graph_mean_{}_thresh_{}_{}_{}.{}.subset.p'.format(dataset, graph_type, threshold, phrase_type,
-                                                                                extraction_type, processed_retriever_name, version), 'wb'))
+                                                                                extraction_type_and_name, processed_retriever_name, version), 'wb'))
         else:
             pickle.dump(graph_with_synonym, open(
                 'output/{}_{}_graph_mean_{}_thresh_{}_{}_sim_max_{}_{}.{}.subset.p'.format(dataset, graph_type, threshold,
-                                                                                           phrase_type, extraction_type, similarity_max, processed_retriever_name, version), 'wb'))
+                                                                                           phrase_type, extraction_type_and_name, similarity_max, processed_retriever_name, version), 'wb'))
 
         json.dump(graph_json, open('output/{}_{}_graph_chatgpt_openIE.{}_{}.{}.subset.json'.format(dataset, graph_type, phrase_type,
-                                                                                                   extraction_type, version), 'w'))
+                                                                                                   extraction_type_and_name, version), 'w'))
 
 
 if __name__ == '__main__':

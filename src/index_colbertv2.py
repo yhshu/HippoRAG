@@ -29,6 +29,7 @@ if __name__ == '__main__':
 
     if args.llm not in ['vllm']:
         set_llm_cache(SQLiteCache(database_path=".langchain.db"))
+    extractor_name = args.extractor.replace('/', '_')
     extraction_type = 'ner'
 
     # Running Open Information Extraction
@@ -51,4 +52,6 @@ if __name__ == '__main__':
         create_graph(args.dataset, extraction_type, args.extractor, args.retriever, args.syn_thresh, True, True)
 
         # ColBERTv2 Indexing for Entity Retrieval & Ensembling
-        colbertv2_graph_indexing(args.dataset, f'data/{args.dataset}_corpus.json', f'output/{args.dataset}_facts_and_sim_graph_phrase_dict_ents_only_lower_preprocess_ner.v3.subset.p')
+
+        colbertv2_graph_indexing(args.dataset, f'data/{args.dataset}_corpus.json',
+                                 f'output/{args.dataset}_facts_and_sim_graph_phrase_dict_ents_only_lower_preprocess_{extraction_type}_{extractor_name}.v3.subset.p')

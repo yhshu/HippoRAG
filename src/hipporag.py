@@ -570,8 +570,7 @@ class HippoRAG:
             self.dataset_df = pd.DataFrame([p['passage'] for p in self.extracted_triples])
             self.dataset_df['paragraph'] = [s['passage'] for s in self.extracted_triples]
 
-        if not self.extraction_model_name.startswith('gpt-3.5-turbo'):
-            self.extraction_type = self.extraction_type + '_' + self.extraction_model_name_processed
+        self.extraction_type = self.extraction_type + '_' + self.extraction_model_name_processed
         self.kb_node_phrase_to_id = pickle.load(open(
             'output/{}_{}_graph_phrase_dict_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type,
                                                                       self.phrase_type,
