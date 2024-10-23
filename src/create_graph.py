@@ -139,10 +139,11 @@ def create_graph(dataset: str, extraction_type: str, extraction_model: str, retr
     q_entities = []
     q_entities_by_doc = []
     for doc_ents in tqdm(queries_full_df.triples):
-        doc_ents = eval_json_str(doc_ents).get('named_entities', [])
         try:
+            doc_ents = eval_json_str(doc_ents).get('named_entities', [])
             clean_doc_ents = [processing_phrases(p) for p in doc_ents]
         except:
+            print("No named entities found for one query")
             clean_doc_ents = []
         q_entities.extend(clean_doc_ents)
         q_entities_by_doc.append(clean_doc_ents)
