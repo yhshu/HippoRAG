@@ -319,11 +319,18 @@ class LLMFilter(Reranker):
 
 
 class VLLMFilter(LLMFilter):
-    def __init__(self, model_name):
+    def __init__(self, model_name, demo_path=None):
         from vllm import LLM
         llm = LLM(model=model_name, trust_remote_code=True, tensor_parallel_size=4, seed=0, dtype='auto', max_seq_len_to_capture=4096)
         self.model = llm
         self.model_name = model_name
+
+        self.demo_retriever = None
+        if demo_path is not None and os.path.isfile(demo_path):
+            self.demos = json.load(open(demo_path, 'r'))
+            if self.demos is not None and len(self.demos) > 0:
+                from src.pangu.retrieval_api import BM25Retriever
+                self.demo_retriever = BM25Retriever([item['question'] for item in self.demos])
 
     def rerank(self, task: str, query: str, candidate_items: List[Tuple], candidate_indices, len_after_rerank=None):
         if candidate_indices is None:
