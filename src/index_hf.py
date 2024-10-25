@@ -16,19 +16,26 @@ def index_with_huggingface(dataset_name: str, run_ner: bool, num_passages, llm_p
                            passage_node=False):
     # set_llm_cache(SQLiteCache(database_path=langchain_db))
     if skip_openie is False:
-        openie_for_corpus(dataset_name, run_ner, num_passages, llm_provider, extractor, num_thread, num_gpus)
-        query_ner_parallel(dataset_name, llm_provider, extractor, num_thread, num_gpus)
+        from src.langchain_util import init_langchain_model
+        if '7B' in retriever:
+            gpu_mem_util = 0.65
+        else:
+            gpu_mem_util = 0.93
+        client = init_langchain_model(llm_provider, extractor, num_gpus=num_gpus, gpu_memory_utilization=gpu_mem_util)  # LangChain model
+        openie_for_corpus(dataset_name, run_ner, num_passages, llm_provider, extractor, num_thread, client)
+        query_ner_parallel(dataset_name, extractor, num_thread, client)
     else:
         print('Skipping OpenIE')
 
     extraction_type = 'ner'
     processed_extractor_name = extractor.replace('/', '_')
 
-    create_graph(dataset_name, extraction_type, processed_extractor_name, retriever, syn_thresh, False, True, passage_node)
-    RetrievalModule(retriever, 'output/query_to_kb.tsv', 'mean')
-    RetrievalModule(retriever, 'output/kb_to_kb.tsv', 'mean')
-    RetrievalModule(retriever, 'output/rel_kb_to_kb.tsv', 'mean')
-    create_graph(dataset_name, extraction_type, processed_extractor_name, retriever, syn_thresh, True, True, passage_node)
+    if not skip_graph:
+        create_graph(dataset_name, extraction_type, processed_extractor_name, retriever, syn_thresh, False, True, passage_node)
+        RetrievalModule(retriever, 'output/query_to_kb.tsv', 'mean')
+        RetrievalModule(retriever, 'output/kb_to_kb.tsv', 'mean')
+        RetrievalModule(retriever, 'output/rel_kb_to_kb.tsv', 'mean')
+        create_graph(dataset_name, extraction_type, processed_extractor_name, retriever, syn_thresh, True, True, passage_node)
 
 
 if __name__ == '__main__':

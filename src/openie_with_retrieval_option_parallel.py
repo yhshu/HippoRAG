@@ -271,10 +271,9 @@ def extract_openie_from_triples(client, existing_json, auxiliary_file_exists, en
     return (extractions, all_entities, llm_total_tokens)
 
 
-def openie_for_corpus(dataset_name: str, run_ner: bool, num_passages, llm: str, model_name: str, num_processes: int, num_gpus: int = 4):
+def openie_for_corpus(dataset_name: str, run_ner: bool, num_passages, llm: str, model_name: str, num_processes: int, client):
     arg_str, dataset_name, flags_present, num_passages, retrieval_corpus = load_corpus(dataset_name, model_name, num_passages, run_ner)
 
-    client = init_langchain_model(llm, model_name, num_gpus=num_gpus)  # LangChain model
     already_done = False
     try:
         # Get incomplete extraction output with same settings
@@ -397,4 +396,5 @@ if __name__ == '__main__':
     parser.add_argument('--num_processes', type=int, default=10)
 
     args = parser.parse_args()
-    openie_for_corpus(args.dataset, args.run_ner, args.num_passages, args.llm, args.model_name, args.num_processes)
+    client = init_langchain_model(args.llm, args.model_name)
+    openie_for_corpus(args.dataset, args.run_ner, args.num_passages, args.llm, args.model_name, args.num_processes, client)

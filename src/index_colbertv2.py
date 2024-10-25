@@ -1,5 +1,7 @@
 import sys
 
+from src.langchain_util import init_langchain_model
+
 sys.path.append('.')
 
 import argparse
@@ -34,8 +36,9 @@ if __name__ == '__main__':
 
     # Running Open Information Extraction
     if not args.skip_openie:
-        openie_for_corpus(args.dataset, args.run_ner, args.num_passages, args.llm, args.extractor, args.num_thread, args.num_gpus)
-        query_ner_parallel(args.dataset, args.llm, args.extractor, args.num_thread, args.num_gpus)
+        client = init_langchain_model(args.llm, args.extractor, num_gpus=args.num_gpus)  # LangChain model
+        openie_for_corpus(args.dataset, args.run_ner, args.num_passages, args.llm, args.extractor, args.num_thread, client)
+        query_ner_parallel(args.dataset, args.extractor, args.num_thread, client)
 
     if not args.skip_graph:
         # Creating ColBERT Graph
