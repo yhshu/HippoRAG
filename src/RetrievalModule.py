@@ -70,7 +70,7 @@ class RetrievalModule:
                 self.encode_strings_func = self.encode_strings
         except Exception as e:
             print(e)
-            print('Loading {} failed. Please make sure it is a valid model name and then check other issues.'.format(retriever_name))
+            print('Loading {} failed. Possible reasons include: 1. Please make sure it is a valid model name; 2. GPU memory.'.format(retriever_name))
             assert False
 
         # If not pre-computed, create vectors

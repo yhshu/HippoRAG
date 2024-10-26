@@ -56,7 +56,7 @@ def init_langchain_model(llm: str, model_name: str, temperature: float = 0.0, ma
         from vllm import LLM
         tensor_parallel_size = kwargs.get('num_gpus', 4)
         llm = LLM(model=model_name, tensor_parallel_size=tensor_parallel_size, seed=0, dtype='auto', max_seq_len_to_capture=4096, enable_prefix_caching=True,
-        enforce_eager=True,)
+        enforce_eager=True, gpu_memory_utilization=kwargs.get('gpu_memory_utilization', 0.93))
         return llm
     else:
         # add any LLMs you want to use here using LangChain

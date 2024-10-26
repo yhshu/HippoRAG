@@ -122,8 +122,7 @@ def run_ner_on_texts_vllm(client, all_queries):
     return all_responses, all_total_tokens
 
 
-def query_ner_parallel(dataset: str, llm: str, model_name: str, num_processes: int, num_gpus: int = 4):
-    client = init_langchain_model(llm, model_name, num_gpus=num_gpus)  # LangChain model
+def query_ner_parallel(dataset: str, model_name: str, num_processes: int, client):
     output_file = f'output/{dataset}_{model_name.replace("/", "_")}_queries.named_entity_output.tsv'
 
     queries_df = pd.read_json(f'data/{dataset}.json')
@@ -138,6 +137,9 @@ def query_ner_parallel(dataset: str, llm: str, model_name: str, num_processes: i
 
     try:
         output_df = pd.read_csv(output_file, sep='\t')
+        if len(queries_df) == len(output_df):
+            print('Passage NER is found at', output_file)
+            return
     except:
         output_df = []
 
@@ -153,39 +155,36 @@ def query_ner_parallel(dataset: str, llm: str, model_name: str, num_processes: i
         print('Passage NER saved to', output_file)
         print('Total tokens:', all_num_tokens)
         return
+    # else, call extraction model in parallel
     try:
+        queries = queries_df[query_name].values
 
-        if len(queries_df) != len(output_df):
-            queries = queries_df[query_name].values
+        splits = np.array_split(range(len(queries)), num_processes)
 
-            splits = np.array_split(range(len(queries)), num_processes)
+        args = []
 
-            args = []
+        for split in splits:
+            args.append([queries[i] for i in split])
 
-            for split in splits:
-                args.append([queries[i] for i in split])
-
-            if num_processes == 1:
-                outputs = [run_ner_on_texts(client, args[0])]
-            else:
-                with ThreadPoolExecutor(max_workers=num_processes) as executor:
-                    outputs = list(executor.map(partial(run_ner_on_texts, client), args))
-                # with Pool(processes=num_processes) as pool:
-                #     outputs = pool.map(partial_func, args)
-
-            chatgpt_total_tokens = 0
-
-            query_triples = []
-
-            for output in outputs:
-                query_triples.extend(output[0])
-                chatgpt_total_tokens += output[1]
-
-            queries_df['triples'] = query_triples
-            queries_df.to_csv(output_file, sep='\t')
-            print('Passage NER saved to', output_file)
+        if num_processes == 1:
+            outputs = [run_ner_on_texts(client, args[0])]
         else:
-            print('Passage NER already saved to', output_file)
+            with ThreadPoolExecutor(max_workers=num_processes) as executor:
+                outputs = list(executor.map(partial(run_ner_on_texts, client), args))
+            # with Pool(processes=num_processes) as pool:
+            #     outputs = pool.map(partial_func, args)
+
+        chatgpt_total_tokens = 0
+
+        query_triples = []
+
+        for output in outputs:
+            query_triples.extend(output[0])
+            chatgpt_total_tokens += output[1]
+
+        queries_df['triples'] = query_triples
+        queries_df.to_csv(output_file, sep='\t')
+        print('Passage NER saved to', output_file)
     except Exception as e:
         print('No queries will be processed for later retrieval.', e)
 
@@ -203,4 +202,4 @@ if __name__ == '__main__':
     dataset = args.dataset
     model_name = args.model_name
 
-    query_ner_parallel(args.dataset, args.llm, args.model_name, args.num_processes)
+    query_ner_parallel(args.dataset, args.model_name, args.num_processes)

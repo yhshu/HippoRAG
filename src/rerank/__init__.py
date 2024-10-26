@@ -321,7 +321,9 @@ class LLMFilter(Reranker):
 class VLLMFilter(LLMFilter):
     def __init__(self, model_name, demo_path=None):
         from vllm import LLM
-        llm = LLM(model=model_name, trust_remote_code=True, tensor_parallel_size=4, seed=0, dtype='auto', max_seq_len_to_capture=4096)
+        tensor_parallel_size = 4
+        llm = LLM(model=model_name, tensor_parallel_size=tensor_parallel_size, seed=0, dtype='auto', max_seq_len_to_capture=4096,
+                  enable_prefix_caching=True, enforce_eager=True, gpu_memory_utilization=0.65)
         self.model = llm
         self.model_name = model_name
 

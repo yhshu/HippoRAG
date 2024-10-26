@@ -180,7 +180,8 @@ if __name__ == '__main__':
         dpr_only_str = 'hipporag'
 
     os.makedirs(f'output/ircot_retrieval/{args.dataset}', exist_ok=True)
-    rerank_str = f'_RE_{args.reranker}' if args.reranker else ''
+    rerank_model_name_processed = args.reranker.replace('/', '_').replace('.', '_') if args.reranker else ''
+    rerank_str = f'_RE_{rerank_model_name_processed}' if rerank_model_name_processed != '' else ''
     graph_type_str = ''
     if 'passage_node' in args.graph_type:
         graph_type_str = '_GT_pn'

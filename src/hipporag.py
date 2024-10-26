@@ -174,9 +174,6 @@ class HippoRAG:
 
         self.statistics = defaultdict(int)
         self.ensembling_debug = []
-        if qa_model is None:
-            qa_model = LangChainModel('openai', 'gpt-3.5-turbo')
-        self.qa_model = init_langchain_model(qa_model.provider, qa_model.model_name)
 
         self.reranker = None
         self.reranker_name = None
@@ -206,6 +203,12 @@ class HippoRAG:
         if self._client is None:
             self._client = init_langchain_model(self.extraction_model, self.extraction_model_name)
         return self._client
+
+    @property
+    def qa_model(self):
+        if self._qa_model is None:
+            self._qa_model = init_langchain_model('openai', 'gpt-4o-mini')
+        return self._qa_model
 
     def get_passage_by_idx(self, passage_idx):
         """
