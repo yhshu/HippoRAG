@@ -61,22 +61,36 @@ def main_eval(file_name):
     print(f'For file: {file_name}')
     with open(file_name, 'r') as file:
         data = json.load(file)
+
+    data_by_type = {}
+    for d in data:
+        if d['question_type'] == 'null_query':
+            continue
+        if d['question_type'] not in data_by_type:
+            data_by_type[d['question_type']] = []
+        data_by_type[d['question_type']].append(d)
+    compare_retrieved_and_gold(data)
+
+    for question_type, selected_data in data_by_type.items():
+        print(f"Question Type: {question_type}")
+        compare_retrieved_and_gold(selected_data)
+
+
+def compare_retrieved_and_gold(data):
     retrieved_lists = []
     gold_lists = []
-
     for d in data:
         if d['question_type'] == 'null_query':
             continue
         retrieved_lists.append([m['text'] for m in d['retrieval_list']])
         gold_lists.append([m['fact'] for m in d['gold_list']])
 
-        # Calculate metrics
+    # Calculate metrics
     metrics = calculate_metrics(retrieved_lists, gold_lists)
-
+    print(f"Number of queries: {len(retrieved_lists)}")
     # Print the metrics
     for metric, value in metrics.items():
         print(f"{metric}: {value:.4f}")
-
     print('-' * 20)
 
 
