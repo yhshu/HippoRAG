@@ -532,7 +532,7 @@ class HippoRAG:
     def load_corpus(self):
         if self.corpus_path is None:
             self.corpus_path = 'data/{}_corpus.json'.format(self.corpus_name)
-        assert os.path.isfile(self.corpus_path), 'Corpus file not found'
+        assert os.path.isfile(self.corpus_path), 'Corpus file not found ' + self.corpus_path
         self.corpus = json.load(open(self.corpus_path, 'r'))
         self.dataset_df = pd.DataFrame()
         self.dataset_df['paragraph'] = [p['title'] + '\n' + p['text'] for p in self.corpus]
