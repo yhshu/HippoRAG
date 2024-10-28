@@ -51,7 +51,7 @@ def parse_prompt(file_path):
     return parsed_data
 
 
-def retrieve_step(query: str, corpus, top_k: int, hipporag: HippoRAG, dataset_name: str, link_top_k: Union[None, int], linking='ner_to_node', oracle_triples=None):
+def retrieve_step(query: str, corpus, top_k: int, hipporag: HippoRAG, link_top_k: Union[None, int], linking='ner_to_node', oracle_triples=None):
     ranks, scores, logs = hipporag.rank_docs(query, doc_top_k=top_k, link_top_k=link_top_k, linking=linking, oracle_triples=oracle_triples)
     retrieved_passages = [corpus[rank]['title'] + '\n' + corpus[rank]['text'] for rank in ranks]
     return retrieved_passages, scores, logs
@@ -269,7 +269,7 @@ if __name__ == '__main__':
             for p in gold_docs:
                 assert len(p) > 0 and '\n' in p
                 oracle_triples += hipporag.get_triples_and_triple_ids_by_passage_content(p)[0]
-        retrieved_passages, scores, logs = retrieve_step(query, corpus, args.top_k, hipporag, args.dataset, args.link_top_k, args.linking, oracle_triples)
+        retrieved_passages, scores, logs = retrieve_step(query, corpus, args.top_k, hipporag, args.link_top_k, args.linking, oracle_triples)
 
         it = 1
         logs_for_all_steps[it] = logs
@@ -284,7 +284,7 @@ if __name__ == '__main__':
                 break
             it += 1
 
-            new_retrieved_passages, new_scores, logs = retrieve_step(new_thought, corpus, args.top_k, hipporag, args.dataset, args.link_top_k, args.linking, oracle_triples)
+            new_retrieved_passages, new_scores, logs = retrieve_step(new_thought, corpus, args.top_k, hipporag, args.link_top_k, args.linking, oracle_triples)
             logs_for_all_steps[it] = logs
 
             for passage, score in zip(new_retrieved_passages, new_scores):
@@ -415,6 +415,18 @@ if __name__ == '__main__':
             print()
             if max_steps > 1:
                 print('[ITERATION]', it, '[PASSAGE]', len(retrieved_passages), '[THOUGHT]', thoughts)
+
+            if args.dataset == 'multihoprag':
+                # for external official evaluation
+                sample['retrieval_list'] = []
+                sample['gold_list'] = sample['supporting_docs']
+                for r in sample['retrieved']:
+                    for c in corpus:
+                        if f"{c['title']}\n{c['text']}" == r:
+                            sample['retrieval_list'].append(c)
+                assert len(sample['retrieval_list']) == len(sample['retrieved'])
+                del sample['retrieved']
+                del sample['supporting_docs']
 
         results.append(sample)
         if (sample_idx + 1) % 10 == 0:
