@@ -9,11 +9,10 @@ from langchain.globals import set_llm_cache
 from langchain_community.cache import SQLiteCache
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate
-from pydantic import BaseModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from src.langchain_util import init_langchain_model
-from src.util.llama_cpp_service import langchain_message_to_llama_3_prompt
+from src.util.llama_cpp_service import langchain_message_to_llama_3_prompt, PROMPT_JSON_TEMPLATE
 
 
 class LLMLogitsCache:
@@ -345,18 +344,18 @@ class VLLMFilter(LLMFilter):
             else:
                 prompt = messages.to_string()
 
-            from outlines.serve.vllm import JSONLogitsProcessor
             from vllm import SamplingParams
-            class FactModel(BaseModel):
-                fact: List[List[str]]
-
-            logits_processor = JSONLogitsProcessor(FactModel.model_json_schema(), self.model)
-
-            completion = self.model.generate(prompt, sampling_params=SamplingParams(max_tokens=256, temperature=0, logits_processors=[logits_processor]))
+            from vllm.model_executor.guided_decoding.guided_fields import GuidedDecodingRequest
+            completion = self.model.generate(prompt,
+                                             sampling_params=SamplingParams(max_tokens=256, temperature=0),
+                                             guided_options_request=GuidedDecodingRequest(guided_json=PROMPT_JSON_TEMPLATE['fact'])
+                                             )
             content = completion[0].outputs[0].text
 
             try:
                 response = json.loads(content)
+                if 'fact' not in response:
+                    response = {'fact': []}
             except Exception as e:
                 print('json.load exception', e, 'output:', content)
                 response = {'fact': []}
