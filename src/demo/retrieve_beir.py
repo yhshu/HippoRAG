@@ -99,7 +99,7 @@ def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: st
     if oracle_extraction:
         linking_str += '_oracle_ie'
     dpr_only_str = '_dpr_only' if dpr_only else ''
-    reranker_str = f'_RE_{reranker_name}' if reranker_name is not None else ''
+    reranker_str = f"_RE_{reranker_name.replace('/', '_').replace('.', '_')}" if reranker_name is not None else ''
     os.makedirs(f'output/retrieval/{dataset_name}', exist_ok=True)
     run_output_path = f'output/retrieval/{dataset_name}/{dataset_name}_run_{doc_ensemble_str}_E_{extraction_str}_R_{graph_creating_str}_L_{linking_str}{dpr_only_str}{reranker_str}.json'
     print(f'Log will be saved to {run_output_path}')  # this file is used for pytrec_eval, another log file will be saved for details

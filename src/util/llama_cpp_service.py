@@ -12,7 +12,7 @@ PROMPT_JSON_TEMPLATE = {
                 "items": {
                     "type": "string"
                 },
-                "minItems": 1
+                "minItems": 0
             }
         },
         "required": ["named_entities"]
@@ -30,10 +30,31 @@ PROMPT_JSON_TEMPLATE = {
                     "maxItems": 3,
                     "minItems": 3,
                 },
-                "minItems": 1
+                "minItems": 0
             }
         },
         "required": ["triples"]
+    },
+    "fact": {
+        "type": "object",
+        "properties": {
+            "fact": {
+                "type": "array",
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                },
+                "minItems": 0
+            }
+        },
+        "required": ["fact"]
+    },
+    "json": {
+        "type": "object",
     }
 }
 
