@@ -220,7 +220,7 @@ if __name__ == '__main__':
     parser.add_argument('--directed', action='store_true')
     args = parser.parse_args()
 
-    set_llm_cache(SQLiteCache(database_path=f".hipporag_{args.extractor}.db"))
+    set_llm_cache(SQLiteCache(database_path=f".hipporag_{args.extractor.replace('/', '_')}.db"))
 
     if args.chunk is False and 'chunk' in args.dataset:
         args.chunk = True

@@ -261,6 +261,12 @@ if __name__ == '__main__':
                         break
         elif args.dataset in ['musique']:
             gold_docs = [item['title'] + '\n' + item['paragraph_text'] for item in sample['paragraphs'] if item['is_supporting']]
+        elif args.dataset in ['hotpotqa']:
+            gold_docs = []
+            gold_title = [f[0] for f in sample['supporting_facts']]
+            for c in sample['context']:
+                if c[0] in gold_title:
+                    gold_docs.append(c[0] + '\n' + ''.join(c[1]))
 
         oracle_triples = None
         if hipporag.reranker_name is not None and hipporag.reranker_name in ['oracle_triple']:
