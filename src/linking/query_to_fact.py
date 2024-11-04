@@ -126,7 +126,7 @@ def llm_verify(hipporag, logs, messages, query, sorted_doc_ids, sorted_scores):
         return dpr_sorted_doc_ids, dpr_sorted_scores, dpr_logs
 
 
-def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, fact_embeddings, link_top_k, graph_search=True, num_rerank_fact=5, oracle_triples=None):
+def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, fact_embeddings, link_top_k, graph_search=True, oracle_triples=None):
     query_doc_scores = np.zeros(hipporag.docs_to_phrases_mat.shape[0])  # (num_docs,)
     query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction(hipporag.embed_model, 'query_to_fact', hipporag.corpus_name),
                                                        return_cpu=True, return_numpy=True, norm=True)
@@ -136,7 +136,7 @@ def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, 
     query_fact_scores = min_max_normalize(query_fact_scores)
 
     if hipporag.reranker is not None:
-        candidate_fact_indices = np.argsort(query_fact_scores)[-num_rerank_fact:][::-1].tolist()
+        candidate_fact_indices = np.argsort(query_fact_scores)[-link_top_k:][::-1].tolist()
         candidate_facts = [candidate_triples[i] for i in candidate_fact_indices]
         if hipporag.reranker_name in ['oracle_triple']:
             top_k_fact_indicies, top_k_facts = hipporag.reranker.rerank('fact_reranking', query, candidate_facts, candidate_fact_indices, oracle_triples=oracle_triples)

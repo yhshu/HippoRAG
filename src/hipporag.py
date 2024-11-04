@@ -630,8 +630,10 @@ class HippoRAG:
         graph_file_path = 'output/{}_{}_graph_mean_{}_thresh_{}_{}_{}.{}.subset.p'.format(self.corpus_name, self.graph_type, str(self.sim_threshold), self.phrase_type,
                                                                                           self.extraction_type, self.graph_creating_retriever_name_processed, self.version)
         if os.path.isfile(graph_file_path):
-            self.graph_plus = pickle.load(
-                open(graph_file_path, 'rb'))  # (phrase1 id, phrase2 id) -> the number of occurrences
+            try:
+                self.graph_plus = pickle.load(open(graph_file_path, 'rb'))  # (phrase1 id, phrase2 id) -> the number of occurrences
+            except:
+                self.logger.exception('Error in loading graph file: ' + graph_file_path)
         else:
             self.logger.error('Graph file not found: ' + graph_file_path)
 
@@ -748,7 +750,7 @@ class HippoRAG:
         self.logger.info('Loading node vectors from: ' + string_file_path)
         kb_vectors = []
         self.strings = open(string_file_path, 'r').readlines()
-        for i in range(len(glob('data/lm_vectors/{}_mean/vecs_*'.format(self.linking_retriever_name_processed)))):
+        for i in tqdm(range(len(glob('data/lm_vectors/{}_mean/vecs_*'.format(self.linking_retriever_name_processed)))), desc='Loading node vectors'):
             kb_vectors.append(
                 torch.Tensor(pickle.load(open('data/lm_vectors/{}_mean/vecs_{}.p'.format(self.linking_retriever_name_processed, i), 'rb'))))
         kb_mat = torch.cat(kb_vectors)  # a matrix of phrase vectors

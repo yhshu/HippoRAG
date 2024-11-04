@@ -3,7 +3,7 @@ import sys
 
 sys.path.append('.')
 
-from typing import Union
+from typing import Union, Dict
 
 from collections import defaultdict
 
@@ -19,7 +19,7 @@ import json
 
 from tqdm import tqdm
 
-from hipporag import HippoRAG
+from src.hipporag import HippoRAG
 
 ircot_reason_instruction = 'You serve as an intelligent assistant, adept at facilitating users through complex, multi-hop reasoning across multiple documents. This task is illustrated through demonstrations, each consisting of a document set paired with a relevant question and its multi-hop reasoning thoughts. Your task is to generate one thought for current step, DON\'T generate the whole thoughts at once! If you reach what you believe to be the final step, start with "So the answer is:".'
 
@@ -107,6 +107,35 @@ def reason_step(dataset, few_shot: list, query: str, passages: list, thoughts: l
     return response_content
 
 
+def get_gold_docs(dataset_name: str, sample: Dict):
+    gold_docs = []
+    if dataset_name in ['2wikimultihopqa']:
+        for item in sample['supporting_facts']:
+            title = item[0]
+            for c in sample['context']:
+                if c[0] == title:
+                    gold_docs.append(c[0] + '\n' + ' '.join(c[1]))
+                    break
+    elif dataset_name in ['musique']:
+        gold_docs = [item['title'] + '\n' + item['paragraph_text'] for item in sample['paragraphs'] if item['is_supporting']]
+    elif dataset_name in ['hotpotqa']:
+        gold_title = [f[0] for f in sample['supporting_facts']]
+        for c in sample['context']:
+            if c[0] in gold_title:
+                gold_docs.append(c[0] + '\n' + ''.join(c[1]))
+    elif dataset_name.startswith('beir'):
+        gold_docs = [item['title'] + '\n' + item['text'] for item in sample['paragraphs']]
+    return gold_docs
+
+
+def get_oracle_triples(gold_docs: list, hipporag: HippoRAG):
+    oracle_triples = []
+    for p in gold_docs:
+        assert len(p) > 0 and '\n' in p
+        oracle_triples += hipporag.get_triples_and_triple_ids_by_passage_content(p)[0]
+    return oracle_triples
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str)
@@ -137,16 +166,23 @@ if __name__ == '__main__':
     # set langchain cache
     set_llm_cache(SQLiteCache(database_path=".ircot_hipporag.db"))
 
+    # process args
     do_eval = string_to_bool(args.do_eval)
+    doc_ensemble = string_to_bool(args.doc_ensemble)
+    doc_ensemble_str = f'doc_ensemble_{args.recognition_threshold}' if doc_ensemble else 'no_ensemble'
+    dpr_only_str = 'dpr_only' if args.dpr_only else 'hipporag'
+    llm_model_name_processed = args.llm_model.replace('/', '_').replace('.', '_')
+    rerank_model_name_processed = args.reranker.replace('/', '_').replace('.', '_') if args.reranker else ''
+    rerank_str = f'_RE_{rerank_model_name_processed}' if rerank_model_name_processed != '' else ''
+    graph_type_str = ''
+    if 'passage_node' in args.graph_type:
+        graph_type_str = '_GT_pn'
+        if 'unidirectional' in args.graph_type:
+            graph_type_str += 'u'
 
-    # check args
     if args.linking in ['query_to_node', 'query_to_fact', 'query_to_passage']:
         assert args.link_top_k, 'link_top_k should be provided for query_to_node or query_to_fact'
 
-    # Please set environment variable OPENAI_API_KEY
-    doc_ensemble = string_to_bool(args.doc_ensemble)
-
-    llm_model_name_processed = args.llm_model.replace('/', '_').replace('.', '_')
     colbert_configs = {'root': f'data/lm_vectors/colbert/{args.dataset}', 'doc_index_name': 'nbits_2', 'phrase_index_name': 'nbits_2'}
 
     hipporag = HippoRAG(args.dataset, extraction_model=args.llm, extractor_name=args.llm_model, graph_creating_retriever_name=args.retriever,
@@ -172,21 +208,7 @@ if __name__ == '__main__':
 
         few_shot_samples = parse_prompt(prompt_path)[:args.num_demo]
 
-    doc_ensemble_str = f'doc_ensemble_{args.recognition_threshold}' if doc_ensemble else 'no_ensemble'
-
-    if args.dpr_only:
-        dpr_only_str = 'dpr_only'
-    else:
-        dpr_only_str = 'hipporag'
-
     os.makedirs(f'output/ircot_retrieval/{args.dataset}', exist_ok=True)
-    rerank_model_name_processed = args.reranker.replace('/', '_').replace('.', '_') if args.reranker else ''
-    rerank_str = f'_RE_{rerank_model_name_processed}' if rerank_model_name_processed != '' else ''
-    graph_type_str = ''
-    if 'passage_node' in args.graph_type:
-        graph_type_str = '_GT_pn'
-        if 'unidirectional' in args.graph_type:
-            graph_type_str += 'u'
 
     output_path = (
         f'output/ircot_retrieval/{args.dataset}/{args.dataset}_{dpr_only_str}{graph_type_str}_E_{llm_model_name_processed}_R_{hipporag.graph_creating_retriever_name_processed}_L_{hipporag.linking_retriever_name_processed}_{args.linking}{rerank_str}'
@@ -251,30 +273,12 @@ if __name__ == '__main__':
         query = sample['question']
         logs_for_all_steps = {}
 
-        gold_docs = []
-        if args.dataset in ['2wikimultihopqa']:
-            for item in sample['supporting_facts']:
-                title = item[0]
-                for c in sample['context']:
-                    if c[0] == title:
-                        gold_docs.append(c[0] + '\n' + ' '.join(c[1]))
-                        break
-        elif args.dataset in ['musique']:
-            gold_docs = [item['title'] + '\n' + item['paragraph_text'] for item in sample['paragraphs'] if item['is_supporting']]
-        elif args.dataset in ['hotpotqa']:
-            gold_docs = []
-            gold_title = [f[0] for f in sample['supporting_facts']]
-            for c in sample['context']:
-                if c[0] in gold_title:
-                    gold_docs.append(c[0] + '\n' + ''.join(c[1]))
+        gold_docs = get_gold_docs(args.dataset, sample)
 
         oracle_triples = None
         if hipporag.reranker_name is not None and hipporag.reranker_name in ['oracle_triple']:
             assert len(gold_docs) > 0
-            oracle_triples = []
-            for p in gold_docs:
-                assert len(p) > 0 and '\n' in p
-                oracle_triples += hipporag.get_triples_and_triple_ids_by_passage_content(p)[0]
+            oracle_triples = get_oracle_triples(gold_docs, hipporag)
         retrieved_passages, scores, logs = retrieve_step(query, corpus, args.top_k, hipporag, args.link_top_k, args.linking, oracle_triples)
 
         it = 1
