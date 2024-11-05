@@ -13,15 +13,11 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=1)
     args = parser.parse_args()
 
-    split_num_sample = {'train': 10, 'dev': None}
+    split_num_sample = {'train': 100, 'dev': 100}
     random.seed(args.seed)
 
     for split in split_num_sample:
         full_text_hash_set = set()
-        path = os.path.join(args.dir, f'{split}.json')
-        split_data = json.load(open(path, 'r'))
-
-        split_data = []
         split_corpus = []
 
         path = os.path.join(args.dir, f'{split}.json')
@@ -30,6 +26,8 @@ if __name__ == '__main__':
         if split_num_sample[split] is not None and isinstance(split_num_sample[split], int):
             assert 0 < split_num_sample[split] <= len(split_data)
             split_data = random.sample(split_data, min(split_num_sample[split], len(split_data)))
+        else:
+            continue
 
         print(f'Processing {split} ({len(split_data)})')
 
@@ -52,11 +50,19 @@ if __name__ == '__main__':
                     continue
                 full_text_hash_set.add(full_text_hash)
                 split_corpus.append({'idx': len(split_corpus), 'title': supporting_title, 'text': supporting_full_text})
+
+            for c in sample['context']:
+                full_text = c[0] + '\n' + ' '.join(c[1])
+                full_text_hash = generate_hash(full_text)
+                if full_text_hash in full_text_hash_set:
+                    continue
+                full_text_hash_set.add(full_text_hash)
+                split_corpus.append({'idx': len(split_corpus), 'title': c[0], 'text': ' '.join(c[1])})
             # end for each evidence
         # end for each sample
 
-        corpus_output_path = f'data/2wikimultihopqa_{split}_{split_num_sample[split]}_corpus.json'
-        queries_output_path = f'data/2wikimultihopqa_{split}_{split_num_sample[split]}.json'
+        corpus_output_path = f'data/2wikimultihopqa_{split}_{len(split_data)}_corpus.json'
+        queries_output_path = f'data/2wikimultihopqa_{split}_{len(split_data)}.json'
 
         with open(corpus_output_path, 'w') as f:
             json.dump(split_corpus, f, indent=2)

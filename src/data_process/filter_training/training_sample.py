@@ -1,56 +1,68 @@
-import argparse
+import sys
+
+sys.path.append('.')
 import json
 import os
+import random
 
+from tqdm import tqdm
 from src.hipporag import HippoRAG
+from src.ircot_hipporag import get_gold_docs, get_oracle_triples
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", type=str)
-    args = parser.parse_args()
 
-    hipporag = HippoRAG(args.dataset, 'openai', 'gpt-4o-mini', 'GritLM/GritLM-7B', 'ner', 'facts_and_sim_passage_node_unidirectional', 0.8, True, False, None, False, 'ppr', 0.5,
-                        0.9, None, None, 'GritLM/GritLM-7B', None)
-
+def collect_filter_data(dataset_name: str, num_sample: int, num_before_filter: int = 5):
     res = []
-    input_path = f'data/{args.dataset}.json'
+    input_path = f'data/{dataset_name}.json'
     data = json.load(open(input_path))
     print(f'Loaded {len(data)} samples from {input_path}')
-    num_same_before_after = 0
-    for sample in data:
+    data = random.sample(data, min(num_sample, len(data)))
+
+    hipporag = HippoRAG(dataset_name, 'openai', 'gpt-4o-mini', 'GritLM/GritLM-7B', 'ner', 'facts_and_sim_passage_node_unidirectional', 0.8, True, False, None, False, 'ppr', 0.5,
+                        0.9, None, None, 'GritLM/GritLM-7B', None)
+
+    from collections import defaultdict
+    metrics = defaultdict(float)
+    for sample in tqdm(data, desc=f'Collecting data for {dataset_name}'):
         question = sample['question']
-        fact_before_filter = hipporag.query_to_fact(question, 5)
+        fact_before_filter = hipporag.query_to_fact(question, num_before_filter)
 
-        gold_docs = []
-        if args.dataset.startswith('2wikimultihopqa'):
-            for item in sample['supporting_facts']:
-                title = item[0]
-                for c in sample['context']:
-                    if c[0] == title:
-                        gold_docs.append(c[0] + '\n' + ' '.join(c[1]))
-                        break
-        elif args.dataset.startswith('musique'):
-            gold_docs = [item['title'] + '\n' + item['paragraph_text'] for item in sample['paragraphs'] if item['is_supporting']]
-        elif args.dataset.startswith('beir'):
-            gold_docs = [item['title'] + '\n' + item['text'] for item in sample['paragraphs']]
+        gold_docs = get_gold_docs(dataset_name, sample)
+        oracle_triples = get_oracle_triples(gold_docs, hipporag)
 
-        oracle_triples = []
-        for p in gold_docs:
-            assert len(p) > 0 and '\n' in p
-            oracle_triples += hipporag.get_triples_and_triple_ids_by_passage_content(p)[0]
-
-        fact_after_filter = []
-        if args.dataset.startswith('beir'):
-            # use triples from gold docs as facts after filtering
-            fact_after_filter = [item for item in fact_before_filter if tuple(item) in oracle_triples]
+        # use triples from gold docs as facts after filtering
+        fact_after_filter = [item for item in fact_before_filter if tuple(item) in oracle_triples]
         if fact_before_filter == fact_after_filter:
-            num_same_before_after += 1
+            metrics['num_same_before_after'] += 1
         res.append({'question': question, 'fact_before_filter': fact_before_filter, 'fact_after_filter': fact_after_filter})
     # end for each sample
+    metrics['num_samples'] = len(data)
+    return res, metrics
+
+
+if __name__ == '__main__':
+    train_split = {'beir_msmarco_train_200': 150, 'musique_train': 50, '2wikimultihopqa_train_100': 50, 'hotpotqa_train': 50}
+    dev_split = {'beir_msmarco_dev_200': 150, 'musique': 50, '2wikimultihopqa': 50, 'hotpotqa': 50}
 
     os.makedirs('data/fact_filter', exist_ok=True)
-    output_path = f'data/fact_filter/{args.dataset}.json'
-    with open(output_path, 'w') as f:
-        json.dump(res, f, indent=4)
-        print(f'Saved {len(res)} samples to {output_path}')
-    print(f'Num of same facts before and after filtering: {num_same_before_after}')
+
+    train_samples = []
+    for dataset_name in train_split:
+        num_sample = train_split[dataset_name]
+        samples, metrics = collect_filter_data(dataset_name, num_sample)
+        train_samples.extend(samples)
+        print(f'{dataset_name}: {metrics}')
+    train_output_path = f'data/fact_filter/train.json'
+    with open(train_output_path, 'w') as f:
+        json.dump(train_samples, f, indent=4)
+        print(f'Saved {len(train_samples)} samples to {train_output_path}')
+
+    dev_samples = []
+    for dataset_name in dev_split:
+        num_sample = dev_split[dataset_name]
+        samples, metrics = collect_filter_data(dataset_name, num_sample)
+        dev_samples.extend(samples)
+        print(f'{dataset_name}: {metrics}')
+    dev_output_path = f'data/fact_filter/dev.json'
+    with open(dev_output_path, 'w') as f:
+        json.dump(dev_samples, f, indent=4)
+        print(f'Saved {len(dev_samples)} samples to {dev_output_path}')

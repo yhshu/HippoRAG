@@ -86,7 +86,7 @@ if __name__ == '__main__':
 
         query = sample['question']
 
-        linked_facts = hipporag.query_to_fact(query, args.top_k)
+        linked_facts = hipporag.query_to_fact(query, max(k_list))
         facts_in_gold_passage = []
 
         gold_docs = get_gold_docs(args.dataset, sample)
