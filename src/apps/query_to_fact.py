@@ -102,10 +102,22 @@ if __name__ == '__main__':
                 recall_at_k = 0
             else:
                 recall_at_k /= len(oracle_facts)
-            metrics[f'recall@{k}'] += recall_at_k
-            print(f"recall@{k}: {round(metrics[f'recall@{k}'] / (sample_idx + 1), 4)}", end=' ')
+            metrics[f'R@{k}'] += recall_at_k
+            print(f"R@{k}: {round(metrics[f'R@{k}'] / (sample_idx + 1), 4)}", end=' ')
+
+            assert k != 0
+            precision_at_k = 0
+            for i, fact in enumerate(linked_facts[:k]):
+                if fact in oracle_facts:
+                    precision_at_k += 1
+            precision_at_k /= k
+            metrics[f'P@{k}'] += precision_at_k
+            print(f"P@{k}: {round(metrics[f'P@{k}'] / (sample_idx + 1), 4)}", end=' ')
+            print()
         print()
 
     for k in k_list:
-        metrics[f'recall@{k}'] /= len(data)
-        print(f'recall@{k}: {round(metrics[f"recall@{k}"], 4)}')
+        metrics[f'R@{k}'] /= len(data)
+        print(f'R@{k}: {round(metrics[f"R@{k}"], 4)}')
+        metrics[f'P@{k}'] /= len(data)
+        print(f'P@{k}: {round(metrics[f"P@{k}"], 4)}')
