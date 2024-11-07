@@ -109,16 +109,16 @@ def reason_step(dataset, few_shot: list, query: str, passages: list, thoughts: l
 
 def get_gold_docs(dataset_name: str, sample: Dict):
     gold_docs = []
-    if dataset_name in ['2wikimultihopqa']:
+    if dataset_name.startswith('2wikimultihopqa'):
         for item in sample['supporting_facts']:
             title = item[0]
             for c in sample['context']:
                 if c[0] == title:
                     gold_docs.append(c[0] + '\n' + ' '.join(c[1]))
                     break
-    elif dataset_name in ['musique']:
+    elif dataset_name.startswith('musique'):
         gold_docs = [item['title'] + '\n' + item['paragraph_text'] for item in sample['paragraphs'] if item['is_supporting']]
-    elif dataset_name in ['hotpotqa']:
+    elif dataset_name.startswith('hotpotqa'):
         gold_title = [f[0] for f in sample['supporting_facts']]
         for c in sample['context']:
             if c[0] in gold_title:
