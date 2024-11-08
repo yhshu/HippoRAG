@@ -1,3 +1,4 @@
+import argparse
 import json
 import os
 
@@ -5,6 +6,7 @@ import dspy
 from dspy import Evaluate
 from dspy.teleprompt import MIPROv2
 from pydantic import BaseModel, Field
+from sympy.physics.units import temperature
 
 
 class Fact(BaseModel):
@@ -52,8 +54,20 @@ def filtering_precision(example, pred, trace=None):
 
 
 if __name__ == '__main__':
-    gpt4o = dspy.OpenAI(model='gpt-4o', max_tokens=256)
-    dspy.settings.configure(lm=gpt4o)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--llm', type=str, default='gpt-4o', help='Language model to use')
+    parser.add_argument('--addr', type=str, default='localhost')
+    parser.add_argument('--port', type=str)
+    args = parser.parse_args()
+
+    if args.llm.startswith('gpt-'):
+        dspy_llm = dspy.LM(model=f"openai/{args.llm}", max_tokens=3000, temperature=0.0)
+    elif args.addr is not None and args.port is not None:
+        url = f'http://{args.addr}:{args.port}/v1'
+        dspy_llm = dspy.LM(model=f"openai/{args.llm}", max_tokens=3000, api_base=url, api_key='osunlp')
+    else:
+        raise ValueError(f"LM not implemented: {args.llm}")
+    dspy.settings.configure(lm=dspy_llm)
 
     train = json.load(open('data/fact_filter/train.json'))
     dev = json.load(open('data/fact_filter/dev.json'))
@@ -90,7 +104,8 @@ if __name__ == '__main__':
 
     # Save optimize program for future use
     os.makedirs("output/dspy", exist_ok=True)
-    optimized_program.save(f"output/dspy/fact_filter_mipro_optimized.json")
+    model_label = args.llm.replace("/", "_")
+    optimized_program.save(f"output/dspy/fact_filter_mipro_optimized_{model_label}.json")
 
     # Evaluate optimized program
     print(f"Evaluate optimized program...")
