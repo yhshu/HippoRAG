@@ -1,4 +1,6 @@
 import json
+import os
+
 import dspy
 from dspy import Evaluate
 from dspy.teleprompt import MIPROv2
@@ -87,7 +89,8 @@ if __name__ == '__main__':
     )
 
     # Save optimize program for future use
-    optimized_program.save(f"fact_filter_mipro_optimized")
+    os.makedirs("output/dspy", exist_ok=True)
+    optimized_program.save(f"output/dspy/fact_filter_mipro_optimized.json")
 
     # Evaluate optimized program
     print(f"Evaluate optimized program...")
