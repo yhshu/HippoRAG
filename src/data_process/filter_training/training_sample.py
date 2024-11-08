@@ -44,7 +44,8 @@ def collect_filter_data(dataset_name: str, num_sample: int, num_before_filter: i
             metrics['num_same_before_after'] += 1
         metrics['num_fact_before_filter'] += len(fact_before_filter)
         metrics['num_fact_after_filter'] += len(fact_after_filter)
-        res.append({'question': question, 'fact_before_filter': fact_before_filter, 'fact_after_filter': fact_after_filter})
+
+        res.append({'question': question, 'fact_before_filter': json.dumps({"fact": fact_before_filter}), 'fact_after_filter': json.dumps({"fact": fact_after_filter})})
     # end for each sample
 
     metrics['num_samples'] = len(data)
