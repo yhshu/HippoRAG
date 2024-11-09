@@ -14,6 +14,20 @@ class Fact(BaseModel):
 
 
 class FactFiltering(dspy.Signature):
+    """
+    Rank facts based on their relevance to the query.
+
+    - Multi-hop reasoning may be required, meaning you might need to combine multiple facts to form a complete response.
+    - If the query is a claim, relevance means the fact supports or contradicts it. For queries seeking specific information, relevance means the fact aids in reasoning and providing an answer.
+    - Select up to 4 relevant facts from the candidate list and output in JSON format without any other words, e.g.,
+
+    ```json
+    {"fact": [["s1", "p1", "o1"], ["s2", "p2", "o2"]]}.
+    ```
+
+    - If no facts are relevant, return an empty list, e.g., {"fact": []}.
+    - Only use facts from the candidate list; do NOT generate new facts.
+    """
     question = dspy.InputField(desc="Query for retrieval")
     fact_before_filter = dspy.InputField(desc="Candidate facts to be filtered")
     fact_after_filter: Fact = dspy.OutputField(desc="Filtered facts in JSON format")
@@ -58,13 +72,14 @@ if __name__ == '__main__':
     parser.add_argument('--llm', type=str, default='gpt-4o', help='Language model to use')
     parser.add_argument('--addr', type=str, default='localhost')
     parser.add_argument('--port', type=str)
+    parser.add_argument('--auto', type=str, default='light', help='Optimization level')
     args = parser.parse_args()
 
     if args.llm.startswith('gpt-'):
         dspy_llm = dspy.LM(model=f"openai/{args.llm}", max_tokens=3000, temperature=0.0)
     elif args.addr is not None and args.port is not None:
         url = f'http://{args.addr}:{args.port}/v1'
-        dspy_llm = dspy.LM(model=f"openai/{args.llm}", max_tokens=3000, api_base=url, api_key='osunlp')
+        dspy_llm = dspy.LM(model=f"openai/{args.llm}", max_tokens=3000, temperature=0.0, api_base=url, api_key='osunlp')
     else:
         raise ValueError(f"LM not implemented: {args.llm}")
     dspy.settings.configure(lm=dspy_llm)
@@ -88,7 +103,7 @@ if __name__ == '__main__':
     # Initialize optimizer
     teleprompter = MIPROv2(
         metric=filter_metric,
-        auto="light",  # Can choose between light, medium, and heavy optimization runs
+        auto=args.auto,  # Can choose between light, medium, and heavy optimization runs
     )
     program = Filter()
 
@@ -97,8 +112,9 @@ if __name__ == '__main__':
     optimized_program = teleprompter.compile(
         program.deepcopy(),
         trainset=trainset,
-        max_bootstrapped_demos=3,
-        max_labeled_demos=4,
+        valset=devset,
+        max_bootstrapped_demos=10,
+        max_labeled_demos=10,
         requires_permission_to_run=False,
     )
 

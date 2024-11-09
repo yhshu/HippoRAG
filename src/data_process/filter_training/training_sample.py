@@ -55,8 +55,8 @@ def collect_filter_data(dataset_name: str, num_sample: int, num_before_filter: i
 
 
 if __name__ == '__main__':
-    train_split = {'beir_msmarco_train_200': 150, 'musique_train': 50, '2wikimultihopqa_train_100': 50, 'hotpotqa_train_100': 50}
-    dev_split = {'beir_msmarco_dev_200': 150, 'musique': 50, '2wikimultihopqa': 50, 'hotpotqa': 50}
+    train_split = {'beir_msmarco_train_200': 200, 'musique_train': 66, '2wikimultihopqa_train_100': 66, 'hotpotqa_train_100': 66}
+    dev_split = {'beir_msmarco_dev_200': 200, 'musique': 66, '2wikimultihopqa': 66, 'hotpotqa': 66}
 
     os.makedirs('data/fact_filter', exist_ok=True)
 
