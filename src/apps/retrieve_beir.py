@@ -1,6 +1,5 @@
 # Note that BEIR uses https://github.com/cvangysel/pytrec_eval to evaluate the retrieval results.
 import sys
-
 sys.path.append('.')
 
 from collections import defaultdict
@@ -89,7 +88,7 @@ def detailed_log(dataset: list, run_dict, eval_res, chunk=False, threshold=None,
 
 
 def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: str, linker_name: str, linking: str,
-                      doc_ensemble: bool, dpr_only: bool, chunk: bool, link_top_k: Union[int, None] = 3, oracle_extraction=False, reranker_name=None):
+                      doc_ensemble: bool, dpr_only: bool, chunk: bool, link_top_k: Union[int, None] = 3, oracle_extraction=False, reranker_name=None, force_retry=False):
     doc_ensemble_str = 'doc_ensemble' if doc_ensemble else 'no_ensemble'
     extraction_str = extractor_name.replace('/', '_').replace('.', '_')
     graph_creating_str = retriever_name.replace('/', '_').replace('.', '_')
@@ -107,7 +106,7 @@ def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: st
     pytrec_metrics = {'map_cut_10', 'ndcg_cut_10'}
     metrics = defaultdict(float)
     evaluator = pytrec_eval.RelevanceEvaluator(qrel, pytrec_metrics)
-    if os.path.isfile(run_output_path):
+    if os.path.isfile(run_output_path) and force_retry is False:
         run_dict = json.load(open(run_output_path))
         print(f'Log file found at {run_output_path}, len: {len(run_dict["retrieved"])}')
     else:
@@ -117,8 +116,8 @@ def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: st
     for i, sample in tqdm(enumerate(dataset), total=len(dataset), desc='Evaluating samples'):
         query_text = sample['text']
         query_id = sample['id']
-        # if query_id in run_dict['retrieved']:
-        #     continue
+        if query_id in run_dict['retrieved']:
+            continue
         supporting_docs = sample['paragraphs']
         if oracle_extraction or hipporag.reranker_name in ['oracle_triple']:
             oracle_triples = []
@@ -199,6 +198,10 @@ def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: st
         json.dump(logs, f)
     print(f'Detailed log saved to {detailed_log_output_path}')
 
+    # write metrics and hipporag statistics to one file
+    metric_output_path = f'output/retrieval/{dataset_name}/{dataset_name}_metrics_{doc_ensemble_str}_E_{extraction_str}_R_{graph_creating_str}_L_{linking_str}{dpr_only_str}{reranker_str}.json'
+    with open(metric_output_path, 'w') as f:
+        json.dump({'metrics': metrics.update(avg_scores), 'hipporag_statistics': dict(hipporag.statistics)}, f)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -218,6 +221,7 @@ if __name__ == '__main__':
     parser.add_argument('--graph_type', type=str, default='facts_and_sim')
     parser.add_argument('--damping', type=float, default=0.1)
     parser.add_argument('--directed', action='store_true')
+    parser.add_argument('--force_retry', action='store_true')
     args = parser.parse_args()
 
     set_llm_cache(SQLiteCache(database_path=f".hipporag_{args.extractor.replace('/', '_')}.db"))
@@ -251,4 +255,4 @@ if __name__ == '__main__':
     if args.linking == 'ner_to_node':
         link_top_k = None
     run_retrieve_beir(args.dataset, args.extractor, args.retriever, args.linker, args.linking,
-                      args.doc_ensemble, args.dpr_only, args.chunk, link_top_k=args.link_top_k, oracle_extraction=args.oracle_ie, reranker_name=args.reranker)
+                      args.doc_ensemble, args.dpr_only, args.chunk, link_top_k=args.link_top_k, oracle_extraction=args.oracle_ie, reranker_name=args.reranker, force_retry=args.force_retry)

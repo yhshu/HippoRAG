@@ -178,20 +178,23 @@ class HippoRAG:
         self.reranker = None
         self.reranker_name = None
         if reranker_name is not None:
-            if (reranker_name.startswith('gpt') or reranker_name.startswith('ft:gpt')
-                    or reranker_name.startswith('o1-') or reranker_name in ['llama_cpp_server']):
-                # from src.rerank import LLMLogitsReranker
-                # reranker = LLMLogitsReranker(fact_rerank_model_name)
-                # from src.rerank import RankGPT
-                # reranker = RankGPT(rerank_model_name)
-                from src.rerank import LLMFilter
-                self.reranker = LLMFilter(reranker_name)
+            # if (reranker_name.startswith('gpt') or reranker_name.startswith('ft:gpt')
+            #         or reranker_name.startswith('o1-') or reranker_name in ['llama_cpp_server']):
+            #     # from src.rerank import LLMLogitsReranker
+            #     # reranker = LLMLogitsReranker(fact_rerank_model_name)
+            #     # from src.rerank import RankGPT
+            #     # reranker = RankGPT(rerank_model_name)
+            #     from src.rerank import LLMFilter
+            #     self.reranker = LLMFilter(reranker_name)
+            # elif reranker_name.startswith('meta-llama/Llama-'):
+            #     from src.rerank import VLLMFilter
+            #     self.reranker = VLLMFilter(reranker_name)
+            if (reranker_name.startswith('gpt') or reranker_name.startswith('ft:gpt') or reranker_name.startswith('meta-llama/Llama-')):
+                from src.rerank import DSPyFilter
+                self.reranker = DSPyFilter(reranker_name)
             elif reranker_name in ['oracle_triple']:
                 from src.rerank import OracleTripleFilter
                 self.reranker = OracleTripleFilter(reranker_name)
-            elif reranker_name.startswith('meta-llama/Llama-'):
-                from src.rerank import VLLMFilter
-                self.reranker = VLLMFilter(reranker_name)
             else:  # load Llama 3.1 model with LoRA
                 from src.rerank import HFLoRAFilter
                 self.reranker = HFLoRAFilter(reranker_name)

@@ -6,7 +6,6 @@ import dspy
 from dspy import Evaluate
 from dspy.teleprompt import MIPROv2
 from pydantic import BaseModel, Field
-from sympy.physics.units import temperature
 
 
 class Fact(BaseModel):
@@ -36,7 +35,7 @@ class FactFiltering(dspy.Signature):
 class Filter(dspy.Module):
     def __init__(self):
         super().__init__()
-        self.prog = dspy.TypedChainOfThought(FactFiltering)
+        self.prog = dspy.Predict(FactFiltering)
 
     def forward(self, question, fact_before_filter):
         return self.prog(question=question, fact_before_filter=fact_before_filter)
