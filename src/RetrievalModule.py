@@ -62,6 +62,10 @@ class RetrievalModule:
             elif 'Qwen' in retriever_name:
                 self.plm = SentenceTransformersWrapper(retriever_name)
                 self.encode_strings_func = self.encode_strings_wrapper
+            elif 'nvidia/NV-Embed' in retriever_name:
+                from src.lm_wrapper.nv_embed import NVEmbedV2Wrapper
+                self.plm = NVEmbedV2Wrapper(retriever_name)
+                self.encode_strings_func = self.encode_strings_wrapper
             else:
                 if 'ckpt' in retriever_name:
                     self.plm = AutoModel.load_from_checkpoint(retriever_name)

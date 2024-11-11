@@ -12,7 +12,7 @@ from src.lm_wrapper import EmbeddingModelWrapper
 
 
 class NVEmbedV2Wrapper(EmbeddingModelWrapper):
-    def __init__(self, model_name: str = 'nvidia/NV-Embed-v2', max_seq_length: int = 32768):
+    def __init__(self, model_name: str = 'nvidia/NV-Embed-v2', max_seq_length: int = 2048):
         # Initialize the model with specified configurations
         self.model = SentenceTransformer(model_name, trust_remote_code=True)
         self.model.max_seq_length = max_seq_length
@@ -22,9 +22,12 @@ class NVEmbedV2Wrapper(EmbeddingModelWrapper):
         # Adds EOS token to each example
         return [example + self.model.tokenizer.eos_token for example in input_examples]
 
-    def encode_list(self, texts: List[str], instruction: str, batch_size: int = 2) -> torch.Tensor:
+    def encode_list(self, texts: List[str], instruction: str, batch_size: int = 8) -> torch.Tensor:
         # Encode the list of texts with instruction as prefix
-        prompt = f"Instruct: {instruction}\nQuery: "
+        if instruction is not None and instruction != '':
+            prompt = f"Instruct: {instruction}\nQuery: "
+        else:
+            prompt = None
         return self.model.encode(self._add_eos(texts), batch_size=batch_size, prompt=prompt, normalize_embeddings=True)
 
     def encode_text(self, text: Union[str, List[str]], instruction: str = '', norm: bool = True, return_cpu: bool = False, return_numpy: bool = False) -> np.ndarray:
