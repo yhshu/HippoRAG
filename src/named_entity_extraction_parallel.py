@@ -14,11 +14,9 @@ import numpy as np
 import pandas as pd
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate
-from langchain_openai import ChatOpenAI
 
 from tqdm import tqdm
 
-from src.langchain_util import init_langchain_model
 from src.util.llama_cpp_service import langchain_message_to_llama_3_prompt, PROMPT_JSON_TEMPLATE
 
 query_prompt_one_shot_input = """Please extract all named entities that are important for solving the questions below.
@@ -51,6 +49,7 @@ def named_entity_recognition(client, text: str):
     query_ner_messages = query_ner_prompts.format_prompt()
 
     json_mode = False
+    from langchain_openai import ChatOpenAI
     if isinstance(client, ChatOpenAI):  # JSON mode
         chat_completion = client.invoke(query_ner_messages.to_messages(), temperature=0, max_tokens=300, stop=['\n\n'], response_format={"type": "json_object"})
         response_content = chat_completion.content

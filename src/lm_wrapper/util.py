@@ -8,6 +8,9 @@ def init_embedding_model(model_name):
     elif model_name.startswith('text-embedding-'):  # OpenAI text embedding models
         from src.lm_wrapper.text_embedding_util import OpenAITextEmbeddingWrapper
         return OpenAITextEmbeddingWrapper(model_name)
+    elif model_name == 'nvidia/NV-Embed-v2':
+        from src.lm_wrapper.nv_embed import NVEmbedV2Wrapper
+        return NVEmbedV2Wrapper(model_name=model_name)
     elif model_name not in ['colbertv2', 'bm25']:
         from src.lm_wrapper.huggingface_util import HuggingFaceWrapper
         return HuggingFaceWrapper(model_name)  # HuggingFace model for retrieval
