@@ -22,7 +22,7 @@ class NVEmbedV2Wrapper(EmbeddingModelWrapper):
         # Adds EOS token to each example
         return [example + self.model.tokenizer.eos_token for example in input_examples]
 
-    def encode_list(self, texts: List[str], instruction: str, batch_size: int = 8) -> torch.Tensor:
+    def encode_list(self, texts: List[str], instruction: str, batch_size: int = 2) -> torch.Tensor:
         # Encode the list of texts with instruction as prefix
         if instruction is not None and instruction != '':
             prompt = f"Instruct: {instruction}\nQuery: "

@@ -386,7 +386,11 @@ class DSPyFilter(Reranker):
             url = f'http://{addr}:{port}/v1'
             dspy_llm = dspy.LM(model=f"openai/{model_name}", max_tokens=3000, temperature=0.0, api_base=url, api_key='osunlp')
         dspy.settings.configure(lm=dspy_llm)
-        self.program.load(dspy_file_path)
+        if dspy_file_path is not None:
+            if os.path.isfile(dspy_file_path):
+                self.program.load(dspy_file_path)
+            else:
+                print(f"DSPy file {dspy_file_path} not found, using the default model.")
 
     def rerank(self, task: str, query, candidate_items, candidate_indices, len_after_rerank=None):
         fact_before_filter = {"fact": [list(candidate_item) for candidate_item in candidate_items]}

@@ -39,6 +39,16 @@ tar -xvzf colbertv2.0.tar.gz
 cd .. # get back to the root
 ```
 
+### Install FAISS
+
+Indexing would require FAISS, please consider install it as follows:
+
+```shell
+conda install faiss-gpu -c pytorch
+```
+
+Note that the GPU version should be installed if CUDA is available, and `pip install faiss-gpu` might not work in some cases. 
+
 ## Using HippoRAG
 
 **Note that the working directory is HippoRAG root for the following commands.**
