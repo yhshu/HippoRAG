@@ -201,7 +201,7 @@ def run_retrieve_beir(dataset_name: str, extractor_name: str, retriever_name: st
     # write metrics and hipporag statistics to one file
     metric_output_path = f'output/retrieval/{dataset_name}/{dataset_name}_metrics_{doc_ensemble_str}_E_{extraction_str}_R_{graph_creating_str}_L_{linking_str}{dpr_only_str}{reranker_str}.json'
     with open(metric_output_path, 'w') as f:
-        json.dump({'metrics': metrics.update(avg_scores), 'hipporag_statistics': dict(hipporag.statistics)}, f)
+        json.dump({'metrics': metrics, 'scores': avg_scores, 'hipporag_statistics': dict(hipporag.statistics)}, f)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

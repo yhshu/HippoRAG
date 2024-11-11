@@ -390,8 +390,8 @@ class DSPyFilter(Reranker):
 
     def rerank(self, task: str, query, candidate_items, candidate_indices, len_after_rerank=None):
         fact_before_filter = {"fact": [list(candidate_item) for candidate_item in candidate_items]}
-        prediction = self.program(question=query, fact_before_filter=json.dumps(fact_before_filter))
         try:
+            prediction = self.program(question=query, fact_before_filter=json.dumps(fact_before_filter))
             res = prediction.fact_after_filter.fact
         except Exception as e:
             print('dspy prediction exception', e)
