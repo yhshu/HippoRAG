@@ -373,6 +373,42 @@ class VLLMFilter(LLMFilter):
             return sorted_candidate_indices[:len_after_rerank], sorted_candidate_items[:len_after_rerank]
 
 
+class DSPyFilter(Reranker):
+    def __init__(self, model_name, dspy_file_path="output/dspy/fact_filter_mipro_optimized_meta-llama_Llama-3.1-70B-Instruct_predict_400_79.json",
+                 addr='localhost', port='8000'):
+        from src.rerank.dspy_optimize import Filter
+        import dspy
+
+        self.program = Filter()
+        if model_name.startswith('gpt-'):
+            dspy_llm = dspy.LM(model=f"openai/{model_name}", max_tokens=3000, temperature=0.0)
+        else:
+            url = f'http://{addr}:{port}/v1'
+            dspy_llm = dspy.LM(model=f"openai/{model_name}", max_tokens=3000, temperature=0.0, api_base=url, api_key='osunlp')
+        dspy.settings.configure(lm=dspy_llm)
+        self.program.load(dspy_file_path)
+
+    def rerank(self, task: str, query, candidate_items, candidate_indices, len_after_rerank=None):
+        fact_before_filter = {"fact": [list(candidate_item) for candidate_item in candidate_items]}
+        prediction = self.program(question=query, fact_before_filter=json.dumps(fact_before_filter))
+        try:
+            res = prediction.fact_after_filter.fact
+        except Exception as e:
+            print('dspy prediction exception', e)
+            res = []
+
+        result_indices = []
+        for generated_fact in res:
+            closest_matched_fact = difflib.get_close_matches(str(generated_fact), [str(i) for i in candidate_items], n=1, cutoff=0.0)[0]
+            try:
+                result_indices.append(candidate_items.index(eval(closest_matched_fact)))
+            except Exception as e:
+                print('result_indices exception', e)
+
+        sorted_candidate_indices = [candidate_indices[i] for i in result_indices]
+        sorted_candidate_items = [candidate_items[i] for i in result_indices]
+        return sorted_candidate_indices[:len_after_rerank], sorted_candidate_items[:len_after_rerank]
+
 def retrieved_to_candidate_facts(candidate_items, candidate_indices, k=30):
     # bind candidate_items and candidate_indices
     candidate_indices_and_items = list(zip(candidate_indices, candidate_items))
