@@ -17,6 +17,7 @@ from tqdm import tqdm
 from src.langchain_util import init_langchain_model, LangChainModel
 from src.lm_wrapper import EmbeddingModelWrapper
 from src.lm_wrapper.gritlm import GritLMWrapper
+from src.lm_wrapper.nv_embed import NVEmbedV2Wrapper
 from src.lm_wrapper.sentence_transformers_util import SentenceTransformersWrapper
 from src.lm_wrapper.util import init_embedding_model
 from src.named_entity_extraction_parallel import named_entity_recognition
@@ -28,26 +29,17 @@ COLBERT_CKPT_DIR = "exp/colbertv2.0"
 
 
 def get_query_instruction(embedding_model: EmbeddingModelWrapper, task=None, dataset_name=None):
-    if isinstance(embedding_model, GritLMWrapper):
+    if isinstance(embedding_model, GritLMWrapper) or isinstance(embedding_model, NVEmbedV2Wrapper):
         if task == 'ner_to_node':
             return 'Given a phrase, retrieve synonymous or relevant phrases that best match this phrase.'
         elif task == 'query_to_node':
-            if 'scifact' in dataset_name.lower():
-                return 'Given a claim, retrieve relevant phrases that are mentioned in this claim.'
             return 'Given a question, retrieve relevant phrases that are mentioned in this question.'
         elif task == 'query_to_fact':
-            if 'scifact' in dataset_name.lower():
-                return 'Given a claim, retrieve relevant triplet facts that support or refute the claim.'
             return 'Given a question, retrieve relevant triplet facts that matches this question.'
         elif task == 'query_to_sentence':
-            if 'scifact' in dataset_name.lower():
-                return 'Given a claim, retrieve relevant sentences that support or refute the claim.'
             return 'Given a question, retrieve relevant sentences that best answer the question.'
         elif task is None or task == 'query_to_passage':
-            if 'scifact' in dataset_name.lower():
-                return 'Given a scientific claim, retrieve documents that support or refute the claim.'
-            else:
-                return 'Given a question, retrieve relevant documents that best answer the question.'
+            return 'Given a question, retrieve relevant documents that best answer the question.'
         else:
             print('Task instruction not found for {}'.format(task))
             return ''
@@ -178,20 +170,20 @@ class HippoRAG:
         self.reranker = None
         self.reranker_name = None
         if reranker_name is not None:
-            # if (reranker_name.startswith('gpt') or reranker_name.startswith('ft:gpt')
-            #         or reranker_name.startswith('o1-') or reranker_name in ['llama_cpp_server']):
-            #     # from src.rerank import LLMLogitsReranker
-            #     # reranker = LLMLogitsReranker(fact_rerank_model_name)
-            #     # from src.rerank import RankGPT
-            #     # reranker = RankGPT(rerank_model_name)
-            #     from src.rerank import LLMFilter
-            #     self.reranker = LLMFilter(reranker_name)
-            # elif reranker_name.startswith('meta-llama/Llama-'):
-            #     from src.rerank import VLLMFilter
-            #     self.reranker = VLLMFilter(reranker_name)
-            if (reranker_name.startswith('gpt') or reranker_name.startswith('ft:gpt') or reranker_name.startswith('meta-llama/Llama-')):
-                from src.rerank import DSPyFilter
-                self.reranker = DSPyFilter(reranker_name)
+            if (reranker_name.startswith('gpt') or reranker_name.startswith('ft:gpt')
+                    or reranker_name.startswith('o1-') or reranker_name in ['llama_cpp_server']):
+                # from src.rerank import LLMLogitsReranker
+                # reranker = LLMLogitsReranker(fact_rerank_model_name)
+                # from src.rerank import RankGPT
+                # reranker = RankGPT(rerank_model_name)
+                from src.rerank import LLMFilter
+                self.reranker = LLMFilter(reranker_name)
+            elif reranker_name.startswith('meta-llama/Llama-'):
+                from src.rerank import VLLMFilter
+                self.reranker = VLLMFilter(reranker_name)
+            # if (reranker_name.startswith('gpt') or reranker_name.startswith('ft:gpt') or reranker_name.startswith('meta-llama/Llama-')):
+            #     from src.rerank import DSPyFilter
+            #     self.reranker = DSPyFilter(reranker_name)
             elif reranker_name in ['oracle_triple']:
                 from src.rerank import OracleTripleFilter
                 self.reranker = OracleTripleFilter(reranker_name)
