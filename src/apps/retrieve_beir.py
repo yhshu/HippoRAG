@@ -226,6 +226,7 @@ if __name__ == '__main__':
 
     set_llm_cache(SQLiteCache(database_path=f".hipporag_{args.extractor.replace('/', '_')}.db"))
 
+    args.reranker = None if args.reranker is None or args.reranker == ''  or args.reranker.lower() == 'none' else args.reranker
     if args.chunk is False and 'chunk' in args.dataset:
         args.chunk = True
     # assert at most only one of them is True
