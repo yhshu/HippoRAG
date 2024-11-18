@@ -43,9 +43,20 @@ def get_query_instruction(embedding_model: EmbeddingModelWrapper, task=None, dat
         else:
             print('Task instruction not found for {}'.format(task))
             return ''
-    elif isinstance(embedding_model, SentenceTransformersWrapper):
-        if embedding_model.model_name.startswith('Alibaba-NLP/gte-Qwen'):
-            return 'query'
+    elif isinstance(embedding_model, SentenceTransformersWrapper) and embedding_model.model_name.startswith('Alibaba-NLP/gte-Qwen'):
+        if task == 'ner_to_node':
+            return 'Instruct: Given a phrase, retrieve synonymous or relevant phrases that best match this phrase.\nQuery: '
+        elif task == 'query_to_node':
+            return 'Instruct: Given a question, retrieve relevant phrases that are mentioned in this question.\nQuery: '
+        elif task == 'query_to_fact':
+            return 'Instruct: Given a question, retrieve relevant triplet facts that matches this question.\nQuery: '
+        elif task == 'query_to_sentence':
+            return 'Instruct: Given a question, retrieve relevant sentences that best answer the question.\nQuery: '
+        elif task is None or task == 'query_to_passage':
+            return 'Instruct: Given a question, retrieve relevant documents that best answer the question.\nQuery: '
+        else:
+            print('Task instruction not found for {}'.format(task))
+            return ''
     return None
 
 

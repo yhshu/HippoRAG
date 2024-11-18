@@ -10,30 +10,43 @@ from src.data_process.util import generate_hash
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dir', type=str, default='data/raw/musique')
+    parser.add_argument('-ntrain', '--num_train', help='number of training samples', default=1000)
+    parser.add_argument('-ndev', '--num_dev', help='number of dev samples', default=1000)
+    parser.add_argument('-ntest', '--num_test', help='number of test samples')
+    parser.add_argument('-src', '--source', help='source of the data, e.g., `train`, `dev`, `test`', default='train')
     parser.add_argument('--seed', type=int, default=1)
     args = parser.parse_args()
 
-    split_num_sample = {'train': 10}
-    random.seed(args.seed)
+    split_num_sample = {}
+    if args.num_train is not None:
+        split_num_sample['train'] = args.num_train
+    if args.num_dev is not None:
+        split_num_sample['dev'] = args.num_dev
+    if args.num_test is not None:
+        split_num_sample['test'] = args.num_test
 
+    data = []
+    path = os.path.join(args.dir, f'musique_ans_v1.0_{args.source}.jsonl')
+    with open(path, 'r') as f:
+        raw = f.readlines()
+        for line in raw:
+            data.append(json.loads(line))
+    random.seed(args.seed)
+    random.shuffle(data)
+
+    start_idx = 0
     for split in split_num_sample:
         full_text_hash_set = set()
-        path = os.path.join(args.dir, f'musique_ans_v1.0_{split}.jsonl')
-
-        split_data = []
         split_corpus = []
-        with open(path, 'r') as f:
-            raw = f.readlines()
-            for line in raw:
-                split_data.append(json.loads(line))
 
-        split_size = split_num_sample[split] if split_num_sample[split] != 'all' else len(split_data)
+        split_size = split_num_sample[split] if split_num_sample[split] != 'all' else len(data)
 
         if split_num_sample[split] is not None and isinstance(split_num_sample[split], int):  # sample data
-            assert 0 <= split_num_sample[split] <= len(split_data)
-            split_data = random.sample(split_data, min(split_num_sample[split], len(split_data)))
+            assert start_idx + split_size <= len(data)
+        split_data = data[start_idx:start_idx + split_size]
+        start_idx += split_size
 
-        print(f'Processing {split} ({len(split_data)})')
+        print(f'Processing {split} ({len(split_data)}) from {args.source}[{start_idx - split_size}:{start_idx})')
 
         # add passages to corpus
         for sample in tqdm(split_data, total=len(split_data), desc=f'Processing {split}'):
