@@ -179,6 +179,30 @@ def eval_json_str(json_str):
             return ''
 
 
+def query_data_has_duplication(dataset: list, return_dict=False, print_query=False):
+    hash_to_content = dict()
+    hash_to_idx = dict()
+
+    duplication = False
+    for idx, item in enumerate(dataset):
+        query = item['query'] if 'query' in item else item['question']
+        query_hash = generate_hash(query)
+        if query_hash not in hash_to_content:
+            hash_to_content[query_hash] = query
+            hash_to_idx[query_hash] = idx
+        else:
+            if print_query:
+                print('Duplicated query hash:', query_hash)
+                print('Duplicated query:', query)
+                print('Duplicated idx:', idx, hash_to_idx[query_hash])
+            duplication = True
+
+    if return_dict is False:
+        return duplication
+    else:
+        return duplication, hash_to_idx
+
+
 def corpus_has_duplication(corpus: list):
     hash_to_content = dict()
     hash_to_idx = dict()  # passage index, not identifier
