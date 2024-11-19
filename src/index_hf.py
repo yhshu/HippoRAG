@@ -21,7 +21,10 @@ def index_with_huggingface(dataset_name: str, run_ner: bool, num_passages, llm_p
             gpu_mem_util = 0.65
         else:
             gpu_mem_util = 0.93
-        client = init_langchain_model(llm_provider, extractor, num_gpus=num_gpus, gpu_memory_utilization=gpu_mem_util)  # LangChain model
+        if llm_provider == 'vllm':
+            client = init_langchain_model(llm_provider, extractor, num_gpus=num_gpus, gpu_memory_utilization=gpu_mem_util)  # LangChain model
+        else:
+            client = init_langchain_model(llm_provider, extractor)
         openie_for_corpus(dataset_name, run_ner, num_passages, llm_provider, extractor, num_thread, client)
         query_ner_parallel(dataset_name, extractor, num_thread, client)
     else:
@@ -32,9 +35,9 @@ def index_with_huggingface(dataset_name: str, run_ner: bool, num_passages, llm_p
 
     if not skip_graph:
         create_graph(dataset_name, extraction_type, processed_extractor_name, retriever, syn_thresh, False, True, passage_node)
-        RetrievalModule(retriever, 'output/query_to_kb.tsv', 'mean')
-        RetrievalModule(retriever, 'output/kb_to_kb.tsv', 'mean')
-        RetrievalModule(retriever, 'output/rel_kb_to_kb.tsv', 'mean')
+        RetrievalModule(retriever, 'output/query_to_kb.tsv', dataset_name, 'mean')
+        RetrievalModule(retriever, 'output/kb_to_kb.tsv', dataset_name, 'mean')
+        RetrievalModule(retriever, 'output/rel_kb_to_kb.tsv', dataset_name, 'mean')
         create_graph(dataset_name, extraction_type, processed_extractor_name, retriever, syn_thresh, True, True, passage_node)
 
 
@@ -52,7 +55,7 @@ if __name__ == '__main__':
     parser.add_argument('--syn_thresh', type=float, default=0.8)
     parser.add_argument('--passage_node', type=str)
     parser.add_argument('--num_gpus', type=int, default=4)
-    
+
     args = parser.parse_args()
     print(args)
 

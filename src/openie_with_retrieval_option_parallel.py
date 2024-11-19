@@ -25,9 +25,10 @@ def print_messages(messages):
 
 
 def named_entity_recognition(passage: str, client, max_retry=5, extractor_name=None):
-    import vllm
-    if isinstance(client, vllm.LLM):
-        return named_entity_recognition_batch_vllm(passage, client, max_retry, extractor_name)
+    if not isinstance(client, ChatOpenAI):
+        import vllm
+        if isinstance(client, vllm.LLM):
+            return named_entity_recognition_batch_vllm(passage, client, max_retry, extractor_name)
     ner_messages = ner_prompts.format_prompt(user_input=passage)
 
     done = False
@@ -78,7 +79,6 @@ def named_entity_recognition(passage: str, client, max_retry=5, extractor_name=N
 
 
 def openie_post_ner_extract(passage: str, entities: list, client, extractor_name=None):
-    import vllm
     try:
         named_entity_json = {"named_entities": entities}
         openie_messages = openie_post_ner_prompts.format_prompt(passage=passage, named_entity_json=json.dumps(named_entity_json))
@@ -223,9 +223,10 @@ def extract_openie_from_triples_batch_vllm(client, existing_json, auxiliary_file
 
 
 def extract_openie_from_triples(client, existing_json, auxiliary_file_exists, ents_by_doc, corpus_json, extractor_name=None):
-    import vllm
-    if isinstance(client, vllm.LLM):
-        return extract_openie_from_triples_batch_vllm(client, existing_json, auxiliary_file_exists, ents_by_doc, corpus_json, extractor_name)
+    if not isinstance(client, ChatOpenAI):
+        import vllm
+        if isinstance(client, vllm.LLM):
+            return extract_openie_from_triples_batch_vllm(client, existing_json, auxiliary_file_exists, ents_by_doc, corpus_json, extractor_name)
     extractions = []
     all_entities = []
     llm_total_tokens = 0

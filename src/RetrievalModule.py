@@ -1,14 +1,11 @@
 import sys
 
-from gritlm import GritLM
-
 from src.lm_wrapper.gritlm import GritLMWrapper
 from src.lm_wrapper.sentence_transformers_util import SentenceTransformersWrapper
 
 sys.path.append('.')
 import _pickle as pickle
 import argparse
-from glob import glob
 import os.path
 
 import numpy as np
@@ -39,7 +36,8 @@ class RetrievalModule:
     def __init__(self,
                  retriever_name,
                  string_filename,
-                 pool_method='cls'
+                 dataset_name,
+                 pool_method='cls',
                  ):
         """
         Args:
@@ -51,6 +49,8 @@ class RetrievalModule:
         self.retriever_name = retriever_name
         self.retrieval_name_dir = None
         self.pool_method = pool_method
+        assert dataset_name is not None
+        self.dataset_name = dataset_name.replace('/', '_').replace('.', '_')
 
         # Search for pickle file
         print('No Pre-Computed Vectors. Confirming PLM Model.')
@@ -141,20 +141,8 @@ class RetrievalModule:
 
         return lengths_df.sort_values(0)
 
-    def save_vectors(self, strings, vectors, direc_name, bin_size=50000):
-        with open(direc_name + '/encoded_strings.txt', 'w') as f:
-            for string in strings:
-                f.write(string + '\n')
-
-        split_vecs = np.array_split(vectors, int(len(vectors) / bin_size) + 1)
-
-        for i, vecs in tqdm(enumerate(split_vecs), total=len(split_vecs), desc='Saving Vectors'):
-            file_path = direc_name + '/vecs_{}.p'.format(i)
-            pickle.dump(vecs, open(file_path, 'wb'))
-            print('Saved {} vectors to {}'.format(len(vecs), file_path))
-
     def load_precomp_strings(self, retrieval_name_dir):
-        filename = retrieval_name_dir + '/encoded_strings.txt'
+        filename = retrieval_name_dir + f'/encoded_strings_{self.dataset_name}.txt'
 
         if not (os.path.exists(filename)):  # No precomputed data
             return []
@@ -169,23 +157,23 @@ class RetrievalModule:
         vectors = []
 
         print('Loading PLM Vectors.')
-        files = glob(retrieval_name_dir + '/vecs_*.p')
-
-        if len(files) == 0:  # No precomputed vectors
-            return vectors
-
-        for i in tqdm(range(len(files))):
-            i_files = glob(retrieval_name_dir + '/*_{}.p'.format(i))
-            if len(i_files) != 1:
-                break
-            else:
-                file_path = i_files[0]
-                vectors.append(pickle.load(open(file_path, 'rb')))
-                print('Loaded {} vectors from {}'.format(len(vectors[-1]), file_path))
-
-        vectors = np.vstack(vectors)
-
+        file_path = retrieval_name_dir + f"/vecs_{self.dataset_name}.p"
+        if os.path.isfile(file_path):
+            with open(file_path, 'rb') as f:
+                vectors = pickle.load(f)
+                print('Loaded {} vectors from {}'.format(len(vectors), file_path))
         return vectors
+
+    def save_vectors(self, strings, vectors, dir_path):
+        with open(dir_path + f'/encoded_strings_{self.dataset_name}.txt', 'w') as f:
+            for string in strings:
+                f.write(string + '\n')
+
+        file_path = dir_path + f'/vecs_{self.dataset_name}.p'
+        print('Saving {} vectors to {}'.format(len(vectors), file_path))
+        with open(file_path, 'wb') as f:
+            pickle.dump(vectors, f)
+        print('Saved {} vectors to {}'.format(len(vectors), file_path))
 
     def find_missing_strings(self, relevant_strings, precomputed_strings):
 
@@ -415,6 +403,7 @@ if __name__ == '__main__':
     parser.add_argument('--retriever_name', type=str, help='retrieval model name, e.g., "facebook/contriever"')
     parser.add_argument('--string_filename', type=str)
     parser.add_argument('--pool_method', type=str, default='mean')
+    parser.add_argument('--dataset', type=str)
 
     args = parser.parse_args()
 
@@ -422,4 +411,4 @@ if __name__ == '__main__':
     string_filename = args.string_filename
     pool_method = args.pool_method
 
-    retrieval_module = RetrievalModule(retriever_name, string_filename, pool_method)
+    retrieval_module = RetrievalModule(retriever_name, string_filename, args.dataset_name, pool_method)

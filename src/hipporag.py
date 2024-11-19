@@ -729,8 +729,7 @@ class HippoRAG:
                 'Saved triple embeddings to: ' + triple_embeddings_path + ', shape: ' + str(self.triple_embeddings.shape))
 
     def load_node_vectors(self):
-        encoded_string_path = 'data/lm_vectors/{}_mean/encoded_strings.txt'.format(
-            self.linking_retriever_name_processed)
+        encoded_string_path = "data/lm_vectors/{}_mean/encoded_strings_{}.txt".format(self.linking_retriever_name_processed, self.corpus_name)
         if os.path.isfile(encoded_string_path):
             self.load_node_vectors_from_string_encoding_cache(encoded_string_path)
         else:  # use another way to load node vectors
@@ -756,11 +755,10 @@ class HippoRAG:
         self.logger.info('Loading node vectors from: ' + string_file_path)
         kb_vectors = []
         self.strings = open(string_file_path, 'r').readlines()
-        for i in tqdm(range(len(glob('data/lm_vectors/{}_mean/vecs_*'.format(self.linking_retriever_name_processed)))), desc='Loading node vectors'):
-            kb_vectors.append(
-                torch.Tensor(pickle.load(open('data/lm_vectors/{}_mean/vecs_{}.p'.format(self.linking_retriever_name_processed, i), 'rb'))))
+        with open(f'data/lm_vectors/{self.linking_retriever_name_processed}_mean/vecs_{self.corpus_name}.p', 'rb') as f:
+            kb_vectors = pickle.load(f)
+        kb_mat = torch.Tensor(kb_vectors)
         try:
-            kb_mat = torch.cat(kb_vectors)  # a matrix of phrase vectors
             self.strings = [s.strip() for s in self.strings]
             self.string_to_id = {string: i for i, string in enumerate(self.strings)}
             kb_mat = kb_mat.T.divide(torch.linalg.norm(kb_mat, dim=1)).T
