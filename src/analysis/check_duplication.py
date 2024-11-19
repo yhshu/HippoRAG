@@ -1,6 +1,6 @@
 import json
 
-from src.processing import query_data_has_duplication
+from src.processing import query_data_has_duplication, corpus_has_duplication
 
 if __name__ == '__main__':
     datasets = ['musique',
@@ -21,8 +21,17 @@ if __name__ == '__main__':
                 "2wikimultihopqa_dev_1000",
                 "beir_msmarco_train_1000",
                 "beir_msmarco_dev_1000",
+                "hippoqa_biomed_ans_dev",
+                "hippoqa_books_ans_dev",
+                "hippoqa_movie_ans_dev"
                 ]
     for dataset in datasets:
         data = json.load(open(f'data/{dataset}.json'))
         duplication, d = query_data_has_duplication(data, True, False)
-        print(dataset, duplication, len(d))
+        if duplication:
+            print(f"dataset {dataset} has query duplication, #query: {len(d)}")
+
+        corpus = json.load(open(f"data/{dataset}_corpus.json"))
+        duplication = corpus_has_duplication(corpus)
+        if duplication:
+            print(f"dataset {dataset} has passage duplication")

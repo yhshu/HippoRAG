@@ -10,6 +10,21 @@ from src.openie_extraction_instructions import ner_output_one_shot, ner_input_on
 from src.openie_with_retrieval_option_parallel import load_corpus
 
 
+def check_duplicate_custom_id(jsonl_contents):
+    custom_id_set = set()
+    duplication = False
+    for item in jsonl_contents:
+        item = json.loads(item)
+        custom_id = item['custom_id']
+        if custom_id not in custom_id_set:
+            custom_id_set.add(custom_id)
+        else:
+            duplication = True
+    if duplication:
+        print(f'The number of unique custom ids {len(custom_id_set)} for a list with {len(jsonl_contents)} elements')
+    return duplication
+
+
 def named_entity_recognition_for_corpus_openai_batch(dataset_name: str, num_passages, model_name: str, max_tokens=4096):
     arg_str, dataset_name, flags_present, num_passages, retrieval_corpus = load_corpus(dataset_name, model_name,
                                                                                        num_passages, True)
@@ -24,7 +39,7 @@ def named_entity_recognition_for_corpus_openai_batch(dataset_name: str, num_pass
                         {'role': 'assistant', 'content': ner_output_one_shot},
                         {'role': 'user', 'content': f"Paragraph:```\n{passage['passage']}\n```"}]
         total_tokens += num_tokens_by_tiktoken(str(ner_messages))
-        idx = passage['idx'] if 'idx' in passage else idx
+        # idx = passage['idx'] if 'idx' in passage else idx
 
         # custom_id must be string
         jsonl_contents.append(json.dumps(
@@ -32,6 +47,7 @@ def named_entity_recognition_for_corpus_openai_batch(dataset_name: str, num_pass
              "body": {"model": model_name, "messages": ner_messages,
                       "max_tokens": max_tokens, "response_format": {"type": "json_object"}}}))
 
+    assert check_duplicate_custom_id(jsonl_contents) is False, "Duplicate custom ids"
     print("Total prompt tokens:", total_tokens)
     print("Approximate costs for prompt tokens using GPT-4o-mini Batch API:", round(0.075 * total_tokens / 1e6, 3))
     print("Approximate costs for prompt tokens using GPT-3.5-turbo-0125 Batch API", round(0.25 * total_tokens / 1e6, 3))
