@@ -1,3 +1,4 @@
+import argparse
 import sys
 
 sys.path.append('.')
@@ -10,15 +11,18 @@ from src.hipporag import HippoRAG
 from src.ircot_hipporag import get_gold_docs, get_oracle_triples
 
 
-def collect_filter_data(dataset_name: str, num_sample: int, num_before_filter: int = 5):
+def collect_filter_data(dataset_name: str, num_sample: int, num_before_filter: int = 5, extractor='gpt-4o-mini',
+                        graph_creating_retriever='GritLM/GritLM-7B', linker='GritLM/GritLM-7B'):
     res = []
     input_path = f'data/{dataset_name}.json'
     data = json.load(open(input_path))
     print(f'Loaded {len(data)} samples from {input_path}')
     data = random.sample(data, min(num_sample, len(data)))
 
-    hipporag = HippoRAG(dataset_name, 'openai', 'gpt-4o-mini', 'GritLM/GritLM-7B', 'ner', 'facts_and_sim_passage_node_unidirectional', 0.8, True, False, None, False, 'ppr', 0.5,
-                        0.9, None, None, 'GritLM/GritLM-7B', None)
+    hipporag = HippoRAG(dataset_name, 'openai', extractor, graph_creating_retriever, 'ner',
+                        'facts_and_sim_passage_node_unidirectional', 0.8, True, False,
+                        None, False, 'ppr', 0.5,0.9, None,
+                        None, linker, None)
 
     from collections import defaultdict
     metrics = defaultdict(float)
@@ -55,15 +59,22 @@ def collect_filter_data(dataset_name: str, num_sample: int, num_before_filter: i
 
 
 if __name__ == '__main__':
-    train_split = {'beir_msmarco_train_200': 200, 'musique_train': 66, '2wikimultihopqa_train_100': 66, 'hotpotqa_train_100': 66}
-    dev_split = {'beir_msmarco_dev_200': 200, 'musique': 66, '2wikimultihopqa': 66, 'hotpotqa': 66}
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--extractor', type=str)
+    parser.add_argument('--retriever', type=str)
+    parser.add_argument('--linker', type=str)
+    args = parser.parse_args()
+
+
+    train_split = {'beir_msmarco_train_1000': 1000, 'musique_train_1000': 500, '2wikimultihopqa_train_1000': 500}
+    dev_split = {'beir_msmarco_dev_1000': 1000, 'musique_dev_1000': 500, '2wikimultihopqa_dev_1000': 500}
 
     os.makedirs('data/fact_filter', exist_ok=True)
 
     train_samples = []
     for dataset_name in train_split:
         num_sample = train_split[dataset_name]
-        samples, metrics = collect_filter_data(dataset_name, num_sample)
+        samples, metrics = collect_filter_data(dataset_name, num_sample, 5, args.extractor, args.retriever, args.linker)
         train_samples.extend(samples)
         print(f'{dataset_name}: {metrics}')
     train_output_path = f'data/fact_filter/train.json'
