@@ -759,11 +759,16 @@ class HippoRAG:
         for i in tqdm(range(len(glob('data/lm_vectors/{}_mean/vecs_*'.format(self.linking_retriever_name_processed)))), desc='Loading node vectors'):
             kb_vectors.append(
                 torch.Tensor(pickle.load(open('data/lm_vectors/{}_mean/vecs_{}.p'.format(self.linking_retriever_name_processed, i), 'rb'))))
-        kb_mat = torch.cat(kb_vectors)  # a matrix of phrase vectors
-        self.strings = [s.strip() for s in self.strings]
-        self.string_to_id = {string: i for i, string in enumerate(self.strings)}
-        kb_mat = kb_mat.T.divide(torch.linalg.norm(kb_mat, dim=1)).T
-        kb_mat = kb_mat.to('cuda')
+        try:
+            kb_mat = torch.cat(kb_vectors)  # a matrix of phrase vectors
+            self.strings = [s.strip() for s in self.strings]
+            self.string_to_id = {string: i for i, string in enumerate(self.strings)}
+            kb_mat = kb_mat.T.divide(torch.linalg.norm(kb_mat, dim=1)).T
+            kb_mat = kb_mat.to('cuda')
+        except Exception as e:
+            print(e)
+            print('KB mat shape', kb_mat.shape)
+            exit(1)
         kb_only_indices = []
         num_non_vector_phrases = 0
         for i in range(len(self.kb_node_phrase_to_id)):
