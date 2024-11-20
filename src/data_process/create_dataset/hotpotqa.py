@@ -6,17 +6,20 @@ import random
 from tqdm import tqdm
 
 from src.data_process.util import generate_hash
+from src.processing import query_data_has_duplication, corpus_has_duplication
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dir', type=str, default='data/raw/hotpotqa')
+    parser.add_argument('--num_train', type=int)
+    parser.add_argument('--num_dev', type=int)
     parser.add_argument('--seed', type=int, default=1)
     args = parser.parse_args()
 
     train_data = json.load(open(os.path.join(args.dir, 'hotpot_train_v1.1.json')))
     dev_data = json.load(open(os.path.join(args.dir, 'hotpot_dev_distractor_v1.json')))
 
-    split_num_sample = {'train': 100, 'dev': None}
+    split_num_sample = {'train': args.num_train, 'dev': args.num_dev}
     random.seed(args.seed)
 
     for split in split_num_sample:
@@ -51,6 +54,13 @@ if __name__ == '__main__':
 
         data_output_path = f'data/hotpotqa_{split}_{len(split_data)}.json'
         corpus_output_path = f'data/hotpotqa_{split}_{len(split_data)}_corpus.json'
+
+        duplication, d = query_data_has_duplication(split_data, True, False)
+        if duplication:
+            print(f"{split} has query duplication, #query: {len(d)}")
+        duplication = corpus_has_duplication(split_corpus)
+        if duplication:
+            print(f"{split} corpus has passage duplication")
 
         with open(data_output_path, 'w') as f:
             json.dump(split_data, f, indent=4)
