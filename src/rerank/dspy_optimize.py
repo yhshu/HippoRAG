@@ -14,10 +14,11 @@ class Fact(BaseModel):
 
 class FactFiltering(dspy.Signature):
     """
-    Rank facts based on their relevance to the query.
+    Filter facts based on their relevance to the query. Carefully generate related facts from the candidate list that have strong connection to the query.
 
     - Multi-hop reasoning may be required, meaning you might need to combine multiple facts to form a complete response.
-    - If the query is a claim, relevance means the fact supports or contradicts it. For queries seeking specific information, relevance means the fact aids in reasoning and providing an answer.
+    - If the query is a claim, relevance means the fact supports or contradicts it.
+    - For queries seeking specific information, relevance means the fact aids in reasoning and providing an answer.
     - Select up to 4 relevant facts from the candidate list and output in JSON format without any other words, e.g.,
 
     ```json
@@ -38,30 +39,35 @@ class Filter(dspy.Module):
         self.prog = dspy.Predict(FactFiltering)
 
     def forward(self, question, fact_before_filter):
-        return self.prog(question=question, fact_before_filter=fact_before_filter)
+        try:
+            return self.prog(question=question, fact_before_filter=fact_before_filter)
+        except Exception as e:
+            print(f"Filter forward exception: {e}")
+            from dspy.primitives.prediction import Prediction
+            return Prediction(fact_after_filter=Fact(fact=[]))
 
 
 def filtering_precision(example, pred, trace=None):
-    if len(pred) == 0:
-        return 0
-    gold = example.fact_after_filter
-
     try:
-        pred_list = pred.fact_after_filter.fact
-        gold_list = json.loads(gold).get('fact', [])
+        if len(pred) == 0:
+            pred_list = []
+        else:
+            pred_list = pred.fact_after_filter.fact
     except Exception as e:
         print(f"Error: {e}")
         pred_list = []
+    try:
+        gold = example.fact_after_filter
+        gold_list = json.loads(gold).get('fact', [])
+    except Exception as e:
+        print(f"Error: {e}")
         gold_list = []
-
-    if len(gold_list) == 0:
-        return 0
 
     gold_set = set([tuple(t) for t in gold_list])
     pred_set = set([tuple(t) for t in pred_list])
     if len(pred_set) == 0 and len(gold_set) == 0:
         return 1
-    elif len(pred_set) == 0:
+    elif len(pred_set) == 0 and len(gold_set) > 0:
         return 0
     return len(gold_set.intersection(pred_set)) / len(pred_set)
 
@@ -75,10 +81,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.llm.startswith('gpt-'):
-        dspy_llm = dspy.LM(model=f"openai/{args.llm}", max_tokens=3000, temperature=0.0)
+        dspy_llm = dspy.LM(model=f"openai/{args.llm}", max_tokens=256, temperature=0.0)
     elif args.addr is not None and args.port is not None:
         url = f'http://{args.addr}:{args.port}/v1'
-        dspy_llm = dspy.LM(model=f"openai/{args.llm}", max_tokens=3000, temperature=0.0, api_base=url, api_key='osunlp')
+        dspy_llm = dspy.LM(model=f"openai/{args.llm}", max_tokens=256, temperature=0.0, api_base=url, api_key='osunlp')
     else:
         raise ValueError(f"LM not implemented: {args.llm}")
     dspy.settings.configure(lm=dspy_llm)
