@@ -14,9 +14,9 @@ if __name__ == '__main__':
 
     program = Filter()
     url = f'http://{args.addr}:{args.port}/v1'
-    dspy_llm = dspy.LM(model=f"openai/{args.llm}", max_tokens=3000, temperature=0.0, api_base=url, api_key='osunlp')
+    dspy_llm = dspy.LM(model=f"openai/{args.llm}", max_tokens=256, temperature=0.0, api_base=url, api_key='osunlp')
     dspy.settings.configure(lm=dspy_llm)
-    program.load("output/dspy/fact_filter_mipro_optimized_meta-llama_Llama-3.1-70B-Instruct_predict_400_79.json")
+    program.load("output/dspy/fact_filter_mipro_optimized_meta-llama_Llama-3.1-70B-Instruct.json")
 
     fact_before_filter = {"fact": [["Paris", "is the capital of", "France", "Berlin", "is the capital of", "Germany"]]}
     print(program(question="What is the capital of France?", fact_before_filter=json.dumps(fact_before_filter)))

@@ -28,11 +28,12 @@ def collect_filter_data(dataset_name: str, num_sample: int, num_before_filter: i
     metrics = defaultdict(float)
     for sample in tqdm(data, desc=f'Collecting data for {dataset_name}'):
         question = sample['question']
-        fact_before_filter = hipporag.query_to_fact(question, 100)
+        # fact_before_filter = hipporag.query_to_fact(question, num_before_filter)
+        fact_before_filter = hipporag.query_to_fact(question, num_before_filter)
 
-        if dataset_name.startswith('beir'):
-            # shuffle facts_before_filter
-            fact_before_filter = fact_before_filter[:1] + random.sample(fact_before_filter[1:], len(fact_before_filter) - 1)
+        # if dataset_name.startswith('beir'):
+        #     # shuffle facts_before_filter
+        #     fact_before_filter = fact_before_filter[:1] + random.sample(fact_before_filter[1:], len(fact_before_filter) - 1)
         fact_before_filter = fact_before_filter[:num_before_filter]
         random.shuffle(fact_before_filter)
 
@@ -72,23 +73,29 @@ if __name__ == '__main__':
     os.makedirs('data/fact_filter', exist_ok=True)
 
     train_samples = []
-    for dataset_name in train_split:
-        num_sample = train_split[dataset_name]
-        samples, metrics = collect_filter_data(dataset_name, num_sample, 5, args.extractor, args.retriever, args.linker)
-        train_samples.extend(samples)
-        print(f'{dataset_name}: {metrics}')
     train_output_path = f'data/fact_filter/train.json'
-    with open(train_output_path, 'w') as f:
-        json.dump(train_samples, f, indent=4)
-        print(f'Saved {len(train_samples)} samples to {train_output_path}')
+    if not os.path.isfile(train_output_path):
+        for dataset_name in train_split:
+            num_sample = train_split[dataset_name]
+            samples, metrics = collect_filter_data(dataset_name, num_sample, 5, args.extractor, args.retriever, args.linker)
+            train_samples.extend(samples)
+            print(f'{dataset_name}: {metrics}')
+        with open(train_output_path, 'w') as f:
+            json.dump(train_samples, f, indent=4)
+            print(f'Saved {len(train_samples)} samples to {train_output_path}')
+    else:
+        print(f'File {train_output_path} already exists, skipping training data collection')
 
     dev_samples = []
-    for dataset_name in dev_split:
-        num_sample = dev_split[dataset_name]
-        samples, metrics = collect_filter_data(dataset_name, num_sample)
-        dev_samples.extend(samples)
-        print(f'{dataset_name}: {metrics}')
     dev_output_path = f'data/fact_filter/dev.json'
-    with open(dev_output_path, 'w') as f:
-        json.dump(dev_samples, f, indent=4)
-        print(f'Saved {len(dev_samples)} samples to {dev_output_path}')
+    if not os.path.isfile(dev_output_path):
+        for dataset_name in dev_split:
+            num_sample = dev_split[dataset_name]
+            samples, metrics = collect_filter_data(dataset_name, num_sample, 5, args.extractor, args.retriever, args.linker)
+            dev_samples.extend(samples)
+            print(f'{dataset_name}: {metrics}')
+        with open(dev_output_path, 'w') as f:
+            json.dump(dev_samples, f, indent=4)
+            print(f'Saved {len(dev_samples)} samples to {dev_output_path}')
+    else:
+        print(f'File {dev_output_path} already exists, skipping dev data collection')

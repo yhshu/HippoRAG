@@ -189,12 +189,12 @@ class HippoRAG:
                 # reranker = RankGPT(rerank_model_name)
                 from src.rerank import LLMFilter
                 self.reranker = LLMFilter(reranker_name)
-            elif reranker_name.startswith('meta-llama/Llama-'):
-                from src.rerank import VLLMFilter
-                self.reranker = VLLMFilter(reranker_name)
-            # if (reranker_name.startswith('gpt') or reranker_name.startswith('ft:gpt') or reranker_name.startswith('meta-llama/Llama-')):
-            #     from src.rerank import DSPyFilter
-            #     self.reranker = DSPyFilter(reranker_name)
+            # elif reranker_name.startswith('meta-llama/Llama-'):
+            #     from src.rerank import VLLMFilter
+            #     self.reranker = VLLMFilter(reranker_name)
+            if (reranker_name.startswith('gpt') or reranker_name.startswith('ft:gpt') or reranker_name.startswith('meta-llama/Llama-')):
+                from src.rerank import DSPyFilter
+                self.reranker = DSPyFilter(reranker_name)
             elif reranker_name in ['oracle_triple']:
                 from src.rerank import OracleTripleFilter
                 self.reranker = OracleTripleFilter(reranker_name)
