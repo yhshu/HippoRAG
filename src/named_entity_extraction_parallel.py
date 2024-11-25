@@ -142,23 +142,26 @@ def query_ner_parallel(dataset: str, model_name: str, num_processes: int, client
     except:
         output_df = []
 
-    import vllm
-    if isinstance(client, vllm.LLM):
-        all_queries = queries_df[query_name].values.tolist()
-        all_outputs, all_num_tokens = run_ner_on_texts_vllm(client, all_queries)
-        queries_df['triples'] = all_outputs
-        if isinstance(all_num_tokens, list):
-            all_num_tokens = sum(all_num_tokens)
-        queries_df['triples'] = all_outputs
-        queries_df.to_csv(output_file, sep='\t')
-        print('Passage NER saved to', output_file)
-        print('Total tokens:', all_num_tokens)
-        return
+    from langchain_openai import ChatOpenAI
+    if not isinstance(client, ChatOpenAI):
+        import vllm
+        if isinstance(client, vllm.LLM):
+            all_queries = queries_df[query_name].values.tolist()
+            all_outputs, all_num_tokens = run_ner_on_texts_vllm(client, all_queries)
+            queries_df['triples'] = all_outputs
+            if isinstance(all_num_tokens, list):
+                all_num_tokens = sum(all_num_tokens)
+            queries_df['triples'] = all_outputs
+            queries_df.to_csv(output_file, sep='\t')
+            print('Passage NER saved to', output_file)
+            print('Total tokens:', all_num_tokens)
+            return
     # else, call extraction model in parallel
     try:
         queries = queries_df[query_name].values
 
         splits = np.array_split(range(len(queries)), num_processes)
+
 
         args = []
 
