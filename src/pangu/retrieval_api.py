@@ -108,16 +108,21 @@ class BM25SparseRetriever(TextRetriever):
         self.retriever.index(self.corpus_tokens)
         self.save(self.index_path)
 
-    def get_top_k_indices(self, query, k=10, distinct=True):
+    def get_top_k_indices(self, query, k=10, distinct=True, return_scores=False):
         import bm25s
         query_tokens = bm25s.tokenize(query, stemmer=self.stemmer)
         results, scores = self.retriever.retrieve(query_tokens, corpus=self.corpus, k=k)
         # for each result, get the index of the passage
         indices = []
-        for result in results[0]:
-            i = self.corpus.index(result)
-            if i is not None:
-                indices.append(i)
+        res_score = []
+        for idx, result in enumerate(results[0]):
+            corpus_idx = self.corpus.index(result)
+            if corpus_idx is not None:
+                indices.append(corpus_idx)
+                res_score.append(scores[0][idx])
+
+        if return_scores:
+            return indices, res_score
         return indices
 
     def scores_on_corpus(self, query):
@@ -125,8 +130,9 @@ class BM25SparseRetriever(TextRetriever):
         pass
 
     def save(self, index_path, save_corpus=True):
-        self.retriever.save(index_path, corpus=self.corpus if save_corpus else None)
-        print(f"Index saved to {index_path}")
+        if index_path is not None:
+            self.retriever.save(index_path, corpus=self.corpus if save_corpus else None)
+            print(f"Index saved to {index_path}")
 
     @staticmethod
     def load(index_path, load_corpus=True):

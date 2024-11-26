@@ -3,6 +3,8 @@ import sys
 
 sys.path.append('.')
 
+from src.util import string_to_bool
+
 from typing import Union, Dict
 
 from collections import defaultdict
@@ -13,7 +15,6 @@ from langchain_community.cache import SQLiteCache
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 
-from transformers.hf_argparser import string_to_bool
 import argparse
 import json
 

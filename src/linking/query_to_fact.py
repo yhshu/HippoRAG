@@ -186,7 +186,7 @@ def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, 
 
 
 def graph_search_with_fact_entities(hipporag: HippoRAG, query: str, link_top_k: int, query_doc_scores, query_fact_scores, top_k_facts, top_k_fact_indices,
-                                    return_ppr=False, use_phrase=True, use_passage=True, passage_truncation=False, num_passage_node=None, passage_node_weight=0.25, filter_phrase_by_passage=False):
+                                    return_ppr=False, use_phrase=True, use_passage=True, passage_truncation=False, num_passage_node=None, passage_node_weight=0.05, filter_phrase_by_passage=False):
     """
 
     @param hipporag:

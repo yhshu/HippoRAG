@@ -21,6 +21,7 @@ from src.lm_wrapper.nv_embed import NVEmbedV2Wrapper
 from src.lm_wrapper.sentence_transformers_util import SentenceTransformersWrapper
 from src.lm_wrapper.util import init_embedding_model
 from src.named_entity_extraction_parallel import named_entity_recognition
+from src.pangu.retrieval_api import BM25SparseRetriever
 from src.processing import processing_phrases, softmax_with_zeros, eval_json_str, min_max_normalize
 
 os.environ['TOKENIZERS_PARALLELISM'] = 'FALSE'
@@ -174,6 +175,11 @@ class HippoRAG:
                 with Run().context(RunConfig(nranks=1, experiment="corpus", root=self.colbert_config['root'])):
                     config = ColBERTConfig(root=self.colbert_config['root'], )
                     self.corpus_searcher = Searcher(index=self.colbert_config['doc_index_name'], config=config, verbose=0)
+        elif self.linking_retriever_name == 'bm25':
+            # load BM25 index
+            corpus_content = self.dataset_df['paragraph'].tolist()
+            os.makedirs(f'data/bm25_sparse/{self.corpus_name}', exist_ok=True)
+            self.bm25_retriever = BM25SparseRetriever(corpus_content, f'data/bm25_sparse/{self.corpus_name}')
 
         self.statistics = defaultdict(int)
         self.ensembling_debug = []
@@ -343,6 +349,11 @@ class HippoRAG:
         if self.dpr_only:
             from src.linking.dpr_only import dense_passage_retrieval
             sorted_doc_ids, sorted_scores, logs = dense_passage_retrieval(self, query)
+            return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], logs
+
+        elif self.linking_retriever_name == 'bm25':
+            from src.linking.bm25 import bm25_retrieval
+            sorted_doc_ids, sorted_scores, logs = bm25_retrieval(self, query)
             return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], logs
 
         elif oracle_triples and linking == 'ner_to_node':
@@ -733,7 +744,7 @@ class HippoRAG:
         if os.path.isfile(encoded_string_path):
             self.load_node_vectors_from_string_encoding_cache(encoded_string_path)
         else:  # use another way to load node vectors
-            if self.linking_retriever_name == 'colbertv2':
+            if self.linking_retriever_name in ['colbertv2', 'bm25']:
                 return
             kb_node_phrase_embeddings_path = (f'data/lm_vectors/{self.linking_retriever_name_processed}_mean/'
                                               f'kb_node_phrase_embeddings_{self.corpus_name}_'
