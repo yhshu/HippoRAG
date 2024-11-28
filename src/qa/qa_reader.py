@@ -1,6 +1,6 @@
 import sys
 
-sys.path.append('..')
+sys.path.append('.')
 
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate
@@ -111,7 +111,7 @@ def parallel_qa_read(data: list, demos: list, args, client, output_path: str, to
             print('Parsing prediction:', e, response)
             pred_ans = response
 
-        gold_ans = sample['answer']
+        gold_ans = sample['answer'] if 'answer' in sample else sample['gold_ans']
         if args.dataset == 'hotpotqa':
             em, f1, precision, recall = update_answer({'em': 0, 'f1': 0, 'precision': 0, 'recall': 0}, pred_ans, gold_ans)
             return sample_idx, sample_id, retrieved, pred_ans, {'em': em, 'f1': f1, 'precision': precision, 'recall': recall}
@@ -122,6 +122,8 @@ def parallel_qa_read(data: list, demos: list, args, client, output_path: str, to
             em = 1 if exact_match_score(pred_ans, gold_ans) else 0
             f1, precision, recall = f1_score(pred_ans, gold_ans)
             return sample_idx, sample_id, retrieved, pred_ans, {'em': em, 'f1': f1, 'precision': precision, 'recall': recall}
+        else:
+            return sample_idx, sample_id, retrieved, pred_ans, {}
 
     with ThreadPoolExecutor(max_workers=args.thread) as executor:
         futures = [executor.submit(process_sample, (sample_idx, sample)) for sample_idx, sample in enumerate(data)]
@@ -133,9 +135,10 @@ def parallel_qa_read(data: list, demos: list, args, client, output_path: str, to
                 sample = data[sample_idx]
                 sample['retrieved'] = retrieved
                 sample['prediction'] = pred_ans
-                for key in metrics:
-                    sample['qa_' + key] = metrics[key]
-                    total_metrics['qa_' + key] += metrics[key]
+                if len(metrics) :
+                    for key in metrics:
+                        sample['qa_' + key] = metrics[key]
+                        total_metrics['qa_' + key] += metrics[key]
 
                 if sample_idx % 50 == 0:
                     with open(output_path, 'w') as f:
@@ -144,17 +147,19 @@ def parallel_qa_read(data: list, demos: list, args, client, output_path: str, to
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str, help='retrieval results or QA reading results', choices=['hotpotqa', 'musique', '2wikimultihopqa'], required=True)
+    parser.add_argument('--dataset', type=str, help='retrieval results or QA reading results', required=True)
     parser.add_argument('--data', type=str, help='retrieval results or QA reading results')
     parser.add_argument('--retriever', type=str, help='retriever name to distinguish different experiments')
     parser.add_argument('--llm', type=str, default='openai', help="LLM, e.g., 'openai' or 'together'")
-    parser.add_argument('--llm_model', type=str, default='gpt-3.5-turbo-1106', help='Specific model name')
+    parser.add_argument('--llm_model', type=str, default='gpt-4o-mini', help='Specific model name')
     parser.add_argument('--num_demo', type=int, default=1, help='the number of few-shot examples')
     parser.add_argument('--num_doc', type=int, default=5, help='the number of in-context documents')
     parser.add_argument('--thread', type=int, default=8, help='the number of workers for parallel processing')
+    parser.add_argument('--force_retry', action='store_true')
     args = parser.parse_args()
 
-    output_path = f'exp/qa_{args.dataset}_{args.retriever}_{args.llm_model}_demo_{args.num_demo}_doc_{args.num_doc}.json'
+    retriever_name = args.retriever.replace('/', '_') if args.retriever else 'none'
+    output_path = f'exp/qa_{args.dataset}_{retriever_name}_{args.llm_model}_demo_{args.num_demo}_doc_{args.num_doc}.json'
     processed_id_set = set()
     total_metrics = {'qa_em': 0, 'qa_f1': 0, 'qa_precision': 0, 'qa_recall': 0}
     if args.data:
@@ -166,8 +171,9 @@ if __name__ == '__main__':
     if args.retriever == 'none':
         args.num_doc = 0
 
+    prompt_dataset = args.dataset if args.dataset in ['musique', '2wikimultihopqa', 'hotpotqa'] else 'musique'
     if args.num_doc == 0:
-        prompt_path = f'data/ircot_prompts/{args.dataset}/no_context_cot_qa_codex.txt'
+        prompt_path = f'data/ircot_prompts/{prompt_dataset}/no_context_cot_qa_codex.txt'
         data = json.load(open(f'data/{args.dataset}.json', 'r'))
         demos = parse_prompt(prompt_path, False)
     else:
@@ -175,15 +181,18 @@ if __name__ == '__main__':
             data = json.load(open(output_path, 'r'))
             for key in total_metrics.keys():
                 total_metrics[key] = sum([sample[key] for sample in data if key in sample])
-        prompt_path = f'data/ircot_prompts/{args.dataset}/gold_with_3_distractors_context_cot_qa_codex.txt'
+        prompt_path = f'data/ircot_prompts/{prompt_dataset}/gold_with_3_distractors_context_cot_qa_codex.txt'
         corpus = json.load(open(f'data/{args.dataset}_corpus.json', 'r'))
         demos = parse_prompt(prompt_path)
 
     # processed id set
-    if args.dataset in ['hotpotqa', '2wikimultihopqa']:
-        processed_id_set = {sample['_id'] for sample in data if 'prediction' in sample}
-    elif args.dataset in ['musique']:
-        processed_id_set = {sample['id'] for sample in data if 'prediction' in sample}
+    if args.force_retry is False:
+        if args.dataset in ['hotpotqa', '2wikimultihopqa']:
+            processed_id_set = {sample['_id'] for sample in data if 'prediction' in sample}
+        elif args.dataset in ['musique']:
+            processed_id_set = {sample['id'] for sample in data if 'prediction' in sample}
+    else:
+        processed_id_set = set()
 
     assert data and len(data)
     demos = demos[:args.num_demo]

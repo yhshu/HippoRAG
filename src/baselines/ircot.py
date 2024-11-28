@@ -16,8 +16,6 @@ import concurrent
 from abc import abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 
-import faiss
-from elasticsearch import Elasticsearch
 from transformers import AutoTokenizer, AutoModel
 
 import argparse
@@ -42,6 +40,7 @@ class DocumentRetriever:
 
 class BM25Retriever(DocumentRetriever):
     def __init__(self, index_name: str, host: str = 'localhost', port: int = 9200):
+        from elasticsearch import Elasticsearch
         self.es = Elasticsearch([{"host": host, "port": port, "scheme": "http"}], max_retries=5, retry_on_timeout=True, request_timeout=30)
         self.index_name = index_name
 
@@ -376,6 +375,7 @@ if __name__ == '__main__':
                 index_name = '2wikimultihopqa_1000_proposition_nbits_2'
         retriever = Colbertv2Retriever(root, index_name)
     elif args.retriever == 'facebook/contriever':
+        import faiss
         if args.dataset == 'hotpotqa':
             if args.unit == 'hippo':
                 faiss_index = faiss.read_index('data/hotpotqa/hotpotqa_facebook_contriever_hippo_ip_norm.index')
@@ -393,6 +393,7 @@ if __name__ == '__main__':
                 faiss_index = faiss.read_index('data/2wikimultihopqa/2wikimultihopqa_proposition_ip_norm.index')
         retriever = DPRRetriever(args.retriever, faiss_index, corpus)
     elif args.retriever.startswith('sentence-transformers/gtr-t5'):
+        import faiss
         if args.dataset == 'hotpotqa':
             if args.unit == 'hippo':
                 faiss_index = faiss.read_index('data/hotpotqa/hotpotqa_sentence-transformers_gtr-t5-base_hippo_ip_norm.index')

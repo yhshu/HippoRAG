@@ -21,7 +21,7 @@ if __name__ == '__main__':
     corpus_hash_set = set()
     dataset = []
 
-    for sample in tqdm(data, desc='Collecting data'):
+    for sample_idx, sample in tqdm(enumerate(data), desc='Collecting data'):
         query = sample['input']
         context = sample['context']
 
@@ -45,6 +45,7 @@ if __name__ == '__main__':
         new_sample = copy.deepcopy(sample)
         new_sample['question'] = query
         del new_sample['input']
+        new_sample['id'] = sample_idx
         dataset.append(new_sample)
 
     dataset_output_path = 'data/lveval.json'

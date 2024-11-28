@@ -1,7 +1,11 @@
 import argparse
+import json
 import re
 import string
 from collections import Counter
+
+ABANDON_WORDS_EN = ['and', 'to', 'of', 'in', 'her', 'was', 'with', 'for', 'it', 'from', 'is', 'that', 'his', 'he', 'by', 'she', 'they', 'or', 'at', 'because', 'be', 'on', 'are',
+                    'their', 'what', 'as', 'had', 'were', 'about', 'being', 'this', 'who', 'but', 'have', 'has', 'when', 'which', 'does']
 
 
 def normalize_answer(s):
@@ -83,3 +87,15 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--log', type=str)
     args = parser.parse_args()
+
+    log = json.load(open(args.log))
+    predictions = []
+    answers = []
+    gold_anss = []
+    for sample in log:
+        predictions.append(sample['prediction'])
+        answers.append(sample['answers'])
+        gold_anss.append(sample['gold_ans'] if 'gold_ans' in sample else None)
+
+    res = scorer(predictions, answers, gold_anss)
+    print(res)
