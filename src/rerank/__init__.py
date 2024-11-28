@@ -374,12 +374,11 @@ class VLLMFilter(LLMFilter):
 
 
 class DSPyFilter(Reranker):
-    def __init__(self, model_name, dspy_file_path="output/dspy/fact_filter_mipro_optimized_meta-llama_Llama-3.1-70B-Instruct_predict_400_79.json",
-                 addr='localhost', port='8000'):
-        from src.rerank.dspy_optimize import Filter
+    def __init__(self, model_name, dspy_file_path=None, addr='localhost', port='8000'):
+        from src.rerank.dspy_optimize import FactFilterProgram
         import dspy
 
-        self.program = Filter()
+        self.program = FactFilterProgram()
         if model_name.startswith('gpt-'):
             dspy_llm = dspy.LM(model=f"openai/{model_name}", max_tokens=3000, temperature=0.0)
         else:

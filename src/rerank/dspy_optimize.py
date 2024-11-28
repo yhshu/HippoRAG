@@ -12,7 +12,7 @@ class Fact(BaseModel):
     fact: list[list[str]] = Field(description="A list of facts, each fact is a list of 3 strings: [subject, predicate, object]")
 
 
-class FactFiltering(dspy.Signature):
+class FactFilteringSignature(dspy.Signature):
     """
     Filter facts based on their relevance to the query. Carefully generate related facts from the candidate list that have strong connection to the query.
 
@@ -33,10 +33,10 @@ class FactFiltering(dspy.Signature):
     fact_after_filter: Fact = dspy.OutputField(desc="Filtered facts in JSON format")
 
 
-class Filter(dspy.Module):
+class FactFilterProgram(dspy.Module):
     def __init__(self):
         super().__init__()
-        self.prog = dspy.Predict(FactFiltering)
+        self.prog = dspy.Predict(FactFilteringSignature)
 
     def forward(self, question, fact_before_filter):
         try:
@@ -110,7 +110,7 @@ if __name__ == '__main__':
         metric=filter_metric,
         auto=args.auto,  # Can choose between light, medium, and heavy optimization runs
     )
-    program = Filter()
+    program = FactFilterProgram()
 
     # Optimize program
     print(f"Optimizing program with MIPRO...")

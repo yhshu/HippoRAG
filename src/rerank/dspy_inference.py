@@ -3,7 +3,7 @@ import json
 
 import dspy
 
-from src.rerank.dspy_optimize import  Filter
+from src.rerank.dspy_optimize import  FactFilterProgram
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -12,7 +12,7 @@ if __name__ == '__main__':
     parser.add_argument('--port', type=str)
     args = parser.parse_args()
 
-    program = Filter()
+    program = FactFilterProgram()
     url = f'http://{args.addr}:{args.port}/v1'
     dspy_llm = dspy.LM(model=f"openai/{args.llm}", max_tokens=256, temperature=0.0, api_base=url, api_key='osunlp')
     dspy.settings.configure(lm=dspy_llm)

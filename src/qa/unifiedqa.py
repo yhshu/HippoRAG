@@ -61,6 +61,8 @@ if __name__ == '__main__':
     rouge_results = rouge.compute(predictions=predictions, references=references)
     meteor_results = meteor.compute(predictions=predictions, references=references)
 
-    print(bleu_results)
-    print(rouge_results)
-    print(meteor_results)
+    # for each dict, print float with 4 decimal places
+    for metric_dict in [bleu_results, rouge_results, meteor_results]:
+        for key, value in metric_dict.items():
+            metric_dict[key] = round(value, 4)
+        print(metric_dict)
