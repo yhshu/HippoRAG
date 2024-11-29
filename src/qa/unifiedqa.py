@@ -2,7 +2,6 @@ import argparse
 import json
 
 import evaluate
-import tensorflow as tf
 from tqdm import tqdm
 from transformers import T5Tokenizer, T5ForConditionalGeneration
 
@@ -15,6 +14,8 @@ def run_model(input_string, device='cuda', **generator_args):
 
 
 def normalize_text(text):
+    import tensorflow as tf
+
     """Lowercase and remove quotes from a TensorFlow string."""
     text = tf.strings.lower(text)
     text = tf.strings.regex_replace(text, "'(.*)'", r"\1")
@@ -57,12 +58,16 @@ if __name__ == '__main__':
         predictions.append(prediction[0])
         references.append(gold_ans)
 
-    bleu_results = bleu.compute(predictions=predictions, references=references)
+    bleu1_results = bleu.compute(predictions=predictions, references=references, max_order=1)
+    bleu4_results = bleu.compute(predictions=predictions, references=references, max_order=4)
     rouge_results = rouge.compute(predictions=predictions, references=references)
     meteor_results = meteor.compute(predictions=predictions, references=references)
 
     # for each dict, print float with 4 decimal places
-    for metric_dict in [bleu_results, rouge_results, meteor_results]:
+    for metric_dict in [bleu1_results, bleu4_results, rouge_results, meteor_results]:
         for key, value in metric_dict.items():
-            metric_dict[key] = round(value, 4)
+            if isinstance(value, float):
+                metric_dict[key] = round(value, 4)
+            elif isinstance(value, list):
+                metric_dict[key] = [round(v, 4) for v in value]
         print(metric_dict)
