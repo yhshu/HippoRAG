@@ -12,31 +12,60 @@ class Fact(BaseModel):
     fact: list[list[str]] = Field(description="A list of facts, each fact is a list of 3 strings: [subject, predicate, object]")
 
 
+class FactWithConfidence(BaseModel):
+    fact: list[list[str]] = Field(description="A list of facts, each fact is a list of 3 strings: [subject, predicate, object]")
+    confidence: str = Field(description="Confidence level of the generated facts, either 'high' or 'low'")
+
+
 class FactFilteringSignature(dspy.Signature):
+    """
+   Filter facts based on their relevance to the query. Carefully generate related facts from the candidate list that have strong connection to the query.
+
+   - Multi-hop reasoning may be required, meaning you might need to combine multiple facts to form a complete response.
+   - If the query is a claim, relevance means the fact supports or contradicts it.
+   - For queries seeking specific information, relevance means the fact aids in reasoning and providing an answer.
+   - Select up to 4 relevant facts from the candidate list and output in JSON format without any other words, e.g.,
+
+   ```json
+   {"fact": [["s1", "p1", "o1"], ["s2", "p2", "o2"]]}.
+   ```
+
+   - If no facts are relevant, return an empty list, e.g., {"fact": []}.
+   - Only use facts from the candidate list; do NOT generate new facts.
+   """
+    question = dspy.InputField(desc="Query for retrieval")
+    fact_before_filter = dspy.InputField(desc="Candidate facts to be filtered")
+    fact_after_filter: Fact = dspy.OutputField(desc="Filtered facts in JSON format")
+
+
+class FactFilteringWithConfidenceSignature(dspy.Signature):
     """
     Filter facts based on their relevance to the query. Carefully generate related facts from the candidate list that have strong connection to the query.
 
     - Multi-hop reasoning may be required, meaning you might need to combine multiple facts to form a complete response.
     - If the query is a claim, relevance means the fact supports or contradicts it.
     - For queries seeking specific information, relevance means the fact aids in reasoning and providing an answer.
-    - Select up to 4 relevant facts from the candidate list and output in JSON format without any other words, e.g.,
+    - Select up to 4 relevant facts from the candidate list, and tell the confidence of your generated facts using "high" or "low" categories.
+
+    - Output in JSON format without any other words, e.g.,
 
     ```json
-    {"fact": [["s1", "p1", "o1"], ["s2", "p2", "o2"]]}.
+    {"fact": [["s1", "p1", "o1"], ["s2", "p2", "o2"]], "confidence": "low"}.
     ```
 
-    - If no facts are relevant, return an empty list, e.g., {"fact": []}.
+    - If no facts are relevant, return an empty list, e.g., {"fact": [], "confidence": "high"}.
     - Only use facts from the candidate list; do NOT generate new facts.
     """
     question = dspy.InputField(desc="Query for retrieval")
     fact_before_filter = dspy.InputField(desc="Candidate facts to be filtered")
-    fact_after_filter: Fact = dspy.OutputField(desc="Filtered facts in JSON format")
+    fact_after_filter: FactWithConfidence = dspy.OutputField(desc="Filtered facts in JSON format")
 
 
 class FactFilterProgram(dspy.Module):
     def __init__(self):
         super().__init__()
         self.prog = dspy.Predict(FactFilteringSignature)
+        # self.prog = dspy.Predict(FactFilteringWithConfidenceSignature)
 
     def forward(self, question, fact_before_filter):
         try:

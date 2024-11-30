@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 from src.data_process.util import chunk_corpus
 from src.langchain_util import num_tokens_by_tiktoken
+from src.processing import query_data_has_duplication, corpus_has_duplication
 
 
 def process_html_to_raw_text(html_text):
@@ -42,8 +43,14 @@ if __name__ == '__main__':
 
     corpus = {}
     data = []
+    question_set = set()
     for sample in tqdm(dataset['validation']):
         s = copy.deepcopy(sample)
+        question = s['question']['text']
+        if question in question_set:
+            continue
+        question_set.add(question)
+
         if s['document']['id'] in sample_docs:
             s['question'] = sample['question']['text']
             s['answer'] = [a['text'] for a in sample['answers']]
@@ -69,3 +76,6 @@ if __name__ == '__main__':
     corpus = chunk_corpus(corpus, chunk_size=128)
     with open(corpus_output_path, 'w') as f:
         json.dump(corpus, f, indent=4)
+
+    query_data_has_duplication(data, False, False)
+    corpus_has_duplication(corpus)

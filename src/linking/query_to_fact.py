@@ -135,13 +135,14 @@ def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, 
     query_fact_scores = np.squeeze(query_fact_scores) if query_fact_scores.ndim == 2 else query_fact_scores
     query_fact_scores = min_max_normalize(query_fact_scores)
 
+    reranker_dict = None
     if hipporag.reranker is not None:
         candidate_fact_indices = np.argsort(query_fact_scores)[-link_top_k:][::-1].tolist()
         candidate_facts = [candidate_triples[i] for i in candidate_fact_indices]
         if hipporag.reranker_name in ['oracle_triple']:
             top_k_fact_indicies, top_k_facts = hipporag.reranker.rerank('fact_reranking', query, candidate_facts, candidate_fact_indices, oracle_triples=oracle_triples)
         else:
-            top_k_fact_indicies, top_k_facts = hipporag.reranker.rerank('fact_reranking', query, candidate_facts, candidate_fact_indices, len_after_rerank=link_top_k)
+            top_k_fact_indicies, top_k_facts, reranker_dict = hipporag.reranker.rerank('fact_reranking', query, candidate_facts, candidate_fact_indices, len_after_rerank=link_top_k)
         rerank_log = {'facts_before_rerank': candidate_facts, 'facts_after_rerank': top_k_facts}
 
         if len(top_k_facts) == 0:
@@ -176,8 +177,13 @@ def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, 
         logs = None
     else:  # graph search
         # from retrieved fact to nodes in the fact
+        passage_node_weight = 0.05
+        # if reranker_dict is not None:
+        #     if 'confidence' in reranker_dict:
+        #         passage_node_weight = 0.05 if reranker_dict['confidence'] == 'high' else 0.25
+        #     print(f'passage_node_weight: {passage_node_weight}')
         sorted_doc_ids, sorted_scores, logs, ppr_phrase_probs, ppr_doc_prob = graph_search_with_fact_entities(hipporag, query, link_top_k, query_doc_scores, query_fact_scores,
-                                                                                                              top_k_facts, top_k_fact_indicies, return_ppr=True)
+                                                                                                              top_k_facts, top_k_fact_indicies, return_ppr=True, passage_node_weight=passage_node_weight)
 
     if hipporag.reranker is not None:
         logs['rerank'] = rerank_log

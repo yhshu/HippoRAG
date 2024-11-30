@@ -1,6 +1,3 @@
-import hashlib
-
-
 def chunk_corpus(corpus: list, chunk_size: int = 64) -> list:
     """
     Chunk the corpus into smaller parts. Run the following command to download the required nltk data:
@@ -121,3 +118,11 @@ def check_continuity(data):
         print(f"Number of continuous subarrays: {len(continuous_ranges)}")
         print(f"Continuous ranges (start, end): {continuous_ranges}")
         exit(1)
+
+
+def convert_html_to_markdown(html_content):
+    import html2text
+    converter = html2text.HTML2Text()
+    converter.ignore_links = False
+    markdown_text = converter.handle(html_content)
+    print(markdown_text)

@@ -39,7 +39,8 @@ def named_entity_recognition_for_corpus_openai_batch(dataset_name: str, num_pass
                         {'role': 'assistant', 'content': ner_output_one_shot},
                         {'role': 'user', 'content': f"Paragraph:```\n{passage['passage']}\n```"}]
         total_tokens += num_tokens_by_tiktoken(str(ner_messages))
-        # idx = passage['idx'] if 'idx' in passage else idx
+        if dataset_name.startswith('narrativeqa'):
+            idx = passage['idx'] if 'idx' in passage else idx
 
         # custom_id must be string
         jsonl_contents.append(json.dumps(
