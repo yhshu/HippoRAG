@@ -46,10 +46,17 @@ if __name__ == '__main__':
     bm25_retriever = BM25SparseRetriever(contents, 'data/bm25_sparse/wiki_text')
 
     corpus = []
+    corpus_content_hash_set = set()
     for sample in tqdm(data, 'Collecting relevant wiki text'):
-        top_indices = bm25_retriever.get_top_k_indices(sample['question'], 10, True, False)
+        k = 10
+        top_indices = bm25_retriever.get_top_k_indices(sample['question'], k, True, False)
+        assert len(top_indices) == k
         for idx in top_indices:
-            corpus.append(full_corpus[idx])
+            content = full_corpus[idx]['title'] + '\n' + full_corpus[idx]['text']
+            content_hash = generate_hash(content)
+            if content_hash not in corpus_content_hash_set:
+                corpus_content_hash_set.add(content_hash)
+                corpus.append(full_corpus[idx])
 
     with open('data/popqa_corpus.json', 'w') as f:
         json.dump(corpus, f)

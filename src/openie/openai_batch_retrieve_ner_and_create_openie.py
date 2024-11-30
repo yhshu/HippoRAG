@@ -27,7 +27,7 @@ if __name__ == '__main__':
     skip_openie = string_to_bool(args.skip_openie)
     arg_str, dataset_name, flags_present, num_passages, retrieval_corpus = load_corpus(args.dataset, args.model_name, args.num_passages, True)
     passage_dict = {
-        str(p['idx']) if 'idx' in p else str(i): p['passage']
+        str(i): p['passage']
         for i, p in enumerate(retrieval_corpus)
     }  # custom_id to passage
 

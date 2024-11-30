@@ -92,34 +92,45 @@ class BM25SparseRetriever(TextRetriever):
         self.corpus_tokens = None
 
         self.index_path = index_path
-        if index_path is not None:
+        if index_path is not None and len(os.listdir(index_path)) > 0:
             self.retriever = self.load(index_path)
             if self.retriever is None:
                 self._preprocess()
         else:
             self._preprocess()
+        assert self.retriever is not None, 'retriever is None'
+        assert self.retriever.corpus is not None, 'corpus is None'
 
     def _preprocess(self):
         # Tokenize the corpus and keep only ids (optimized for speed and memory)
-        from bm25s import BM25
         import bm25s
-        self.retriever = BM25()
+        self.retriever = bm25s.BM25(corpus=self.corpus)
+        assert self.corpus is not None and len(self.corpus) > 0, "Corpus is empty"
         self.corpus_tokens = bm25s.tokenize(self.corpus, stopwords=self.stopwords, stemmer=self.stemmer)
         self.retriever.index(self.corpus_tokens)
+        # self.corpus = self.retriever.corpus
         self.save(self.index_path)
 
     def get_top_k_indices(self, query, k=10, distinct=True, return_scores=False):
         import bm25s
-        query_tokens = bm25s.tokenize(query, stemmer=self.stemmer)
-        results, scores = self.retriever.retrieve(query_tokens, corpus=self.corpus, k=k)
+        try:
+            query_tokens = bm25s.tokenize(query, stemmer=self.stemmer)
+            results, scores = self.retriever.retrieve(query_tokens, k=k)
+        except Exception as e:
+            print('get top-k indices exception', e)
+            exit(1)
+
         # for each result, get the index of the passage
         indices = []
         res_score = []
         for idx, result in enumerate(results[0]):
-            corpus_idx = self.corpus.index(result)
-            if corpus_idx is not None:
-                indices.append(corpus_idx)
-                res_score.append(scores[0][idx])
+            try:
+                corpus_idx = self.corpus.index(result)
+            except Exception as e:
+                print(f"Passage not found in corpus", e)
+                exit(1)
+            indices.append(corpus_idx)
+            res_score.append(scores[0][idx])
 
         if return_scores:
             return indices, res_score
@@ -131,6 +142,8 @@ class BM25SparseRetriever(TextRetriever):
 
     def save(self, index_path, save_corpus=True):
         if index_path is not None:
+            if save_corpus:
+                assert self.corpus is not None, "Corpus is None"
             self.retriever.save(index_path, corpus=self.corpus if save_corpus else None)
             print(f"Index saved to {index_path}")
 
@@ -146,7 +159,7 @@ class BM25SparseRetriever(TextRetriever):
             reloaded_retriever.retriever = bm25s.BM25.load(index_path, load_corpus=load_corpus)
             return reloaded_retriever
         except Exception as e:
-            print(e)
+            print("Loading retriever exception", e)
             return None
 
 

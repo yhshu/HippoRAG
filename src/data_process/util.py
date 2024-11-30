@@ -125,4 +125,38 @@ def convert_html_to_markdown(html_content):
     converter = html2text.HTML2Text()
     converter.ignore_links = False
     markdown_text = converter.handle(html_content)
-    print(markdown_text)
+    return markdown_text
+
+
+def split_html_to_text_segments(html_content, max_words_per_segment=128):
+    # Parse HTML content to extract pure text
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html_content, "html.parser")
+    pure_text = soup.get_text(separator=" ", strip=True)
+    pure_text = " ".join(pure_text.split())
+
+    # Split text into sentences
+    import nltk
+    sentences = nltk.sent_tokenize(pure_text)
+
+    # Group sentences into segments, ensuring each segment does not exceed the max word limit
+    segments = []
+    current_segment = []
+    current_word_count = 0
+
+    for sentence in sentences:
+        sentence_word_count = len(sentence.split())
+        # If adding the current sentence exceeds the max word limit, finalize the current segment
+        if current_word_count + sentence_word_count > max_words_per_segment:
+            segments.append(" ".join(current_segment))
+            current_segment = [sentence]
+            current_word_count = sentence_word_count
+        else:
+            current_segment.append(sentence)
+            current_word_count += sentence_word_count
+
+    # Add the last segment if it contains any sentences
+    if current_segment:
+        segments.append(" ".join(current_segment))
+
+    return segments

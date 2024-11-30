@@ -6,7 +6,7 @@ import argparse
 import json
 import random
 
-from src.data_process.util import convert_html_to_markdown
+from src.data_process.util import convert_html_to_markdown, split_html_to_text_segments, generate_hash
 from src.processing import query_data_has_duplication, corpus_has_duplication
 
 # coding=utf-8
@@ -162,15 +162,29 @@ if __name__ == '__main__':
 
     print(f'{len(raw_data)} samples loaded from data/v1.0-simplified-nq-dev.jsonl')
     random.seed(1)
-    sampled_data = random.sample(raw_data, 1000)
-    corpus = []
+    sampled_data = random.sample(raw_data, 300)
     data = []
-
     for sample in sampled_data:
-        simplified_sample = simplify_nq_example(sample)
-        document_text = simplified_sample['document_text']
-        markdown = convert_html_to_markdown(document_text)
-        data.append(simplified_sample)
+        sample['question'] = sample['question_text']
+        del sample['question_text']
+        data.append(sample)
+
+    corpus = []
+    corpus_content_hash_set = set()
+    for sample in data:
+        segments = split_html_to_text_segments(sample['document_html'])
+        for segment in segments:
+            content_hash = generate_hash(segment)
+            if content_hash not in corpus_content_hash_set:
+                corpus_content_hash_set.add(content_hash)
+                corpus.append({'idx': len(corpus), 'title': sample['document_title'], 'text': segment})
 
     query_data_has_duplication(data, False, False)
     corpus_has_duplication(corpus)
+
+    with open('data/nq.json', 'w') as f:
+        json.dump(data, f, indent=2)
+        print(f'{len(data)} samples saved to data/nq.json')
+    with open('data/nq_corpus.json', 'w') as f:
+        json.dump(corpus, f, indent=2)
+        print(f'{len(corpus)} samples saved to data/nq_corpus.json')
