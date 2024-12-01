@@ -51,7 +51,8 @@ if __name__ == '__main__':
     num_entities = 0
 
     for i, passage in enumerate(retrieval_corpus):
-        idx = str(passage['idx']) if 'idx' in passage else str(i)
+        # idx = str(passage['idx']) if 'idx' in passage else str(i)
+        idx = str(i)
         try:
             extraction = json.loads(response[idx]).get('triples', [])
         except:
