@@ -1,7 +1,8 @@
-import argparse
 import sys
 
 sys.path.append('.')
+
+import argparse
 import json
 import os
 import random
@@ -66,9 +67,9 @@ if __name__ == '__main__':
     parser.add_argument('--linker', type=str)
     args = parser.parse_args()
 
-
     train_split = {'beir_msmarco_train_1000': 1000, 'musique_train_1000': 500, '2wikimultihopqa_train_1000': 500}
     dev_split = {'beir_msmarco_dev_1000': 1000, 'musique_dev_1000': 500, '2wikimultihopqa_dev_1000': 500}
+    num_before_filter = 5
 
     os.makedirs('data/fact_filter', exist_ok=True)
 
@@ -77,7 +78,7 @@ if __name__ == '__main__':
     if not os.path.isfile(train_output_path):
         for dataset_name in train_split:
             num_sample = train_split[dataset_name]
-            samples, metrics = collect_filter_data(dataset_name, num_sample, 5, args.extractor, args.retriever, args.linker)
+            samples, metrics = collect_filter_data(dataset_name, num_sample, num_before_filter, args.extractor, args.retriever, args.linker)
             train_samples.extend(samples)
             print(f'{dataset_name}: {metrics}')
         with open(train_output_path, 'w') as f:
@@ -91,7 +92,7 @@ if __name__ == '__main__':
     if not os.path.isfile(dev_output_path):
         for dataset_name in dev_split:
             num_sample = dev_split[dataset_name]
-            samples, metrics = collect_filter_data(dataset_name, num_sample, 5, args.extractor, args.retriever, args.linker)
+            samples, metrics = collect_filter_data(dataset_name, num_sample, num_before_filter, args.extractor, args.retriever, args.linker)
             dev_samples.extend(samples)
             print(f'{dataset_name}: {metrics}')
         with open(dev_output_path, 'w') as f:

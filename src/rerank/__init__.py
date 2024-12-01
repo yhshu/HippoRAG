@@ -380,10 +380,10 @@ class DSPyFilter(Reranker):
 
         self.program = FactFilterProgram()
         if model_name.startswith('gpt-'):
-            dspy_llm = dspy.LM(model=f"{model_name}", max_tokens=3000, temperature=0.0)
+            dspy_llm = dspy.LM(model=f"{model_name}", max_tokens=512, temperature=0.0)
         else:
             url = f'http://{addr}:{port}/v1'
-            dspy_llm = dspy.LM(model=f"openai/{model_name}", max_tokens=3000, temperature=0.0, api_base=url, api_key='osunlp')
+            dspy_llm = dspy.LM(model=f"openai/{model_name}", max_tokens=512, temperature=0.0, api_base=url, api_key='osunlp')
         dspy.settings.configure(lm=dspy_llm)
         if dspy_file_path is not None:
             if os.path.isfile(dspy_file_path):
