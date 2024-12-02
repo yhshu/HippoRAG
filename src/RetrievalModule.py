@@ -1,9 +1,9 @@
 import sys
 
+sys.path.append('.')
 from src.lm_wrapper.gritlm import GritLMWrapper
 from src.lm_wrapper.sentence_transformers_util import SentenceTransformersWrapper
 
-sys.path.append('.')
 import _pickle as pickle
 import argparse
 import os.path
@@ -17,7 +17,6 @@ import os
 import torch
 from tqdm import tqdm
 
-import faiss
 import gc
 
 from transformers import AutoModel, AutoTokenizer
@@ -267,135 +266,217 @@ class RetrievalModule:
 
         return all_cls, all_strings
 
-    def retrieve_knn(self, queries, knowledge_base, k=2047):
+    # def retrieve_knn(self, queries, knowledge_base, k=2047):
+    #     original_vecs = []
+    #     new_vecs = []
+    #
+    #     print('knowledge base size: ', len(knowledge_base))
+    #     print('vector dict size: ', len(self.vector_dict))
+    #     for string in knowledge_base:
+    #         original_vecs.append(self.vector_dict[string])
+    #
+    #     for string in queries:
+    #         new_vecs.append(self.vector_dict[string])
+    #
+    #     if len(original_vecs) == 0 or len(new_vecs) == 0:
+    #         return {}
+    #
+    #     original_vecs = np.vstack(original_vecs)
+    #     new_vecs = np.vstack(new_vecs)
+    #
+    #     original_vecs = original_vecs.astype(np.float32)
+    #     new_vecs = new_vecs.astype(np.float32)
+    #
+    #     import faiss
+    #     faiss.normalize_L2(original_vecs)
+    #     faiss.normalize_L2(new_vecs)
+    #
+    #     # Preparing Data for k-NN Algorithm
+    #     print('Chunking')
+    #
+    #     dim = len(original_vecs[0])
+    #     index_split = 4
+    #     index_chunks = np.array_split(original_vecs, index_split)
+    #     query_chunks = np.array_split(new_vecs, 100)
+    #
+    #     # Building and Querying FAISS Index by parts to keep memory usage manageable.
+    #     print('Building Index')
+    #
+    #     index_chunk_D = []
+    #     index_chunk_I = []
+    #
+    #     current_zero_index = 0
+    #
+    #     for num, index_chunk in enumerate(index_chunks):
+    #
+    #         print('Running Index Part {}'.format(num))
+    #         index = faiss.IndexFlat(dim, faiss.METRIC_INNER_PRODUCT)  # build the index
+    #
+    #         if faiss.get_num_gpus() > 1:
+    #             gpu_resources = []
+    #
+    #             for i in range(faiss.get_num_gpus()):
+    #                 res = faiss.StandardGpuResources()
+    #                 gpu_resources.append(res)
+    #
+    #             gpu_index = faiss.index_cpu_to_gpu_multiple_py(gpu_resources, index)
+    #         else:
+    #             print('No GPU is available. Running on CPU. Please check CUDA_VISIBLE_DEVICES if you have any GPU.')
+    #             gpu_resources = faiss.StandardGpuResources()
+    #             gpu_index = faiss.index_cpu_to_gpu(gpu_resources, 0, index)
+    #
+    #         print()
+    #         gpu_index.add(index_chunk)
+    #
+    #         D, I = [], []
+    #
+    #         for q in tqdm(query_chunks):
+    #             d, i = gpu_index.search(q, k)
+    #
+    #             i += current_zero_index
+    #
+    #             D.append(d)
+    #             I.append(i)
+    #
+    #         index_chunk_D.append(D)
+    #         index_chunk_I.append(I)
+    #
+    #         current_zero_index += len(index_chunk)
+    #
+    #         #             print(subprocess.check_output(['nvidia-smi']))
+    #
+    #         del gpu_index
+    #         del gpu_resources
+    #         gc.collect()
+    #
+    #     print('Combining Index Chunks')
+    #
+    #     stacked_D = []
+    #     stacked_I = []
+    #
+    #     for D, I in zip(index_chunk_D, index_chunk_I):
+    #         D = np.vstack(D)
+    #         I = np.vstack(I)
+    #
+    #         stacked_D.append(D)
+    #         stacked_I.append(I)
+    #
+    #     del index_chunk_D
+    #     del index_chunk_I
+    #     gc.collect()
+    #
+    #     stacked_D = np.hstack(stacked_D)
+    #     stacked_I = np.hstack(stacked_I)
+    #
+    #     full_sort_I = []
+    #     full_sort_D = []
+    #
+    #     for d, i in tqdm(zip(stacked_D, stacked_I)):
+    #         sort_indices = np.argsort(d, kind='stable')
+    #
+    #         sort_indices = sort_indices[::-1]
+    #
+    #         i = i[sort_indices][:k]
+    #         d = d[sort_indices][:k]
+    #
+    #         full_sort_I.append(i)
+    #         full_sort_D.append(d)
+    #
+    #     del stacked_D
+    #     del stacked_I
+    #     gc.collect()
+    #
+    #     sorted_candidate_dictionary = {}
+    #
+    #     for new_index, nn_info in tqdm(enumerate(zip(full_sort_I, full_sort_D))):
+    #         nn_inds, nn_dists = nn_info
+    #         nns = [knowledge_base[i] for i in nn_inds]
+    #
+    #         sorted_candidate_dictionary[queries[new_index]] = (nns, nn_dists)
+    #
+    #     return sorted_candidate_dictionary
 
-        original_vecs = []
-        new_vecs = []
 
-        print('knowledge base size: ', len(knowledge_base))
-        print('vector dict size: ', len(self.vector_dict))
-        for string in knowledge_base:
-            original_vecs.append(self.vector_dict[string])
+    def retrieve_knn(self, queries, knowledge_base, k=2047, batch_size=1000, index_batch_size=10000):
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        for string in queries:
-            new_vecs.append(self.vector_dict[string])
+        original_vecs = [self.vector_dict[s] for s in knowledge_base]
 
-        if len(original_vecs) == 0 or len(new_vecs) == 0:
+        if len(original_vecs) == 0:
             return {}
 
-        original_vecs = np.vstack(original_vecs)
-        new_vecs = np.vstack(new_vecs)
+        original_vecs = torch.tensor(original_vecs, dtype=torch.float32)
+        original_vecs = torch.nn.functional.normalize(original_vecs, dim=1)
 
-        original_vecs = original_vecs.astype(np.float32)
-        new_vecs = new_vecs.astype(np.float32)
+        new_vecs = [self.vector_dict[s] for s in queries]
+        if len(new_vecs) == 0:
+            return {}
 
-        faiss.normalize_L2(original_vecs)
-        faiss.normalize_L2(new_vecs)
+        new_vecs = torch.tensor(new_vecs, dtype=torch.float32)
+        new_vecs = torch.nn.functional.normalize(new_vecs, dim=1)
 
-        # Preparing Data for k-NN Algorithm
-        print('Chunking')
+        result = {}
 
-        dim = len(original_vecs[0])
-        index_split = 4
-        index_chunks = np.array_split(original_vecs, index_split)
-        query_chunks = np.array_split(new_vecs, 100)
+        def get_query_batches(query_vecs, batch_size):
+            for i in range(0, len(query_vecs), batch_size):
+                yield query_vecs[i:i + batch_size], i
 
-        # Building and Querying FAISS Index by parts to keep memory usage manageable.
-        print('Building Index')
+        def get_knowledge_base_batches(knowledge_base_vecs, index_batch_size):
+            for i in range(0, len(knowledge_base_vecs), index_batch_size):
+                yield knowledge_base_vecs[i:i + index_batch_size], i
 
-        index_chunk_D = []
-        index_chunk_I = []
+        for query_batch, batch_start_idx in get_query_batches(new_vecs, batch_size):
+            query_batch = query_batch.clone().detach()
+            query_batch = query_batch.to(device)
 
-        current_zero_index = 0
+            batch_similarities = []
+            batch_indices = []
 
-        for num, index_chunk in enumerate(index_chunks):
+            offset_kb = 0
 
-            print('Running Index Part {}'.format(num))
-            index = faiss.IndexFlat(dim, faiss.METRIC_INNER_PRODUCT)  # build the index
+            for kb_batch, kb_start_idx in get_knowledge_base_batches(original_vecs, index_batch_size):
+                kb_batch = kb_batch.to(device)
+                batch_size_kb = kb_batch.size(0)
 
-            if faiss.get_num_gpus() > 1:
-                gpu_resources = []
+                similarity = torch.mm(query_batch, kb_batch.T)
 
-                for i in range(faiss.get_num_gpus()):
-                    res = faiss.StandardGpuResources()
-                    gpu_resources.append(res)
+                similarities, indices = torch.topk(similarity, min(k, batch_size_kb), dim=1, largest=True, sorted=True)
 
-                gpu_index = faiss.index_cpu_to_gpu_multiple_py(gpu_resources, index)
-            else:
-                print('No GPU is available. Running on CPU. Please check CUDA_VISIBLE_DEVICES if you have any GPU.')
-                gpu_resources = faiss.StandardGpuResources()
-                gpu_index = faiss.index_cpu_to_gpu(gpu_resources, 0, index)
+                indices += offset_kb
 
-            print()
-            gpu_index.add(index_chunk)
+                batch_similarities.append(similarities)
+                batch_indices.append(indices)
 
-            D, I = [], []
+                del similarity
+                kb_batch = kb_batch.cpu()
+                torch.cuda.empty_cache()
 
-            for q in tqdm(query_chunks):
-                d, i = gpu_index.search(q, k)
+                offset_kb += batch_size_kb
+            # end for each kb batch
 
-                i += current_zero_index
+            batch_similarities = torch.cat(batch_similarities, dim=1)
+            batch_indices = torch.cat(batch_indices, dim=1)
 
-                D.append(d)
-                I.append(i)
+            final_similarities, final_indices = torch.topk(batch_similarities, min(k, batch_similarities.size(1)), dim=1, largest=True, sorted=True)
+            final_indices = final_indices.cpu()
+            final_similarities = final_similarities.cpu()
 
-            index_chunk_D.append(D)
-            index_chunk_I.append(I)
+            for i in range(final_indices.size(0)):
+                query_idx = batch_start_idx + i
+                query = queries[query_idx]
+                indices_i = final_indices[i]
+                similarities_i = final_similarities[i]
 
-            current_zero_index += len(index_chunk)
+                global_indices = batch_indices[i][indices_i]
 
-            #             print(subprocess.check_output(['nvidia-smi']))
+                knn_strings = [knowledge_base[idx] for idx in global_indices.cpu().numpy()]
+                result[query] = (knn_strings, similarities_i.numpy().tolist())
 
-            del gpu_index
-            del gpu_resources
-            gc.collect()
+            query_batch = query_batch.cpu()
+            torch.cuda.empty_cache()
+        # end for each query batch
 
-        print('Combining Index Chunks')
-
-        stacked_D = []
-        stacked_I = []
-
-        for D, I in zip(index_chunk_D, index_chunk_I):
-            D = np.vstack(D)
-            I = np.vstack(I)
-
-            stacked_D.append(D)
-            stacked_I.append(I)
-
-        del index_chunk_D
-        del index_chunk_I
-        gc.collect()
-
-        stacked_D = np.hstack(stacked_D)
-        stacked_I = np.hstack(stacked_I)
-
-        full_sort_I = []
-        full_sort_D = []
-
-        for d, i in tqdm(zip(stacked_D, stacked_I)):
-            sort_indices = np.argsort(d, kind='stable')
-
-            sort_indices = sort_indices[::-1]
-
-            i = i[sort_indices][:k]
-            d = d[sort_indices][:k]
-
-            full_sort_I.append(i)
-            full_sort_D.append(d)
-
-        del stacked_D
-        del stacked_I
-        gc.collect()
-
-        sorted_candidate_dictionary = {}
-
-        for new_index, nn_info in tqdm(enumerate(zip(full_sort_I, full_sort_D))):
-            nn_inds, nn_dists = nn_info
-            nns = [knowledge_base[i] for i in nn_inds]
-
-            sorted_candidate_dictionary[queries[new_index]] = (nns, nn_dists)
-
-        return sorted_candidate_dictionary
+        return result
 
 
 if __name__ == '__main__':
