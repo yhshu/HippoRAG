@@ -114,7 +114,8 @@ def parallel_qa_read(data: list, demos: list, args, client, output_path: str, to
             print('Parsing prediction:', e, response)
             pred_ans = response
 
-        gold_ans = sample['answer'] if 'answer' in sample else sample['gold_ans']
+        if 'answer' in sample or 'gold_ans' in sample:
+            gold_ans = sample['answer'] if 'answer' in sample else sample['gold_ans']
         if args.dataset == 'hotpotqa':
             em, f1, precision, recall = update_answer({'em': 0, 'f1': 0, 'precision': 0, 'recall': 0}, pred_ans, gold_ans)
             return sample_idx, sample_id, retrieved, pred_ans, {'em': em, 'f1': f1, 'precision': precision, 'recall': recall}
