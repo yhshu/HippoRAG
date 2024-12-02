@@ -84,7 +84,10 @@ def qa_read(query: str, passages: list, few_shot: list, client):
 def parallel_qa_read(data: list, demos: list, args, client, output_path: str, total_metrics: dict, sample_id_set: set):
     def process_sample(sample):
         sample_idx, sample = sample
-        sample_id = sample['_id'] if '_id' in sample else sample['id']
+        if '_id' in sample or 'id' in sample:
+            sample_id = sample['_id'] if '_id' in sample else sample['id']
+        else:
+            sample_id = sample_idx
         if sample_id in sample_id_set:
             return None  # Skip processing if sample already processed
         query = sample['question']
