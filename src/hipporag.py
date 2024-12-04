@@ -690,6 +690,13 @@ class HippoRAG:
         self.kg_adj_list = defaultdict(dict)
         self.kg_inverse_adj_list = defaultdict(dict)
 
+        try:
+            self.graph_plus is not None
+        except Exception as e:
+            print(f'Graph not loaded: {e}, corpus: {self.corpus_name}, extractor: {self.extraction_model_name_processed}, graph retriever: {self.graph_creating_retriever_name_processed}, '
+                  f'linker: {self.linking_retriever_name_processed}, graph type: {self.graph_type}')
+            exit(1)
+
         for edge, weight in tqdm(self.graph_plus.items(), total=len(self.graph_plus), desc='Building Graph'):
             edge1 = edge[0]
             edge2 = edge[1]

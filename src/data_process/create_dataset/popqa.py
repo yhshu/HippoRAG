@@ -1,8 +1,8 @@
+import argparse
 import sys
 
 sys.path.append('.')
 
-from src.processing import query_data_has_duplication, corpus_has_duplication
 import json
 import os
 import random
@@ -12,12 +12,17 @@ from tqdm import tqdm
 
 from src.data_process.util import generate_hash
 from src.pangu.retrieval_api import BM25SparseRetriever
+from src.processing import query_data_has_duplication, corpus_has_duplication
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--wiki', type=str)
+    args = parser.parse_args()
+
     df = pd.read_csv('data/popQA.tsv', sep='\t')
 
     data = []
-    for row in df.iterrows():
+    for row in tqdm(df.iterrows(), desc='Reading data...'):
         data.append(json.loads(row[1].to_json()))
 
     random.seed(1)
@@ -30,7 +35,7 @@ if __name__ == '__main__':
     full_corpus = []
     contents = []
     content_hash_set = set()
-    with open('/research/nfs_su_809/workspace/shu.251/atlas/corpus/corpora/wiki/enwiki-dec2021/text-list-100-sec.jsonl') as f:
+    with open(args.wiki) as f:
         for line in tqdm(f, 'Processing wiki text'):
             item = json.loads(line.strip())
             title = item['title'] + ' - ' + item['section']
@@ -49,9 +54,14 @@ if __name__ == '__main__':
     corpus_content_hash_set = set()
     for sample in tqdm(data, 'Collecting relevant wiki text'):
         k = 10
+        indices = set()
         top_indices = bm25_retriever.get_top_k_indices(sample['question'], k, True, False)
-        assert len(top_indices) == k
-        for idx in top_indices:
+        indices.update(top_indices)
+        top_indices = bm25_retriever.get_top_k_indices(sample['o_wiki_title'], k, True, False)
+        indices.update(top_indices)
+
+        assert  k <= len(indices) <= 2 * k
+        for idx in indices:
             content = full_corpus[idx]['title'] + '\n' + full_corpus[idx]['text']
             content_hash = generate_hash(content)
             if content_hash not in corpus_content_hash_set:

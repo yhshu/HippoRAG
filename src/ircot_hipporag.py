@@ -321,6 +321,7 @@ if __name__ == '__main__':
                 gold_items = set([item[0] for item in gold_passages])
                 retrieved_items = [passage.split('\n')[0].strip() for passage in retrieved_passages]
             else:
+                assert 'paragraphs' in sample, "`paragraphs` should be in sample, or consider set `--do_eval` to False"
                 gold_passages = [item for item in sample['paragraphs'] if item['is_supporting']]
                 gold_items = set([item['title'] + '\n' + (item['text'] if 'text' in item else item['paragraph_text']) for item in gold_passages])
                 retrieved_items = retrieved_passages

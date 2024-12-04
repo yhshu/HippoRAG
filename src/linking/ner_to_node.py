@@ -141,7 +141,15 @@ def graph_search_with_entities(hipporag: HippoRAG, query_ner_list: list, all_phr
             else:
                 assert False, f'Graph Algorithm {hipporag.graph_alg} Not Implemented'
 
-            fact_prob = hipporag.triples_to_phrases_mat.dot(ppr_phrase_probs)
+            try:
+                if 'passage_node' in hipporag.graph_type:
+                    fact_prob = hipporag.triples_to_phrases_mat.dot(ppr_phrase_probs[:hipporag.triples_to_phrases_mat.shape[1]])
+                else:
+                    fact_prob = hipporag.triples_to_phrases_mat.dot(ppr_phrase_probs)
+            except Exception as e:
+                print(e)
+                print(f'matrix dot exception， triple_to_phrase matrix shape: {hipporag.triples_to_phrases_mat.shape}, ppr_phrase_probs shape: {ppr_phrase_probs.shape}')
+                exit(1)
             ppr_doc_prob = hipporag.docs_to_triples_mat.dot(fact_prob)
             ppr_doc_prob = min_max_normalize(ppr_doc_prob)
         else:  # dpr_only or no entities found

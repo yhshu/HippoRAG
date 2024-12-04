@@ -3,7 +3,6 @@ import json
 import random
 import re
 
-from bs4 import BeautifulSoup
 from datasets import load_dataset
 from tqdm import tqdm
 
@@ -13,6 +12,7 @@ from src.processing import query_data_has_duplication, corpus_has_duplication
 
 
 def process_html_to_raw_text(html_text):
+    from bs4 import BeautifulSoup
     soup = BeautifulSoup(html_text, "html.parser")
     text = soup.get_text()
     text = text.replace('\xa0', ' ')

@@ -8,8 +8,6 @@ import re
 import string
 import itertools
 from collections import Counter
-import pickle
-import os
 
 
 def normalize_answer(s):
