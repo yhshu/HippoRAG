@@ -8,9 +8,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from src.langchain_util import init_langchain_model
 
 from src.baselines.ircot import parse_prompt
-from src.qa.hotpotqa_evaluation import update_answer
-from src.qa.musique_evaluation import evaluate
-from src.qa.twowikimultihopqa_evaluation import exact_match_score, f1_score
+from src.qa.twowikimultihopqa_evaluation import compare_prediction_and_golds
 
 import os.path
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -114,20 +112,20 @@ def parallel_qa_read(data: list, demos: list, args, client, output_path: str, to
             print('Parsing prediction:', e, response)
             pred_ans = response
 
+        gold_ans = None
         if 'answer' in sample or 'gold_ans' in sample:
             gold_ans = sample['answer'] if 'answer' in sample else sample['gold_ans']
-        if args.dataset == 'hotpotqa':
-            em, f1, precision, recall = update_answer({'em': 0, 'f1': 0, 'precision': 0, 'recall': 0}, pred_ans, gold_ans)
-            return sample_idx, sample_id, retrieved, pred_ans, {'em': em, 'f1': f1, 'precision': precision, 'recall': recall}
-        elif args.dataset == 'musique':
-            em, f1 = evaluate({'predicted_answer': pred_ans}, sample)
-            return sample_idx, sample_id, retrieved, pred_ans, {'em': em, 'f1': f1}
-        elif args.dataset == '2wikimultihopqa':
-            em = 1 if exact_match_score(pred_ans, gold_ans) else 0
-            f1, precision, recall = f1_score(pred_ans, gold_ans)
-            return sample_idx, sample_id, retrieved, pred_ans, {'em': em, 'f1': f1, 'precision': precision, 'recall': recall}
-        else:
-            return sample_idx, sample_id, retrieved, pred_ans, {}
+        elif 'reference' in sample:
+            gold_ans = sample['reference']
+        assert gold_ans is not None
+        if isinstance(gold_ans, str):
+            gold_ans = [gold_ans]
+        assert isinstance(gold_ans, list)
+        gold_ans = set(gold_ans)
+        if 'answer_aliases' in sample:
+            gold_ans.update(sample['answer_aliases'])
+        em, f1, precision, recall = compare_prediction_and_golds(pred_ans, gold_ans)
+        return sample_idx, sample_id, retrieved, pred_ans, {'em': em, 'f1': f1, 'precision': precision, 'recall': recall}
 
     with ThreadPoolExecutor(max_workers=args.thread) as executor:
         futures = [executor.submit(process_sample, (sample_idx, sample)) for sample_idx, sample in enumerate(data)]
@@ -169,8 +167,8 @@ if __name__ == '__main__':
     if args.data:
         data = json.load(open(args.data, 'r'))
     else:
-        print('Please provide the retrieval results')
-        exit(1)
+        data = json.load(open(f'data/{args.dataset}.json', 'r'))
+        print('Dataset without retrieval results is loaded')
 
     if args.retriever == 'none':
         args.num_doc = 0

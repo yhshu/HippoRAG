@@ -60,7 +60,7 @@ def eval_answer(prediction, gold):
     return em, f1, prec, recall
 
 
-def update_answer(metrics, prediction, golds):
+def compare_prediction_and_golds(prediction, golds):
     max_em, max_f1, max_prec, max_recall = 0, 0, 0, 0
 
     for gold in golds:
@@ -70,6 +70,10 @@ def update_answer(metrics, prediction, golds):
         max_f1 = max(max_f1, f1)
         max_prec = max(max_prec, prec)
         max_recall = max(max_recall, recall)
+    return max_em, max_f1, max_prec, max_recall
+
+def update_answer(metrics, prediction, golds):
+    max_em, max_f1, max_prec, max_recall = compare_prediction_and_golds(prediction, golds)
 
     metrics['em'] += float(max_em)
     metrics['f1'] += max_f1
