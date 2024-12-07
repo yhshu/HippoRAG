@@ -117,6 +117,9 @@ def parallel_qa_read(data: list, demos: list, args, client, output_path: str, to
             gold_ans = sample['answer'] if 'answer' in sample else sample['gold_ans']
         elif 'reference' in sample:
             gold_ans = sample['reference']
+        elif 'obj' in sample:
+            gold_ans = set([sample['obj']] + [sample['possible_answers']] + [sample['o_wiki_title']] + [sample['o_aliases']])
+            gold_ans = list(gold_ans)
         assert gold_ans is not None
         if isinstance(gold_ans, str):
             gold_ans = [gold_ans]

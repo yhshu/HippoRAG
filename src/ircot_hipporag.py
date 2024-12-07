@@ -312,14 +312,14 @@ if __name__ == '__main__':
 
         # calculate recall
         if do_eval:
-            if args.dataset in ['hotpotqa', 'hotpotqa_train']:
+            if 'supporting_facts' in sample:  # hotpotqa, 2wikimultihopqa
                 gold_passages = [item for item in sample['supporting_facts']]
                 gold_items = set([item[0] for item in gold_passages])
                 retrieved_items = [passage.split('\n')[0].strip() for passage in retrieved_passages]
-            elif args.dataset in ['2wikimultihopqa']:
-                gold_passages = [item for item in sample['supporting_facts']]
-                gold_items = set([item[0] for item in gold_passages])
-                retrieved_items = [passage.split('\n')[0].strip() for passage in retrieved_passages]
+            elif 'contexts' in sample:
+                gold_passages = [item for item in sample['contexts'] if item['is_supporting']]
+                gold_items = [item['title'] + '\n' + item['text'] for item in sample['contexts'] if item['is_supporting']]
+                retrieved_items = retrieved_passages
             else:
                 assert 'paragraphs' in sample, "`paragraphs` should be in sample, or consider set `--do_eval` to False"
                 gold_passages = [item for item in sample['paragraphs'] if item['is_supporting']]
@@ -335,8 +335,10 @@ if __name__ == '__main__':
                         phrases_in_gold_docs.append(hipporag.get_phrases_in_doc_by_str(passage_content))
                     # elif isinstance(gold_passage, list) and len(gold_passage) == 2 and isinstance(gold_passage[1], int):
 
-            if args.dataset in ['hotpotqa', '2wikimultihopqa', 'hotpotqa_train']:
+            if 'supporting_facts' in sample:
                 sample['supporting_docs'] = [item for item in sample['supporting_facts']]
+            elif 'contexts' in sample:
+                sample['supporting_docs'] = [item for item in sample['contexts'] if item['is_supporting']]
             else:
                 sample['supporting_docs'] = [item for item in sample['paragraphs'] if item['is_supporting']]
                 del sample['paragraphs']

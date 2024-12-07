@@ -29,7 +29,6 @@ def collect_filter_data(dataset_name: str, num_sample: int, num_before_filter: i
     metrics = defaultdict(float)
     for sample in tqdm(data, desc=f'Collecting data for {dataset_name}'):
         question = sample['question']
-        # fact_before_filter = hipporag.query_to_fact(question, num_before_filter)
         fact_before_filter = hipporag.query_to_fact(question, num_before_filter)
 
         # if dataset_name.startswith('beir'):
@@ -67,8 +66,8 @@ if __name__ == '__main__':
     parser.add_argument('--linker', type=str)
     args = parser.parse_args()
 
-    train_split = {'beir_msmarco_train_1000': 1000, 'musique_train_1000': 500, '2wikimultihopqa_train_1000': 500}
-    dev_split = {'beir_msmarco_dev_1000': 1000, 'musique_dev_1000': 500, '2wikimultihopqa_dev_1000': 500}
+    train_split = {'musique_train_1000': 500, '2wikimultihopqa_train_1000': 500}
+    dev_split = {'musique_dev_1000': 500, '2wikimultihopqa_dev_1000': 500}
     num_before_filter = 5
 
     os.makedirs('data/fact_filter', exist_ok=True)

@@ -22,8 +22,7 @@ class FactFilteringSignature(dspy.Signature):
    Filter facts based on their relevance to the query. Carefully generate related facts from the candidate list that have strong connection to the query.
 
    - Multi-hop reasoning may be required, meaning you might need to combine multiple facts to form a complete response.
-   - If the query is a claim, relevance means the fact supports or contradicts it.
-   - For queries seeking specific information, relevance means the fact aids in reasoning and providing an answer.
+   - The relevance means the fact aids in reasoning and providing an answer.
    - Select up to 4 relevant facts from the candidate list and output in JSON format without any other words, e.g.,
 
    ```json
@@ -98,7 +97,49 @@ def filtering_precision(example, pred, trace=None):
         return 1
     elif len(pred_set) == 0 and len(gold_set) > 0:
         return 0
-    return len(gold_set.intersection(pred_set)) / len(pred_set)
+    elif len(gold_set) == 0 and len(pred_set) > 0:
+        return 0
+
+    if trace is None:
+        return len(gold_set.intersection(pred_set)) / len(pred_set)
+    else:
+        return gold_set == pred_set
+
+
+def filtering_recall(example, pred, trace=None):
+    try:
+        if len(pred) == 0:
+            pred_list = []
+        else:
+            pred_list = pred.fact_after_filter.fact
+    except Exception as e:
+        print(f"Error: {e}")
+        pred_list = []
+    try:
+        gold = example.fact_after_filter
+        gold_list = json.loads(gold).get('fact', [])
+    except Exception as e:
+        print(f"Error: {e}")
+        gold_list = []
+
+    gold_set = set([tuple(t) for t in gold_list])
+    pred_set = set([tuple(t) for t in pred_list])
+    if len(pred_set) == 0 and len(gold_set) == 0:
+        return 1
+    elif len(pred_set) == 0 and len(gold_set) > 0:
+        return 0
+    elif len(gold_set) == 0 and len(pred_set) > 0:
+        return 1
+    return len(gold_set.intersection(pred_set)) / len(gold_set)
+
+
+def filtering_f1(example, pred, trace=None):
+    p = filtering_precision(example, pred, trace)
+    r = filtering_recall(example, pred, trace)
+    if p + r == 0:
+        return 0
+    f1 = 2 * p * r / (p + r)
+    return f1
 
 
 if __name__ == '__main__':
@@ -155,8 +196,10 @@ if __name__ == '__main__':
     # Save optimize program for future use
     os.makedirs("output/dspy", exist_ok=True)
     model_label = args.llm.replace("/", "_")
-    optimized_program.save(f"output/dspy/fact_filter_mipro_optimized_{model_label}.json")
+    output_path = f"output/dspy/fact_filter_mipro_optimized_{model_label}.json"
+    optimized_program.save(output_path)
 
     # Evaluate optimized program
     print(f"Evaluate optimized program...")
     evaluate(optimized_program, devset=devset[:])
+    print(f"Optimized program saved at {output_path}")
