@@ -1,5 +1,8 @@
 import sys
 
+from langchain.globals import set_llm_cache
+from langchain_community.cache import SQLiteCache
+
 sys.path.append('.')
 
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
@@ -163,6 +166,10 @@ if __name__ == '__main__':
     parser.add_argument('--force_retry', action='store_true')
     args = parser.parse_args()
 
+    if args.llm_model.startswith('gpt-'):
+        llm_model_name = args.llm_model.replace('/', '_')
+        set_llm_cache(SQLiteCache(database_path=f".qa_{llm_model_name}.db"))
+
     retriever_name = args.retriever.replace('/', '_') if args.retriever else 'none'
     output_path = f'exp/qa_{args.dataset}_{retriever_name}_{args.llm_model}_demo_{args.num_demo}_doc_{args.num_doc}.json'
     processed_id_set = set()
@@ -182,10 +189,11 @@ if __name__ == '__main__':
         data = json.load(open(f'data/{args.dataset}.json', 'r'))
         demos = parse_prompt(prompt_path, False)
     else:
-        if os.path.isfile(output_path):  # resume from previous results
-            data = json.load(open(output_path, 'r'))
-            for key in total_metrics.keys():
-                total_metrics[key] = sum([sample[key] for sample in data if key in sample])
+        if args.force_retry is False:
+            if os.path.isfile(output_path):  # resume from previous results
+                data = json.load(open(output_path, 'r'))
+                for key in total_metrics.keys():
+                    total_metrics[key] = sum([sample[key] for sample in data if key in sample])
         prompt_path = f'data/ircot_prompts/{prompt_dataset}/gold_with_3_distractors_context_cot_qa_codex.txt'
         corpus = json.load(open(f'data/{args.dataset}_corpus.json', 'r'))
         demos = parse_prompt(prompt_path)
@@ -198,6 +206,7 @@ if __name__ == '__main__':
             processed_id_set = {sample['id'] for sample in data if 'prediction' in sample}
     else:
         processed_id_set = set()
+        total_metrics = {'qa_em': 0, 'qa_f1': 0, 'qa_precision': 0, 'qa_recall': 0}
 
     assert data and len(data)
     demos = demos[:args.num_demo]

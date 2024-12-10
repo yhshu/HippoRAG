@@ -374,9 +374,14 @@ class VLLMFilter(LLMFilter):
 
 
 class DSPyFilter(Reranker):
-    def __init__(self, model_name, dspy_file_path=None, addr='localhost', port='8000'):
+    def __init__(self, model_name,
+                 # dspy_file_path=None,
+                 dspy_file_path='output/dspy/fact_filter_mipro_optimized_meta-llama_Llama-3.3-70B-Instruct.json',
+                 addr='localhost', port='8000'):
         from src.rerank.dspy_optimize import FactFilterProgram
         import dspy
+
+        model_name_processed = model_name.replace('/', '_')
 
         self.program = FactFilterProgram()
         if model_name.startswith('gpt-'):
@@ -387,9 +392,13 @@ class DSPyFilter(Reranker):
         dspy.settings.configure(lm=dspy_llm)
         if dspy_file_path is not None:
             if os.path.isfile(dspy_file_path):
+                print(f"Loading DSPy program from file {dspy_file_path}")
                 self.program.load(dspy_file_path)
+            elif os.path.isfile(f'output/dspy/fact_filter_mipro_optimized_{model_name_processed}.json'):
+                print(f"Loading DSPy program from file output/dspy/fact_filter_mipro_optimized_{model_name_processed}.json")
+                self.program.load(f'output/dspy/fact_filter_mipro_optimized_{model_name_processed}.json')
             else:
-                print(f"DSPy file {dspy_file_path} not found, using the default model.")
+                print(f"DSPy file {dspy_file_path} not found, using the default config.")
 
     def rerank(self, task: str, query, candidate_items, candidate_indices, len_after_rerank=None):
         fact_before_filter = {"fact": [list(candidate_item) for candidate_item in candidate_items]}
