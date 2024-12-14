@@ -332,7 +332,7 @@ if __name__ == '__main__':
 
             # record results
             phrases_in_gold_docs = []
-            if not hipporag.dpr_only:
+            if not hipporag.dpr_only and hipporag.linking_retriever_name_processed != 'bm25':
                 for gold_passage in gold_passages:
                     if isinstance(gold_passage, dict):
                         passage_content = gold_passage['text'] if 'text' in gold_passage else gold_passage['paragraph_text']

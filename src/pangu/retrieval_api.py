@@ -95,8 +95,10 @@ class BM25SparseRetriever(TextRetriever):
         if index_path is not None and len(os.listdir(index_path)) > 0:
             self.retriever = self.load(index_path)
             if self.retriever is None:
+                print(f"Failed to load index from {index_path}, rerun the preprocessing")
                 self._preprocess()
         else:
+            print(f"Index path is not given, rerun the preprocessing")
             self._preprocess()
         assert self.retriever is not None, 'retriever is None'
         assert self.retriever.corpus is not None, 'corpus is None'
@@ -125,9 +127,9 @@ class BM25SparseRetriever(TextRetriever):
         res_score = []
         for idx, result in enumerate(results[0]):
             try:
-                corpus_idx = self.corpus.index(result)
+                corpus_idx = self.retriever.corpus.index(result)
             except Exception as e:
-                print(f"Passage not found in corpus", e)
+                print(f"BM25 sparse retriever: passage not found in corpus", e)
                 exit(1)
             indices.append(corpus_idx)
             res_score.append(scores[0][idx])
@@ -154,12 +156,12 @@ class BM25SparseRetriever(TextRetriever):
             return None
 
         try:
-            reloaded_retriever = BM25SparseRetriever([])
             import bm25s
-            reloaded_retriever.retriever = bm25s.BM25.load(index_path, load_corpus=load_corpus)
-            return reloaded_retriever
+            retriever = bm25s.BM25.load(index_path, load_corpus=load_corpus)
+            return retriever
         except Exception as e:
             print("Loading retriever exception", e)
+            print('Index path:', index_path)
             return None
 
 

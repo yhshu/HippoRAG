@@ -142,7 +142,7 @@ class HippoRAG:
         self.node_to_doc_strategy = 'multiply'  # 'multiply', 'map'
 
         # Loading Important Corpus Files
-        if not self.dpr_only:
+        if not self.dpr_only and self.linking_retriever_name_processed != 'bm25':
             self.load_index_files()
 
             # Construct Graph
