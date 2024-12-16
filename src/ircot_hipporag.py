@@ -322,12 +322,8 @@ if __name__ == '__main__':
                 retrieved_items = retrieved_passages
             else:
                 assert 'paragraphs' in sample, "`paragraphs` should be in sample, or consider set `--do_eval` to False"
-                if hipporag.corpus_name == 'popqa':
-                    gold_passages = [item for item in sample['paragraphs']]
-                    gold_items = set([item['title'] + '\n' + item['text'] for item in gold_passages])
-                else:
-                    gold_passages = [item for item in sample['paragraphs'] if item['is_supporting']]
-                    gold_items = set([item['title'] + '\n' + (item['text'] if 'text' in item else item['paragraph_text']) for item in gold_passages])
+                gold_passages = [item for item in sample['paragraphs'] if item['is_supporting']]
+                gold_items = set([item['title'] + '\n' + (item['text'] if 'text' in item else item['paragraph_text']) for item in gold_passages])
                 retrieved_items = retrieved_passages
 
             # record results
@@ -344,10 +340,7 @@ if __name__ == '__main__':
             elif 'contexts' in sample:
                 sample['supporting_docs'] = [item for item in sample['contexts'] if item['is_supporting']]
             else:
-                if hipporag.corpus_name == 'popqa':
-                    sample['supporting_docs'] = [item for item in sample['paragraphs']]
-                else:
-                    sample['supporting_docs'] = [item for item in sample['paragraphs'] if item['is_supporting']]
+                sample['supporting_docs'] = [item for item in sample['paragraphs'] if item['is_supporting']]
                 del sample['paragraphs']
 
             if len(phrases_in_gold_docs):

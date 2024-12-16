@@ -199,8 +199,28 @@ class RetrievalModule:
 
         return vector_dict
 
-    def encode_strings_wrapper(self, strs_to_encode):
-        all_embeddings = self.plm.encode_text(strs_to_encode, return_numpy=True, return_cpu=True, norm=True)
+    def encode_strings_wrapper(self, strs_to_encode, batch_size=1000):
+        if not strs_to_encode:
+            print('No strings to encode')
+            return np.empty((0, 0)), strs_to_encode
+        if batch_size is not None and batch_size <= 0:
+            raise ValueError("batch_size must be a positive integer")
+
+        if batch_size is not None:
+            batches = [strs_to_encode[i:i + batch_size] for i in range(0, len(strs_to_encode), batch_size)]
+            embedding_list = []
+            for batch in tqdm(batches, total=len(batches), desc='Encoding string by batch'):
+                embeddings = self.plm.encode_text(batch, return_numpy=True, return_cpu=True, norm=True)
+                embedding_list.append(embeddings)
+
+            embedding_dims = {emb.shape[1] for emb in embedding_list}
+            if len(embedding_dims) > 1:
+                raise ValueError(f"Inconsistent embedding dimensions: {embedding_dims}")
+
+            all_embeddings = np.concatenate(embedding_list, axis=0)
+        else:
+            all_embeddings = self.plm.encode_text(strs_to_encode, return_numpy=True, return_cpu=True, norm=True)
+
         return all_embeddings, strs_to_encode
 
     def encode_strings(self, strs_to_encode):
