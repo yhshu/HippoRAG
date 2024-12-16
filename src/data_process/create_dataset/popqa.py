@@ -1,10 +1,10 @@
-import argparse
+import pickle
 import sys
-
-import requests
 
 sys.path.append('.')
 
+import requests
+import argparse
 import json
 import os
 import random
@@ -91,18 +91,31 @@ if __name__ == '__main__':
 
     full_corpus = []
     contents = []
-    content_hash_set = set()
-    with open(args.wiki) as f:
-        for line in tqdm(f, 'Processing wiki text'):
-            item = json.loads(line.strip())
-            title = item['title'] + ' - ' + item['section']
-            text = item['text']
-            content = title + '\n' + text
-            content_hash = generate_hash(content)
-            if content_hash not in content_hash_set:
-                content_hash_set.add(content_hash)
-                full_corpus.append({'idx': len(full_corpus), 'title': title, 'text': text})
-                contents.append(content)
+    full_corpus_path = 'data/enwiki_full_corpus.pkl'
+    contents_path = 'data/enwiki_contents.pkl'
+
+    if os.path.exists(full_corpus_path) and os.path.exists(contents_path):
+        with open(full_corpus_path, 'rb') as f:
+            full_corpus = pickle.load(f)
+        with open(contents_path, 'rb') as f:
+            contents = pickle.load(f)
+    else:
+        content_hash_set = set()
+        with open(args.wiki) as f:
+            for line in tqdm(f, 'Processing wiki text'):
+                item = json.loads(line.strip())
+                title = item['title'] + ' - ' + item['section']
+                text = item['text']
+                content = title + '\n' + text
+                content_hash = generate_hash(content)
+                if content_hash not in content_hash_set:
+                    content_hash_set.add(content_hash)
+                    full_corpus.append({'idx': len(full_corpus), 'title': title, 'text': text})
+                    contents.append(content)
+        with open(full_corpus_path, 'wb') as f:
+            pickle.dump(full_corpus, f)
+        with open(contents_path, 'wb') as f:
+            pickle.dump(contents, f)
 
     os.makedirs('data/bm25_sparse/wiki_text', exist_ok=True)
     bm25_retriever = BM25SparseRetriever(contents, 'data/bm25_sparse/wiki_text')
@@ -121,22 +134,37 @@ if __name__ == '__main__':
         if subject_wikipedia_text == '' or object_wikipedia_text == '':
             continue
 
-        subject_first_paragraph = subject_wikipedia_text.split('\n\n\n== ')
-        object_first_paragraph = object_wikipedia_text.split('\n\n\n== ')
+        subject_first_paragraphs = subject_wikipedia_text.split('\n\n\n== ')
+        object_first_paragraphs = object_wikipedia_text.split('\n\n\n== ')
 
-        content_hash = generate_hash(subject_first_paragraph[0].strip())
+        o_wiki_title = sample['o_wiki_title']
+        o_aliases = sample['o_aliases']
+
+        found = False
+        for p in [subject_first_paragraphs[0], object_first_paragraphs[0]]:
+            if o_wiki_title in p:
+                found = True
+                break
+            for alias in o_aliases:
+                if alias in p:
+                    found = True
+                    break
+        if not found:
+            continue
+
+        content_hash = generate_hash(subject_first_paragraphs[0].strip())
         if content_hash not in corpus_content_hash_set:
             corpus_content_hash_set.add(content_hash)
-            corpus.append({'title': sample['s_wiki_title'], 'text': subject_first_paragraph[0]})
+            corpus.append({'title': sample['s_wiki_title'], 'text': subject_first_paragraphs[0]})
 
-        content_hash = generate_hash(object_first_paragraph[0].strip())
+        content_hash = generate_hash(object_first_paragraphs[0].strip())
         if content_hash not in corpus_content_hash_set:
             corpus_content_hash_set.add(content_hash)
-            corpus.append({'title': sample['o_wiki_title'], 'text': object_first_paragraph[0]})
+            corpus.append({'title': sample['o_wiki_title'], 'text': object_first_paragraphs[0]})
 
         sample['paragraphs'] = []
-        sample['paragraphs'].append({'title': sample['s_wiki_title'], 'text': subject_first_paragraph[0], 'is_supporting': True})
-        sample['paragraphs'].append({'title': sample['o_wiki_title'], 'text': object_first_paragraph[0], 'is_supporting': True})
+        sample['paragraphs'].append({'title': sample['s_wiki_title'], 'text': subject_first_paragraphs[0], 'is_supporting': True})
+        sample['paragraphs'].append({'title': sample['o_wiki_title'], 'text': object_first_paragraphs[0], 'is_supporting': True})
 
         k = 5
         indices = set()
@@ -145,7 +173,7 @@ if __name__ == '__main__':
         top_indices = bm25_retriever.get_top_k_indices(sample['o_wiki_title'], k, True, False)
         indices.update(top_indices)
 
-        assert  k <= len(indices) <= 2 * k
+        assert k <= len(indices) <= 2 * k
         for idx in indices:
             content = full_corpus[idx]['text'].strip()
             content_hash = generate_hash(content)
@@ -154,6 +182,7 @@ if __name__ == '__main__':
                 corpus.append(full_corpus[idx])
 
         new_data.append(sample)
+        print(f'{len(new_data)} samples collected')
         if len(new_data) >= 1000:
             break
 

@@ -498,8 +498,8 @@ class HippoRAG:
                     query_ner_list = eval_json_str(query_ner_json).get('named_entities', [])
 
                 query_ner_list = [processing_phrases(p) for p in query_ner_list]
-            except:
-                self.logger.error('Error in Query NER')
+            except Exception as e:
+                self.logger.error('Error in Query NER' + str(e))
                 query_ner_list = []
         return query_ner_list
 
