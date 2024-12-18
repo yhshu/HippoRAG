@@ -162,6 +162,7 @@ if __name__ == '__main__':
     parser.add_argument('--force_retry', action='store_true')
     parser.add_argument('--do_eval', type=str, default='t')
     parser.add_argument('--directed', action='store_true')
+    parser.add_argument('--reranker_dspy', type=str, help="The path of the DSPy file for the filter")
     args = parser.parse_args()
 
     # set langchain cache
@@ -175,6 +176,8 @@ if __name__ == '__main__':
     llm_model_name_processed = args.llm_model.replace('/', '_').replace('.', '_')
     rerank_model_name_processed = args.reranker.replace('/', '_').replace('.', '_') if args.reranker else ''
     rerank_str = f'_RE_{rerank_model_name_processed}' if rerank_model_name_processed != '' else ''
+    rerank_dspy_name_processed = args.reranker_dspy.split('/')[-1].replace('.json', '') if args.reranker_dspy else ''
+    rerank_dspy_str = f'_{rerank_dspy_name_processed}' if rerank_dspy_name_processed != '' else ''
     graph_type_str = ''
     if 'passage_node' in args.graph_type:
         graph_type_str = '_GT_pn'
@@ -190,7 +193,8 @@ if __name__ == '__main__':
                         linker_name=args.linker,
                         doc_ensemble=doc_ensemble, node_specificity=not (args.wo_node_spec), sim_threshold=args.sim_threshold,
                         colbert_config=colbert_configs, dpr_only=args.dpr_only, graph_alg=args.graph_alg, damping=args.damping, recognition_threshold=args.recognition_threshold,
-                        reranker_name=args.reranker, graph_type=args.graph_type, directed_graph=args.directed)
+                        reranker_name=args.reranker, graph_type=args.graph_type, directed_graph=args.directed,
+                        reranker_dspy_file_path=args.reranker_dspy)
 
     data = json.load(open(f'data/{args.dataset}.json', 'r'))
     corpus = json.load(open(f'data/{args.dataset}_corpus.json', 'r'))
@@ -212,7 +216,7 @@ if __name__ == '__main__':
     os.makedirs(f'output/ircot_retrieval/{args.dataset}', exist_ok=True)
 
     output_path = (
-        f'output/ircot_retrieval/{args.dataset}/{args.dataset}_{dpr_only_str}{graph_type_str}_E_{llm_model_name_processed}_R_{hipporag.graph_creating_retriever_name_processed}_L_{hipporag.linking_retriever_name_processed}_{args.linking}{rerank_str}'
+        f'output/ircot_retrieval/{args.dataset}/{args.dataset}_{dpr_only_str}{graph_type_str}_E_{llm_model_name_processed}_R_{hipporag.graph_creating_retriever_name_processed}_L_{hipporag.linking_retriever_name_processed}_{args.linking}{rerank_str}{rerank_dspy_str}'
         f'_demo_{args.num_demo}_step_{max_steps}_top_{args.top_k}_{args.graph_alg}_damp_{args.damping}_sim_{args.sim_threshold}')
 
     if args.wo_node_spec:

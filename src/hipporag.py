@@ -68,7 +68,8 @@ class HippoRAG:
                  sim_threshold=0.8, node_specificity=True,
                  doc_ensemble=False, colbert_config=None, dpr_only=False,
                  graph_alg='ppr', damping=0.1, recognition_threshold=0.9, corpus_path=None,
-                 qa_model: LangChainModel = None, linker_name=None, reranker_name=None, directed_graph=False):
+                 qa_model: LangChainModel = None, linker_name=None, reranker_name=None, directed_graph=False,
+                 reranker_dspy_file_path=None):
         """
         @param corpus_name: Name of the dataset to use for retrieval
         @param extraction_model: LLM provider for query NER, e.g., 'openai' or 'together'
@@ -200,7 +201,7 @@ class HippoRAG:
             #     self.reranker = VLLMFilter(reranker_name)
             if (reranker_name.startswith('gpt') or reranker_name.startswith('ft:gpt') or reranker_name.startswith('meta-llama/Llama-')):
                 from src.rerank import DSPyFilter
-                self.reranker = DSPyFilter(reranker_name)
+                self.reranker = DSPyFilter(reranker_name, dspy_file_path=reranker_dspy_file_path)
             elif reranker_name in ['oracle_triple']:
                 from src.rerank import OracleTripleFilter
                 self.reranker = OracleTripleFilter(reranker_name)
