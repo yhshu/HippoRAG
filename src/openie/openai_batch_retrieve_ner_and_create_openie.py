@@ -36,21 +36,20 @@ if __name__ == '__main__':
     }  # custom_id to passage
 
     client = OpenAI(max_retries=5, timeout=60)
-    global_custom_id = 0  # Global counter for unique custom IDs
 
     output_dir = "output/openie_batches"
     os.makedirs(output_dir, exist_ok=True)
 
-    for file_idx, file_id in enumerate(args.file_ids):  # Loop over each file ID
-        print(f"Processing file ID: {file_id}")
+    for file_idx, openai_file_id in enumerate(args.file_ids):  # Loop over each file ID
+        print(f"Processing file ID: {openai_file_id}")
         openie_submission_jsonl = []
         total_tokens = 0
 
-        content = client.files.content(file_id=file_id)
+        content = client.files.content(file_id=openai_file_id)
         lines = content.text.strip().split("\n")
-        print(f'File ID {file_id} - content length:', len(lines))
+        print(f'File ID {openai_file_id} - content length:', len(lines))
 
-        for line in tqdm(lines, desc=f"Processing file {file_id}"):
+        for line in tqdm(lines, desc=f"Processing file {openai_file_id}"):
             response = json.loads(line)
             if response['error'] is None:
                 content = response['response']['body']['choices'][0]['message']['content']
@@ -62,8 +61,7 @@ if __name__ == '__main__':
                 continue
 
             if not skip_openie:
-                custom_id = f"global_{global_custom_id}"
-                global_custom_id += 1
+                custom_id = f"global_{response['custom_id']}"  # Unique custom ID
                 passage = passage_dict.get(response['custom_id'], "")
                 user_message = openie_post_ner_frame.replace("{passage}", passage).replace("{named_entity_json}", json.dumps(ner))
                 openie_messages = [
@@ -82,7 +80,7 @@ if __name__ == '__main__':
                 openie_submission_jsonl.append(openie_submission)
 
         if not skip_openie and openie_submission_jsonl:
-            openie_submission_file = os.path.join(output_dir, f"openie_batch_{args.dataset}_{file_idx}.jsonl")
+            openie_submission_file = os.path.join(output_dir, f"openie_{args.dataset}_{args.model_name}_batch_{file_idx}.jsonl")
             with open(openie_submission_file, 'w') as f:
                 f.write('\n'.join(openie_submission_jsonl))
                 print(f"Batch file saved to {openie_submission_file}, len: {len(openie_submission_jsonl)}")

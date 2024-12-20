@@ -50,22 +50,21 @@ def main():
 
     # Process each file and accumulate results
     for file_id in args.file_ids:
-        responses, num_lines = process_file(file_id, client,)
+        responses, num_lines = process_file(file_id, client)
         all_responses.update(responses)
 
-    # Process responses
-    sorted_custom_ids = sorted(all_responses.keys())  # Ensure global order by custom ID
-
     for i, passage in enumerate(retrieval_corpus):
-        idx = sorted_custom_ids[i]  # Get sorted global custom ID
+        response = all_responses.get(f"global_{i}", "")
+        if response == "":
+            print(f'Idx {i}: no response found')
         try:
-            extraction = json.loads(all_responses[idx]).get('triples', [])
+            extraction = json.loads(response).get('triples', [])
         except:
             try:
-                extraction = json.loads(fix_broken_triple_json(all_responses[idx])).get('triples', [])
+                extraction = json.loads(fix_broken_triple_json(response)).get('triples', [])
             except:
                 extraction = []
-                print(f'Error loading extraction response for ID {idx}')
+                print(f'Idx {i}, error when loading extraction response')
 
         entities = set()
         triples = []
@@ -77,9 +76,9 @@ def main():
                     entities.add(e[2])
                     triples.append(e)
             else:
-                print('Wrong type in extraction:', type(extraction))
+                print(f'Idx {i}, wrong type in extraction: {type(extraction)}')
 
-        item = {'idx': idx, 'title': passage['title'], 'text': passage['text'], 'passage': passage['passage'],
+        item = {'idx': i, 'title': passage['title'], 'text': passage['text'], 'passage': passage['passage'],
                 'extracted_entities': list(entities), 'extracted_triples': triples}
         all_extraction_by_doc.append(item)
         all_ents_by_doc.append(list(entities))

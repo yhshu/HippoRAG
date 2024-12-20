@@ -63,7 +63,7 @@ def named_entity_recognition_for_corpus_openai_batch(dataset_name: str, num_pass
     arg_str, dataset_name, flags_present, num_passages, retrieval_corpus = load_corpus(dataset_name, model_name, num_passages, True)
 
     # Output corpus to a file to upload to OpenAI
-    corpus_jsonl_path_template = f'output/ner_batch_{dataset_name[1:]}_{model_name}_batch_{{}}.jsonl'
+    corpus_jsonl_path_template = f'output/ner_{dataset_name[1:]}_{model_name}_batch_{{}}.jsonl'
     jsonl_contents = []
     total_tokens = 0
 

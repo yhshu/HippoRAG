@@ -1,6 +1,5 @@
 # https://huggingface.co/nvidia/NV-Embed-v2
 import sys
-
 sys.path.append('.')
 
 from typing import Union, List
@@ -30,10 +29,11 @@ class NVEmbedV2Wrapper(EmbeddingModelWrapper):
             prompt = None
         return self.model.encode(self._add_eos(texts), batch_size=batch_size, prompt=prompt, normalize_embeddings=True)
 
-    def encode_text(self, text: Union[str, List[str]], instruction: str = '', norm: bool = True, return_cpu: bool = False, return_numpy: bool = False) -> np.ndarray:
+    def encode_text(self, text: Union[str, List[str]], instruction: str = '', norm: bool = True, return_cpu: bool = False, return_numpy: bool = False,
+                    batch_size=2) -> np.ndarray:
         if isinstance(text, str):
             text = [text]
-        embeddings = self.encode_list(text, instruction)
+        embeddings = self.encode_list(text, instruction, batch_size=batch_size)
 
         if isinstance(embeddings, torch.Tensor):
             if return_cpu:
