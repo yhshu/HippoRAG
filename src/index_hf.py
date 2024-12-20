@@ -17,10 +17,7 @@ def index_with_huggingface(dataset_name: str, run_ner: bool, num_passages, llm_p
     # set_llm_cache(SQLiteCache(database_path=langchain_db))
     if skip_openie is False:
         from src.langchain_util import init_langchain_model
-        if '7B' in retriever:
-            gpu_mem_util = 0.65
-        else:
-            gpu_mem_util = 0.93
+        gpu_mem_util = 0.93
         if llm_provider == 'vllm':
             client = init_langchain_model(llm_provider, extractor, num_gpus=num_gpus, gpu_memory_utilization=gpu_mem_util)  # LangChain model
         else:

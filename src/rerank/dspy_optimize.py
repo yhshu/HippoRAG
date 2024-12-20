@@ -1,3 +1,6 @@
+# https://dspy.ai/tutorials/math/
+# https://dspy.ai/learn/
+
 import argparse
 import json
 import os
@@ -144,14 +147,16 @@ def filtering_f1(example, pred, trace=None):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--llm', type=str, default='gpt-4o', help='Language model to use')
+    parser.add_argument('--llm', type=str, default='gpt-4o-mini', help='Default DSPy LM')
     parser.add_argument('--addr', type=str, default='localhost')
     parser.add_argument('--port', type=str)
-    parser.add_argument('--auto', type=str, default='light', help='Optimization level')
+    parser.add_argument('--auto', type=str, default='light', help='Optimization level', choices=['light', 'medium', 'heavy'])
+    parser.add_argument('--max_demos', type=int, default=10)
     args = parser.parse_args()
 
-    if args.llm.startswith('gpt-'):
-        dspy_llm = dspy.LM(model=f"openai/{args.llm}", max_tokens=256, temperature=0.0)
+    THREAD = 24
+    if args.llm.startswith('gpt-') or args.llm.startswith('ft:gpt-') or args.llm.startswith('o1-'):
+        dspy_llm = dspy.LM(model=f"openai/{args.llm}", max_tokens=2000, temperature=0.0)
     elif args.addr is not None and args.port is not None:
         url = f'http://{args.addr}:{args.port}/v1'
         dspy_llm = dspy.LM(model=f"openai/{args.llm}", max_tokens=256, temperature=0.0, api_base=url, api_key='osunlp')
@@ -173,23 +178,27 @@ if __name__ == '__main__':
                           input_keys=("question", "fact_before_filter"))
 
     filter_metric = filtering_precision
-    evaluate = Evaluate(devset=devset[:], metric=filter_metric, num_threads=8, display_progress=True, display_table=False)
+    evaluate = Evaluate(devset=devset[:], metric=filter_metric, num_threads=THREAD, display_progress=True, display_table=False)
 
     # Initialize optimizer
-    teleprompter = MIPROv2(
+    gpt4o = dspy.LM(model="openai/gpt-4o", max_tokens=2000, temperature=0.0)
+    gpt4o_mini = dspy.LM(model="openai/gpt-4o-mini", max_tokens=2000, temperature=0.0)
+    kwargs = dict(num_threads=THREAD, teacher_settings=dict(lm=gpt4o), prompt_model=gpt4o_mini)
+    optimizer = MIPROv2(
         metric=filter_metric,
-        auto=args.auto,  # Can choose between light, medium, and heavy optimization runs
+        auto=args.auto,
+        **kwargs
     )
     program = FactFilterProgram()
 
     # Optimize program
     print(f"Optimizing program with MIPRO...")
-    optimized_program = teleprompter.compile(
+    optimized_program = optimizer.compile(
         program.deepcopy(),
         trainset=trainset,
         valset=devset,
-        max_bootstrapped_demos=10,
-        max_labeled_demos=10,
+        max_bootstrapped_demos=args.max_demos,
+        max_labeled_demos=args.max_demos,
         requires_permission_to_run=False,
     )
 

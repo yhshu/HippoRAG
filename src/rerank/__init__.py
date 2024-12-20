@@ -374,9 +374,7 @@ class VLLMFilter(LLMFilter):
 
 
 class DSPyFilter(Reranker):
-    def __init__(self, model_name,
-                 # dspy_file_path=None,
-                 dspy_file_path='output/dspy/fact_filter_mipro_optimized_meta-llama_Llama-3.3-70B-Instruct.json',
+    def __init__(self, model_name, dspy_file_path='output/dspy/filter_4o-mini.json',
                  addr='localhost', port='8000'):
         from src.rerank.dspy_optimize import FactFilterProgram
         import dspy
@@ -394,9 +392,6 @@ class DSPyFilter(Reranker):
             if os.path.isfile(dspy_file_path):
                 print(f"Loading DSPy program from file {dspy_file_path}")
                 self.program.load(dspy_file_path)
-            elif os.path.isfile(f'output/dspy/fact_filter_mipro_optimized_{model_name_processed}.json'):
-                print(f"Loading DSPy program from file output/dspy/fact_filter_mipro_optimized_{model_name_processed}.json")
-                self.program.load(f'output/dspy/fact_filter_mipro_optimized_{model_name_processed}.json')
             else:
                 print(f"DSPy file {dspy_file_path} not found, using the default config.")
 
