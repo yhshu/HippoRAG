@@ -152,6 +152,7 @@ if __name__ == '__main__':
     parser.add_argument('--port', type=str)
     parser.add_argument('--auto', type=str, default='light', help='Optimization level', choices=['light', 'medium', 'heavy'])
     parser.add_argument('--max_demos', type=int, default=10)
+    parser.add_argument('--teacher', type=str, default='gpt-4o')
     args = parser.parse_args()
 
     THREAD = 24
@@ -159,10 +160,22 @@ if __name__ == '__main__':
         dspy_llm = dspy.LM(model=f"openai/{args.llm}", max_tokens=2000, temperature=0.0)
     elif args.addr is not None and args.port is not None:
         url = f'http://{args.addr}:{args.port}/v1'
-        dspy_llm = dspy.LM(model=f"openai/{args.llm}", max_tokens=256, temperature=0.0, api_base=url, api_key='osunlp')
+        dspy_llm = dspy.LM(model=f"openai/{args.llm}", max_tokens=500, temperature=0.0, api_base=url, api_key='osunlp')
     else:
         raise ValueError(f"LM not implemented: {args.llm}")
     dspy.settings.configure(lm=dspy_llm)
+
+    if args.teacher is None:
+        args.teacher = args.llm
+    if args.teacher.startswith('gpt-') or args.teacher.startswith('ft:gpt-'):
+        teacher_lm = dspy.LM(model=f"openai/{args.teacher}", max_tokens=2000, temperature=0.0)
+    elif args.teacher.startswith('o1-'):
+        teacher_lm = dspy.LM(model=f"openai/{args.teacher}", max_tokens=5000, temperature=1.0)
+    elif args.addr is not None and args.port is not None:
+        url = f'http://{args.addr}:{args.port}/v1'
+        teacher_lm = dspy.LM(model=f"openai/{args.teacher}", max_tokens=500, temperature=0.0, api_base=url, api_key='osunlp')
+    else:
+        raise NotImplementedError(f"Teacher model {args.teacher} not implemented yet.")
 
     train = json.load(open('data/fact_filter/train.json'))
     dev = json.load(open('data/fact_filter/dev.json'))
@@ -181,9 +194,8 @@ if __name__ == '__main__':
     evaluate = Evaluate(devset=devset[:], metric=filter_metric, num_threads=THREAD, display_progress=True, display_table=False)
 
     # Initialize optimizer
-    gpt4o = dspy.LM(model="openai/gpt-4o", max_tokens=2000, temperature=0.0)
-    gpt4o_mini = dspy.LM(model="openai/gpt-4o-mini", max_tokens=2000, temperature=0.0)
-    kwargs = dict(num_threads=THREAD, teacher_settings=dict(lm=gpt4o), prompt_model=gpt4o_mini)
+    prompt_lm = dspy.LM(model=f"openai/{args.llm}", max_tokens=2000, temperature=0.0)
+    kwargs = dict(num_threads=THREAD, teacher_settings=dict(lm=teacher_lm), prompt_model=prompt_lm)
     optimizer = MIPROv2(
         metric=filter_metric,
         auto=args.auto,
@@ -205,7 +217,8 @@ if __name__ == '__main__':
     # Save optimize program for future use
     os.makedirs("output/dspy", exist_ok=True)
     model_label = args.llm.replace("/", "_")
-    output_path = f"output/dspy/fact_filter_mipro_optimized_{model_label}.json"
+    teacher_model_label = args.teacher.replace("/", "_")
+    output_path = f"output/dspy/fact_filter_mipro_optimized_{model_label}_teacher_{teacher_model_label}.json"
     optimized_program.save(output_path)
 
     # Evaluate optimized program

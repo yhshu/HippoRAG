@@ -126,7 +126,7 @@ def named_entity_recognition_batch_vllm(client, passages, extractor_name=None):
     vllm_output = client.generate(
         all_prompts,
         sampling_params=SamplingParams(max_tokens=512, temperature=0),
-        guided_options_request=GuidedDecodingRequest(guided_json=PROMPT_JSON_TEMPLATE['ner'])
+        guided_options_request=GuidedDecodingRequest(guided_json=PROMPT_JSON_TEMPLATE['ner'])  # constrained decoding
     )
     all_responses = [completion.outputs[0].text for completion in vllm_output]
     all_responses = [extract_json_dict(response) for response in all_responses]
@@ -152,7 +152,7 @@ def openie_post_ner_extract_batch_vllm(client, passages, entities_list, extracto
     vllm_output = client.generate(
         all_prompts,
         sampling_params=SamplingParams(max_tokens=512, temperature=0),
-        guided_options_request=GuidedDecodingRequest(guided_json=PROMPT_JSON_TEMPLATE['triples'])
+        guided_options_request=GuidedDecodingRequest(guided_json=PROMPT_JSON_TEMPLATE['triples'])  # constrained decoding
     )
     all_responses = [completion.outputs[0].text for completion in vllm_output]
     all_total_tokens = [len(completion.outputs[0].token_ids) for completion in vllm_output]

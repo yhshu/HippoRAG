@@ -742,7 +742,7 @@ class HippoRAG:
                 'Loaded triple embeddings from: ' + triple_embeddings_path + ', shape: ' + str(self.triple_embeddings.shape))
         else:
             self.triple_embeddings = self.embed_model.encode_text(self.triples_str_list, return_cpu=True,
-                                                                  return_numpy=True, norm=True)
+                                                                  return_numpy=True, norm=True, batch_size=80)
             pickle.dump(self.triple_embeddings, open(triple_embeddings_path, 'wb'))
             self.logger.info(
                 'Saved triple embeddings to: ' + triple_embeddings_path + ', shape: ' + str(self.triple_embeddings.shape))
@@ -763,7 +763,8 @@ class HippoRAG:
                     self.kb_node_phrase_embeddings = np.squeeze(self.kb_node_phrase_embeddings, axis=1)
                 self.logger.info('Loaded phrase embeddings from: ' + kb_node_phrase_embeddings_path + ', shape: ' + str(self.kb_node_phrase_embeddings.shape))
             else:
-                self.kb_node_phrase_embeddings = self.embed_model.encode_text(self.node_phrases.tolist(), return_cpu=True, return_numpy=True, norm=True)
+                self.kb_node_phrase_embeddings = self.embed_model.encode_text(self.node_phrases.tolist(), return_cpu=True, return_numpy=True,
+                                                                              norm=True, batch_size=80)
                 dir = os.path.dirname(kb_node_phrase_embeddings_path)
                 if not os.path.exists(dir):
                     os.makedirs(dir)

@@ -1,6 +1,8 @@
 import pickle
 import sys
 
+from src.data_process.create_dataset.wiki_corpus import read_enwiki_corpus
+
 sys.path.append('.')
 
 import requests
@@ -89,33 +91,7 @@ if __name__ == '__main__':
 
     random.seed(1)
 
-    full_corpus = []
-    contents = []
-    full_corpus_path = 'data/enwiki_full_corpus.pkl'
-    contents_path = 'data/enwiki_contents.pkl'
-
-    if os.path.exists(full_corpus_path) and os.path.exists(contents_path):
-        with open(full_corpus_path, 'rb') as f:
-            full_corpus = pickle.load(f)
-        with open(contents_path, 'rb') as f:
-            contents = pickle.load(f)
-    else:
-        content_hash_set = set()
-        with open(args.wiki) as f:
-            for line in tqdm(f, 'Processing wiki text'):
-                item = json.loads(line.strip())
-                title = item['title'] + ' - ' + item['section']
-                text = item['text']
-                content = title + '\n' + text
-                content_hash = generate_hash(content)
-                if content_hash not in content_hash_set:
-                    content_hash_set.add(content_hash)
-                    full_corpus.append({'idx': len(full_corpus), 'title': title, 'text': text})
-                    contents.append(content)
-        with open(full_corpus_path, 'wb') as f:
-            pickle.dump(full_corpus, f)
-        with open(contents_path, 'wb') as f:
-            pickle.dump(contents, f)
+    full_corpus, contents = read_enwiki_corpus()
 
     os.makedirs('data/bm25_sparse/wiki_text', exist_ok=True)
     bm25_retriever = BM25SparseRetriever(contents, 'data/bm25_sparse/wiki_text')

@@ -210,7 +210,7 @@ class RetrievalModule:
             batches = [strs_to_encode[i:i + batch_size] for i in range(0, len(strs_to_encode), batch_size)]
             embedding_list = []
             for batch in tqdm(batches, total=len(batches), desc='Encoding string by batch'):
-                embeddings = self.plm.encode_text(batch, return_numpy=True, return_cpu=True, norm=True, batch_size=64)
+                embeddings = self.plm.encode_text(batch, return_numpy=True, return_cpu=True, norm=True, batch_size=80)
                 embedding_list.append(embeddings)
 
             embedding_dims = {emb.shape[1] for emb in embedding_list}
