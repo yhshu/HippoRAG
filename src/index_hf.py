@@ -12,12 +12,11 @@ from src.openie_with_retrieval_option_parallel import openie_for_corpus
 
 def index_with_huggingface(dataset_name: str, run_ner: bool, num_passages, llm_provider: str, extractor: str, retriever: str,
                            num_thread, syn_thresh=0.8, langchain_db='.langchain.db', skip_openie=False, skip_graph=False,
-                           num_gpus=4,
-                           passage_node=False):
+                           num_gpus=4, passage_node=False):
     # set_llm_cache(SQLiteCache(database_path=langchain_db))
     if skip_openie is False:
         from src.langchain_util import init_langchain_model
-        gpu_mem_util = 0.93
+        gpu_mem_util = 0.95
         if llm_provider == 'vllm':
             client = init_langchain_model(llm_provider, extractor, num_gpus=num_gpus, gpu_memory_utilization=gpu_mem_util)  # LangChain model
         else:

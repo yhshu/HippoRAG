@@ -151,7 +151,7 @@ def openie_post_ner_extract_batch_vllm(client, passages, entities_list, extracto
 
     vllm_output = client.generate(
         all_prompts,
-        sampling_params=SamplingParams(max_tokens=512, temperature=0),
+        sampling_params=SamplingParams(max_tokens=2048, temperature=0),
         guided_options_request=GuidedDecodingRequest(guided_json=PROMPT_JSON_TEMPLATE['triples'])  # constrained decoding
     )
     all_responses = [completion.outputs[0].text for completion in vllm_output]
@@ -215,9 +215,13 @@ def extract_openie_from_triples_batch_vllm(client, existing_json, auxiliary_file
                     sample['extracted_triples'] = eval(response)["triples"]
                     sample['extracted_triples'] = deduplicate_triples(sample['extracted_triples'])
             except Exception as e:
-                print('extracting OpenIE from triples exception', e)
-                print(response)
-                sample['extracted_triples'] = []
+                try:
+                    extraction = fix_broken_generated_json(response)
+                    triples = eval(extraction)["triples"]
+                    sample['extracted_triples'] = deduplicate_triples(triples)
+                except Exception as e1:
+                    print('extracting OpenIE from triples exception', e1)
+                    sample['extracted_triples'] = []
             extractions.append(sample)
     return (extractions, all_entities, llm_total_tokens)
 

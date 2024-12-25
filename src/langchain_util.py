@@ -54,9 +54,15 @@ def init_langchain_model(llm: str, model_name: str, temperature: float = 0.0, ma
         return VLLMOpenAI(openai_api_key='osunlp', openai_api_base='http://localhost:8000/v1', model_name=model_name)
     elif llm == 'vllm':
         from vllm import LLM
+        pipeline_parallel_size = 1
         tensor_parallel_size = kwargs.get('num_gpus', 4)
-        llm = LLM(model=model_name, tensor_parallel_size=tensor_parallel_size, seed=0, dtype='auto', max_seq_len_to_capture=4096, enable_prefix_caching=True,
-        enforce_eager=True, gpu_memory_utilization=kwargs.get('gpu_memory_utilization', 0.93))
+        if '8B' in model_name:
+            tensor_parallel_size = 1
+        quantization = None
+        llm = LLM(model=model_name, tensor_parallel_size=tensor_parallel_size, pipeline_parallel_size=pipeline_parallel_size,
+                  seed=0, dtype='auto', max_seq_len_to_capture=4096, enable_prefix_caching=True,
+                  enforce_eager=True, gpu_memory_utilization=kwargs.get('gpu_memory_utilization', 0.93),
+                  max_num_seqs=20, max_model_len=4096, quantization=quantization)
         return llm
     else:
         # add any LLMs you want to use here using LangChain

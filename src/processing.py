@@ -153,6 +153,8 @@ def deduplicate_triples(triples: list):
     unique_triples = set()
     deduplicated_triples = []
     for triple in triples:
+        if len(triple) != 3:
+            continue
         if tuple(triple) not in unique_triples:
             unique_triples.add(tuple(triple))
             deduplicated_triples.append(triple)
@@ -161,9 +163,9 @@ def deduplicate_triples(triples: list):
 
 
 def fix_broken_generated_json(json_str: str):
-    last_comma_index = json_str.rfind(',')
+    last_comma_index = json_str.rfind('],')
     if last_comma_index != -1:
-        json_str = json_str[:last_comma_index]
+        json_str = json_str[:last_comma_index + 1]
 
     processed_string = json_str + ']\n}'
     return processed_string
