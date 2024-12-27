@@ -122,7 +122,7 @@ def named_entity_recognition_batch_vllm(client, passages, extractor_name=None):
     else:
         all_prompts = [prompt.to_string() for prompt in all_prompts]
 
-    print(all_prompts[0])
+    print('NER prompt example:', all_prompts[0])
     vllm_output = client.generate(
         all_prompts,
         sampling_params=SamplingParams(max_tokens=512, temperature=0),

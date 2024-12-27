@@ -3,7 +3,7 @@ import sys
 sys.path.append('.')
 
 from src.langchain_util import LangChainModel
-from src.qa.qa_reader import qa_read
+from src.qa.qa_reader import qa_read_for_one_sample
 
 import argparse
 
@@ -31,7 +31,7 @@ if __name__ == '__main__':
         ranks, scores, logs = hipporag.rank_docs(query, doc_top_k=10)
         retrieved_passages = [hipporag.get_passage_by_idx(rank) for rank in ranks]
 
-        response = qa_read(query, retrieved_passages, qa_few_shot_samples, hipporag.qa_model)
+        response = qa_read_for_one_sample(query, retrieved_passages, qa_few_shot_samples, hipporag.qa_model)
         print(ranks)
         print(scores)
         print(response)

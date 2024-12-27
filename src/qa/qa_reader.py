@@ -1,9 +1,9 @@
 import sys
 
+sys.path.append('.')
+
 from langchain.globals import set_llm_cache
 from langchain_community.cache import SQLiteCache
-
-sys.path.append('.')
 
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate
@@ -37,7 +37,7 @@ cot_system_instruction_no_doc = ('As an advanced reading comprehension assistant
                                  'Conclude with "Answer: " to present a concise, definitive response, devoid of additional elaborations.')
 
 
-def qa_read(query: str, passages: list, few_shot: list, client):
+def qa_read_for_one_sample(query: str, passages: list, few_shot: list, client):
     """
 
     @param query: query str
@@ -47,6 +47,43 @@ def qa_read(query: str, passages: list, few_shot: list, client):
     @return: answer from passages
     """
 
+    messages = get_qa_input_messages(few_shot, passages, query)
+    messages = ChatPromptTemplate.from_messages(messages).format_prompt()
+    try:
+        chat_completion = client.invoke(messages.to_messages())
+        response_content = chat_completion.content
+    except Exception as e:
+        print('QA read exception', e)
+        return ''
+    return response_content
+
+
+def evaluate_answer(response, sample):
+    try:
+        pred_ans = response.split('Answer:')[1].strip()
+    except Exception as e:
+        print('Parsing prediction:', e, response)
+        pred_ans = response
+    gold_ans = None
+    if 'answer' in sample or 'gold_ans' in sample:
+        gold_ans = sample['answer'] if 'answer' in sample else sample['gold_ans']
+    elif 'reference' in sample:
+        gold_ans = sample['reference']
+    elif 'obj' in sample:
+        gold_ans = set([sample['obj']] + [sample['possible_answers']] + [sample['o_wiki_title']] + [sample['o_aliases']])
+        gold_ans = list(gold_ans)
+    assert gold_ans is not None
+    if isinstance(gold_ans, str):
+        gold_ans = [gold_ans]
+    assert isinstance(gold_ans, list)
+    gold_ans = set(gold_ans)
+    if 'answer_aliases' in sample:
+        gold_ans.update(sample['answer_aliases'])
+    em, f1, precision, recall = compare_prediction_and_golds(pred_ans, gold_ans)
+    return pred_ans, em, f1, precision, recall
+
+
+def get_qa_input_messages(few_shot, passages, query):
     instruction = cot_system_instruction if len(passages) else cot_system_instruction_no_doc
     messages = [SystemMessage(instruction)]
     if few_shot:
@@ -61,25 +98,34 @@ def qa_read(query: str, passages: list, few_shot: list, client):
             else:  # No Chain-of-Thought, directly answer the question
                 messages.append(HumanMessage(cur_sample + '\nAnswer: '))
                 messages.append(AIMessage(f'Answer: {sample["answer"]}'))
-
     user_prompt = ''
     for passage in passages:
         user_prompt += f'Wikipedia Title: {passage}\n\n'
     user_prompt += 'Question: ' + query + '\nThought: '
     messages.append(HumanMessage(user_prompt))
-
     if few_shot:
         assert len(messages) == len(few_shot) * 2 + 2
     else:
         assert len(messages) == 2
-    messages = ChatPromptTemplate.from_messages(messages).format_prompt()
-    try:
-        chat_completion = client.invoke(messages.to_messages())
-        response_content = chat_completion.content
-    except Exception as e:
-        print('QA read exception', e)
-        return ''
-    return response_content
+    return messages
+
+
+def get_retrieved_items(sample, sample_id):
+    if 'retrieved' in sample:
+        retrieved = sample['retrieved'][:args.num_doc]
+    elif 'retrieved_id' in sample:
+        retrieved = [corpus[doc_id] for doc_id in sample['retrieved_id']][:args.num_doc]
+    else:
+        retrieved = []
+    assert len(retrieved) == args.num_doc, f'sample {sample_id}: #retrieved {len(retrieved)} != args.num_doc {args.num_doc}'
+    if len(retrieved):
+        if isinstance(retrieved[0], dict):
+            retrieved = [item['title'] + '\n' + item['text'] for item in retrieved]
+        elif isinstance(retrieved[0], list):
+            retrieved = ['\n'.join(item) for item in retrieved]
+    if args.dataset == 'hotpotqa':
+        retrieved = [remove_newlines_after_first(item) for item in retrieved]
+    return retrieved
 
 
 def parallel_qa_read(data: list, demos: list, args, client, output_path: str, total_metrics: dict, sample_id_set: set):
@@ -92,45 +138,10 @@ def parallel_qa_read(data: list, demos: list, args, client, output_path: str, to
         if sample_id in sample_id_set:
             return None  # Skip processing if sample already processed
         query = sample['question']
-        if 'retrieved' in sample:
-            retrieved = sample['retrieved'][:args.num_doc]
-        elif 'retrieved_id' in sample:
-            retrieved = [corpus[doc_id] for doc_id in sample['retrieved_id']][:args.num_doc]
-        else:
-            retrieved = []
-        assert len(retrieved) == args.num_doc, f'sample {sample_id}: #retrieved {len(retrieved)} != args.num_doc {args.num_doc}'
-        if len(retrieved):
-            if isinstance(retrieved[0], dict):
-                retrieved = [item['title'] + '\n' + item['text'] for item in retrieved]
-            elif isinstance(retrieved[0], list):
-                retrieved = ['\n'.join(item) for item in retrieved]
+        retrieved = get_retrieved_items(sample, sample_id)
 
-        if args.dataset == 'hotpotqa':
-            retrieved = [remove_newlines_after_first(item) for item in retrieved]
-
-        response = qa_read(query, retrieved, demos, client)
-        try:
-            pred_ans = response.split('Answer:')[1].strip()
-        except Exception as e:
-            print('Parsing prediction:', e, response)
-            pred_ans = response
-
-        gold_ans = None
-        if 'answer' in sample or 'gold_ans' in sample:
-            gold_ans = sample['answer'] if 'answer' in sample else sample['gold_ans']
-        elif 'reference' in sample:
-            gold_ans = sample['reference']
-        elif 'obj' in sample:
-            gold_ans = set([sample['obj']] + [sample['possible_answers']] + [sample['o_wiki_title']] + [sample['o_aliases']])
-            gold_ans = list(gold_ans)
-        assert gold_ans is not None
-        if isinstance(gold_ans, str):
-            gold_ans = [gold_ans]
-        assert isinstance(gold_ans, list)
-        gold_ans = set(gold_ans)
-        if 'answer_aliases' in sample:
-            gold_ans.update(sample['answer_aliases'])
-        em, f1, precision, recall = compare_prediction_and_golds(pred_ans, gold_ans)
+        response = qa_read_for_one_sample(query, retrieved, demos, client)
+        pred_ans, em, f1, precision, recall = evaluate_answer(response, sample)
         return sample_idx, sample_id, retrieved, pred_ans, {'em': em, 'f1': f1, 'precision': precision, 'recall': recall}
 
     with ThreadPoolExecutor(max_workers=args.thread) as executor:
@@ -143,7 +154,7 @@ def parallel_qa_read(data: list, demos: list, args, client, output_path: str, to
                 sample = data[sample_idx]
                 sample['retrieved'] = retrieved
                 sample['prediction'] = pred_ans
-                if len(metrics) :
+                if len(metrics):
                     for key in metrics:
                         sample['qa_' + key] = metrics[key]
                         total_metrics['qa_' + key] += metrics[key]
