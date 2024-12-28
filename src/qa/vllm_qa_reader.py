@@ -6,7 +6,7 @@ from src.qa.qa_reader import get_qa_input_messages, get_retrieved_items, evaluat
 from src.langchain_util import init_langchain_model
 from src.baselines.ircot import parse_prompt
 
-import os.path
+import os
 import argparse
 import json
 from tqdm import tqdm
@@ -29,26 +29,26 @@ cot_system_instruction_no_doc = ('As an advanced reading comprehension assistant
                                  'Conclude with "Answer: " to present a concise, definitive response, devoid of additional elaborations.')
 
 
-def vllm_qa_read(data, demos, args, client, output_path, total_metrics, processed_id_set):
+def vllm_qa_read(data, demos, args, client, total_metrics, processed_id_set):
     import vllm
     assert isinstance(client, vllm.LLM)
     all_messages = []
-    for sample_idx, sample in enumerate(tqdm(data), desc='Creating prompts', total=len(data)):
+    for sample_idx, sample in tqdm(enumerate(data), desc='Creating prompts', total=len(data)):
         query = sample['question']
         if '_id' in sample or 'id' in sample:
             sample_id = sample['_id'] if '_id' in sample else sample['id']
         else:
             sample_id = sample_idx
-        retrieved = get_retrieved_items(sample, sample_id)
+        retrieved = get_retrieved_items(sample, sample_id, args.num_doc, args.dataset)
         sample['retrieved'] = retrieved
 
         all_messages.append(get_qa_input_messages(demos, retrieved, query))
 
     if 'meta-llama/Llama-3' in client.llm_engine.model_config.served_model_name:
         from src.util.llama_cpp_service import langchain_message_to_llama_3_prompt
-        all_prompts = [langchain_message_to_llama_3_prompt(qa_message.to_messages()) for qa_message in all_messages]
+        all_prompts = [langchain_message_to_llama_3_prompt(qa_message) for qa_message in all_messages]
     else:
-        all_prompts = [qa_message.to_string() for qa_message in all_messages]
+        raise NotImplementedError("Please add the conversion for this model")
 
     print('QA prompt example:', all_prompts[0])
 
@@ -79,17 +79,22 @@ def vllm_qa_read(data, demos, args, client, output_path, total_metrics, processe
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, help='retrieval results or QA reading results', required=True)
+    parser.add_argument('--exp', type=str, help='The experimental name', required=True)
     parser.add_argument('--data', type=str, help='retrieval results or QA reading results')
     parser.add_argument('--retriever', type=str, help='retriever name to distinguish different experiments')
     parser.add_argument('--llm_model', type=str, default='meta-llama/Llama-3.3-70B-Instruct', help='Specific model name')
     parser.add_argument('--num_demo', type=int, default=1, help='the number of few-shot examples')
     parser.add_argument('--num_doc', type=int, default=5, help='the number of in-context documents')
+    parser.add_argument('--num_gpus', type=int, required=True)
     parser.add_argument('--force_retry', action='store_true')
     args = parser.parse_args()
 
     llm_model_name_processed = args.llm_model.replace('/', '_')
     retriever_name = args.retriever.replace('/', '_') if args.retriever else 'none'
-    output_path = f'exp/qa_{args.dataset}_{retriever_name}_{llm_model_name_processed}_demo_{args.num_demo}_doc_{args.num_doc}.json'
+    assert args.dataset is not None and len(args.dataset.strip()) > 0
+    os.makedirs('exp/qa/{args.dataset}', exist_ok=True)
+    exp_label = '' if args.exp is None else f'_{args.exp}'
+    output_path = f'exp/qa/{args.dataset}/{retriever_name}_{llm_model_name_processed}_demo_{args.num_demo}_doc_{args.num_doc}{exp_label}.json'
 
     processed_id_set = set()
     total_metrics = {'qa_em': 0, 'qa_f1': 0, 'qa_precision': 0, 'qa_recall': 0}
@@ -129,8 +134,9 @@ if __name__ == '__main__':
 
     assert data and len(data)
     demos = demos[:args.num_demo]
-    client = init_langchain_model(args.llm, args.llm_model)
-    vllm_qa_read(data, demos, args, client, output_path, total_metrics, processed_id_set)
+    client = init_langchain_model('vllm', args.llm_model, num_gpus=args.num_gpus)
+    vllm_qa_read(data, demos, args, client, total_metrics, processed_id_set)
+
     with open(output_path, 'w') as f:
         json.dump(data, f)
     print('QA results saved to', output_path)

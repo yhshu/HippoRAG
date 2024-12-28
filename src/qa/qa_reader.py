@@ -62,7 +62,7 @@ def evaluate_answer(response, sample):
     try:
         pred_ans = response.split('Answer:')[1].strip()
     except Exception as e:
-        print('Parsing prediction:', e, response)
+        print('Parsing prediction:', e, response[:100])
         pred_ans = response
     gold_ans = None
     if 'answer' in sample or 'gold_ans' in sample:
@@ -110,20 +110,20 @@ def get_qa_input_messages(few_shot, passages, query):
     return messages
 
 
-def get_retrieved_items(sample, sample_id):
+def get_retrieved_items(sample: dict, sample_id, num_doc: int, dataset: str):
     if 'retrieved' in sample:
-        retrieved = sample['retrieved'][:args.num_doc]
+        retrieved = sample['retrieved'][:num_doc]
     elif 'retrieved_id' in sample:
-        retrieved = [corpus[doc_id] for doc_id in sample['retrieved_id']][:args.num_doc]
+        retrieved = [corpus[doc_id] for doc_id in sample['retrieved_id']][:num_doc]
     else:
         retrieved = []
-    assert len(retrieved) == args.num_doc, f'sample {sample_id}: #retrieved {len(retrieved)} != args.num_doc {args.num_doc}'
+    assert len(retrieved) == num_doc, f'sample {sample_id}: #retrieved {len(retrieved)} != args.num_doc {num_doc}'
     if len(retrieved):
         if isinstance(retrieved[0], dict):
             retrieved = [item['title'] + '\n' + item['text'] for item in retrieved]
         elif isinstance(retrieved[0], list):
             retrieved = ['\n'.join(item) for item in retrieved]
-    if args.dataset == 'hotpotqa':
+    if dataset == 'hotpotqa':
         retrieved = [remove_newlines_after_first(item) for item in retrieved]
     return retrieved
 
@@ -138,7 +138,7 @@ def parallel_qa_read(data: list, demos: list, args, client, output_path: str, to
         if sample_id in sample_id_set:
             return None  # Skip processing if sample already processed
         query = sample['question']
-        retrieved = get_retrieved_items(sample, sample_id)
+        retrieved = get_retrieved_items(sample, sample_id, args.num_doc, args.dataset)
 
         response = qa_read_for_one_sample(query, retrieved, demos, client)
         pred_ans, em, f1, precision, recall = evaluate_answer(response, sample)

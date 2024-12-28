@@ -21,7 +21,7 @@ def process_file(file_id, client):
     print(f'Processing file {file_id}, content length:', len(lines))
 
     response = {}  # custom_id -> response, adjusted for global custom IDs
-    for i, line in enumerate(tqdm(lines)):
+    for i, line in tqdm(enumerate(lines)):
         item = json.loads(line)
         response[item['custom_id']] = item['response']['body']['choices'][0]['message']['content']
 
