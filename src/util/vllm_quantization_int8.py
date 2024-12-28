@@ -5,7 +5,7 @@ if __name__ == '__main__':
     from llmcompressor.transformers import SparseAutoModelForCausalLM
     from transformers import AutoTokenizer
 
-    MODEL_ID = "meta-llama/Meta-Llama-3.3-70B-Instruct"
+    MODEL_ID = "meta-llama/Llama-3.3-70B-Instruct"
     model = SparseAutoModelForCausalLM.from_pretrained(
         MODEL_ID, device_map="auto", torch_dtype="auto",
     )
@@ -51,7 +51,7 @@ if __name__ == '__main__':
     )
 
     # Save the compressed model
-    SAVE_DIR = MODEL_ID.split("/")[1] + "-W8A8-Dynamic-Per-Token"
+    SAVE_DIR = 'exp/model/' + MODEL_ID.split("/")[1] + "-W8A8-Dynamic-Per-Token"
     model.save_pretrained(SAVE_DIR, save_compressed=True)
     tokenizer.save_pretrained(SAVE_DIR)
     print(f"Model and tokenizer saved to {SAVE_DIR}")

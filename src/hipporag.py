@@ -199,7 +199,7 @@ class HippoRAG:
             # elif reranker_name.startswith('meta-llama/Llama-'):
             #     from src.rerank import VLLMFilter
             #     self.reranker = VLLMFilter(reranker_name)
-            if (reranker_name.startswith('gpt') or reranker_name.startswith('ft:gpt') or reranker_name.startswith('meta-llama/Llama-')):
+            if reranker_name.startswith('gpt') or reranker_name.startswith('ft:gpt') or 'Llama-' in reranker_name:
                 from src.rerank import DSPyFilter
                 self.reranker = DSPyFilter(reranker_name, dspy_file_path=reranker_dspy_file_path)
             elif reranker_name in ['oracle_triple']:
@@ -741,7 +741,11 @@ class HippoRAG:
                                   f'fact_embeddings_{self.corpus_name}_'
                                   f'{self.extraction_model_name_processed}_{self.graph_creating_retriever_name_processed}.p')
         if os.path.isfile(triple_embeddings_path):
-            self.triple_embeddings = pickle.load(open(triple_embeddings_path, 'rb'))
+            try:
+                self.triple_embeddings = pickle.load(open(triple_embeddings_path, 'rb'))
+            except Exception as e:
+                self.logger.error(f'Error loading triple embeddings {triple_embeddings_path}: {e}')
+                exit(1)
             self.logger.info(
                 'Loaded triple embeddings from: ' + triple_embeddings_path + ', shape: ' + str(self.triple_embeddings.shape))
         else:

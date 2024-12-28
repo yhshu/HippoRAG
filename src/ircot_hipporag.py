@@ -173,7 +173,7 @@ if __name__ == '__main__':
     doc_ensemble = string_to_bool(args.doc_ensemble)
     doc_ensemble_str = f'doc_ensemble_{args.recognition_threshold}' if doc_ensemble else 'no_ensemble'
     dpr_only_str = 'dpr_only' if args.dpr_only else 'hipporag'
-    llm_model_name_processed = args.llm_model.replace('/', '_').replace('.', '_')
+    llm_model_name_processed = args.llm_model.replace('/', '_').replace('.', '_').replace('exp/model/', '')
     rerank_model_name_processed = args.reranker.replace('/', '_').replace('.', '_') if args.reranker else ''
     rerank_str = f'_RE_{rerank_model_name_processed}' if rerank_model_name_processed != '' else ''
     rerank_dspy_name_processed = args.reranker_dspy.split('/')[-1].replace('.json', '') if args.reranker_dspy else ''
