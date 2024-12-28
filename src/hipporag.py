@@ -566,8 +566,12 @@ class HippoRAG:
         max_samples = np.max(
             [int(file.split('{}_'.format(self.extraction_model_name_processed))[1].split('.json')[0]) for file in
              possible_files])
-        extracted_file = json.load(
-            open('output/openie_{}_results_{}_{}_{}.json'.format(self.corpus_name, self.extraction_type, self.extraction_model_name_processed, max_samples), 'r'))
+        try:
+            extracted_file_path = 'output/openie_{}_results_{}_{}_{}.json'.format(self.corpus_name, self.extraction_type, self.extraction_model_name_processed, max_samples)
+            extracted_file = json.load(open(extracted_file_path, 'r'))
+        except Exception as e:
+            self.logger.error(f'Error loading extraction file {extracted_file_path}: {str(e)}')
+            exit(1)
 
         self.extracted_triples = extracted_file['docs']
 

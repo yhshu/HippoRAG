@@ -123,6 +123,7 @@ def named_entity_recognition_batch_vllm(client, passages, extractor_name=None):
         all_prompts = [prompt.to_string() for prompt in all_prompts]
 
     print('NER prompt example:', all_prompts[0])
+    print(f'Running NER on {len(all_prompts)} passages')
     vllm_output = client.generate(
         all_prompts,
         sampling_params=SamplingParams(max_tokens=512, temperature=0),
@@ -149,6 +150,7 @@ def openie_post_ner_extract_batch_vllm(client, passages, entities_list, extracto
     from vllm import SamplingParams
     from vllm.model_executor.guided_decoding.guided_fields import GuidedDecodingRequest
 
+    print(f'Running OpenIE on {len(all_prompts)} passages after NER')
     vllm_output = client.generate(
         all_prompts,
         sampling_params=SamplingParams(max_tokens=2048, temperature=0),

@@ -110,6 +110,7 @@ def run_ner_on_texts_vllm(client, all_queries):
     else:
         prompts = [ner_messages.to_string() for ner_messages in query_ner_prompts]
 
+    print(f"Running NER on {len(all_queries)} queries")
     vllm_output = client.generate(
         prompts,
         sampling_params=vllm.SamplingParams(max_tokens=512, temperature=0),
