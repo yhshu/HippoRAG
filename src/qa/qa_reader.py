@@ -8,7 +8,7 @@ from langchain_community.cache import SQLiteCache
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate
 
-from src.langchain_util import init_langchain_model
+from src.langchain_util import init_llm_client
 
 from src.baselines.ircot import parse_prompt
 from src.qa.twowikimultihopqa_evaluation import compare_prediction_and_golds
@@ -35,6 +35,7 @@ cot_system_instruction = ('As an advanced reading comprehension assistant, your 
 cot_system_instruction_no_doc = ('As an advanced reading comprehension assistant, your task is to analyze the questions and then answer them. '
                                  'Your response start after "Thought: ", where you will methodically break down the reasoning process, illustrating how you arrive at conclusions. '
                                  'Conclude with "Answer: " to present a concise, definitive response, devoid of additional elaborations.')
+cot_json_mode_instruction = """Respond in a JSON format, e.g., for the question `Paris is the capital of which country?`, respond {"Thought": "Paris is the capital of France.", "Answer": "France"}"""
 
 
 def qa_read_for_one_sample(query: str, passages: list, few_shot: list, client):
@@ -58,12 +59,19 @@ def qa_read_for_one_sample(query: str, passages: list, few_shot: list, client):
     return response_content
 
 
-def evaluate_answer(response, sample):
-    try:
-        pred_ans = response.split('Answer:')[1].strip()
-    except Exception as e:
-        print('Parsing prediction:', e, response[:100])
-        pred_ans = response
+def evaluate_answer(response, sample, json_mode=False):
+    if not json_mode:
+        try:
+            pred_ans = response.split('Answer:')[1].strip()
+        except Exception as e:
+            print('Parsing prediction:', e, response[:100])
+            pred_ans = response
+    else:
+        try:
+            pred_ans = json.loads(response)['Answer']
+        except Exception as e:
+            print('Parsing prediction:', e, response[:100])
+            pred_ans = response
     gold_ans = None
     if 'answer' in sample or 'gold_ans' in sample:
         gold_ans = sample['answer'] if 'answer' in sample else sample['gold_ans']
@@ -83,8 +91,11 @@ def evaluate_answer(response, sample):
     return pred_ans, em, f1, precision, recall
 
 
-def get_qa_input_messages(few_shot, passages, query):
+def get_qa_input_messages(few_shot, passages, query, json_mode=False):
     instruction = cot_system_instruction if len(passages) else cot_system_instruction_no_doc
+    if json_mode:
+        instruction += '\n' + cot_json_mode_instruction
+
     messages = [SystemMessage(instruction)]
     if few_shot:
         for sample in few_shot:
@@ -221,7 +232,7 @@ if __name__ == '__main__':
 
     assert data and len(data)
     demos = demos[:args.num_demo]
-    client = init_langchain_model(args.llm, args.llm_model)
+    client = init_llm_client(args.llm, args.llm_model)
     parallel_qa_read(data, demos, args, client, output_path, total_metrics, processed_id_set)
     with open(output_path, 'w') as f:
         json.dump(data, f)

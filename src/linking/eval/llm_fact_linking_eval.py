@@ -9,7 +9,7 @@ from langchain.globals import set_llm_cache
 from langchain_community.cache import SQLiteCache
 from tqdm import tqdm
 
-from src.langchain_util import init_langchain_model
+from src.langchain_util import init_llm_client
 from src.linking.llama3_fact_linker_train import load_custom_dataset
 
 if __name__ == '__main__':
@@ -21,7 +21,7 @@ if __name__ == '__main__':
 
     set_llm_cache(SQLiteCache(database_path=f".llm_{args.model}_rerank.db"))
     if args.model.startswith('gpt-') or args.model.startswith('ft:gpt-') or args.model.startswith('o1-'):
-        model = init_langchain_model(args.llm, args.model)
+        model = init_llm_client(args.llm, args.model)
 
     selected_datasets = args.datasets
     datasets = load_custom_dataset(selected_datasets=selected_datasets)

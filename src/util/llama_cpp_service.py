@@ -55,6 +55,22 @@ PROMPT_JSON_TEMPLATE = {
     },
     "json": {
         "type": "object",
+    },
+    "qa_cot": {
+        "type": "object",
+        "required": ["Thought", "Answer"],
+        "properties": {
+            "Thought": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+            },
+            "Answer": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+            },
+        },
     }
 }
 

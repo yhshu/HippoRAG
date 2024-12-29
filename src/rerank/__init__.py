@@ -11,7 +11,7 @@ from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from src.langchain_util import init_langchain_model
+from src.langchain_util import init_llm_client
 from src.util.llama_cpp_service import langchain_message_to_llama_3_prompt, PROMPT_JSON_TEMPLATE
 
 
@@ -62,7 +62,7 @@ class Reranker:
             model_name = 'http://localhost:8080/completion'
         else:
             raise NotImplementedError(f"Model {model_name} not implemented for reranker.")
-        self.model = init_langchain_model(llm_provider, model_name)
+        self.model = init_llm_client(llm_provider, model_name)
 
     def rerank(self, task: str, query, candidate_indices, candidate_items, len_after_rerank=None):
         pass
@@ -378,8 +378,6 @@ class DSPyFilter(Reranker):
                  addr='localhost', port='8000'):
         from src.rerank.dspy_optimize import FactFilterProgram
         import dspy
-
-        model_name_processed = model_name.replace('/', '_')
 
         self.program = FactFilterProgram()
         if model_name.startswith('gpt-'):

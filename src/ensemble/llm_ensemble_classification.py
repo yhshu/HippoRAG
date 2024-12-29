@@ -5,7 +5,7 @@ from langchain.globals import set_llm_cache
 from langchain_community.cache import SQLiteCache
 from langchain_core.messages import SystemMessage, HumanMessage
 
-from src.langchain_util import init_langchain_model
+from src.langchain_util import init_llm_client
 
 system_message = """Given a query and candidate passages, classify whether the passages fully support, partially support or do not support the query. Consider multi-hop reasoning across passages. Respond in JSON format, e.g., {"label": "FULLY"}, {"label": "PARTIALLY"}, or {"label": "NOT"}."""
 
@@ -15,7 +15,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='gpt-4o-mini')
     args = parser.parse_args()
 
-    client = init_langchain_model(args.llm, args.model)
+    client = init_llm_client(args.llm, args.model)
 
     with open('data/relevance_classifier_training/musique_dev.jsonl', 'r') as f:
         dev_data = f.readlines()

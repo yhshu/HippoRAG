@@ -9,7 +9,7 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate
 from tqdm import tqdm
 
-from src.langchain_util import init_langchain_model
+from src.langchain_util import init_llm_client
 
 
 def paraphrasing_question(question: str, client):
@@ -40,7 +40,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='gpt-4o')
     args = parser.parse_args()
 
-    client = init_langchain_model(args.llm, args.model)
+    client = init_llm_client(args.llm, args.model)
     dataset = json.load(open(f'data/{args.dataset}.json', 'r'))
     for sample in tqdm(dataset):
         question = sample['question']

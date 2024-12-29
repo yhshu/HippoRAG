@@ -14,7 +14,7 @@ from langchain_community.llms.vllm import VLLMOpenAI
 from langchain_community.chat_models import ChatOllama
 from tqdm import tqdm
 
-from src.langchain_util import init_langchain_model
+from src.langchain_util import init_llm_client
 from src.openie_extraction_instructions import ner_prompts, openie_post_ner_prompts
 from src.processing import extract_json_dict, deduplicate_triples, fix_broken_generated_json, corpus_has_duplication
 
@@ -403,5 +403,5 @@ if __name__ == '__main__':
     parser.add_argument('--num_processes', type=int, default=10)
 
     args = parser.parse_args()
-    client = init_langchain_model(args.llm, args.model_name)
+    client = init_llm_client(args.llm, args.model_name)
     openie_for_corpus(args.dataset, args.run_ner, args.num_passages, args.llm, args.model_name, args.num_processes, client)

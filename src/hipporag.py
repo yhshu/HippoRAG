@@ -14,7 +14,7 @@ from scipy.sparse import csr_matrix
 
 from tqdm import tqdm
 
-from src.langchain_util import init_langchain_model, LangChainModel
+from src.langchain_util import init_llm_client, LangChainModel
 from src.lm_wrapper import EmbeddingModelWrapper
 from src.lm_wrapper.gritlm import GritLMWrapper
 from src.lm_wrapper.nv_embed import NVEmbedV2Wrapper
@@ -214,13 +214,13 @@ class HippoRAG:
     @property
     def client(self):
         if self._client is None:
-            self._client = init_langchain_model(self.extraction_model, self.extraction_model_name)
+            self._client = init_llm_client(self.extraction_model, self.extraction_model_name)
         return self._client
 
     @property
     def qa_model(self):
         if self._qa_model is None:
-            self._qa_model = init_langchain_model('openai', 'gpt-4o-mini')
+            self._qa_model = init_llm_client('openai', 'gpt-4o-mini')
         return self._qa_model
 
     def get_passage_by_idx(self, passage_idx):

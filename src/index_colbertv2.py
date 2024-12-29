@@ -1,6 +1,6 @@
 import sys
 
-from src.langchain_util import init_langchain_model
+from src.langchain_util import init_llm_client
 
 sys.path.append('.')
 
@@ -36,7 +36,7 @@ if __name__ == '__main__':
 
     # Running Open Information Extraction
     if not args.skip_openie:
-        client = init_langchain_model(args.llm, args.extractor, num_gpus=args.num_gpus)  # LangChain model
+        client = init_llm_client(args.llm, args.extractor, num_gpus=args.num_gpus)  # LangChain model
         openie_for_corpus(args.dataset, args.run_ner, args.num_passages, args.llm, args.extractor, args.num_thread, client)
         query_ner_parallel(args.dataset, args.extractor, args.num_thread, client)
 

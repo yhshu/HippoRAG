@@ -20,7 +20,7 @@ class LangChainModel:
         self.kwargs = kwargs
 
 
-def init_langchain_model(llm: str, model_name: str, temperature: float = 0.0, max_retries=5, timeout=60, **kwargs):
+def init_llm_client(llm: str, model_name: str, temperature: float = 0.0, max_retries=5, timeout=60, **kwargs):
     """
     Initialize a language model from the langchain library.
     :param llm: The LLM to use, e.g., 'openai', 'together'
@@ -59,10 +59,16 @@ def init_langchain_model(llm: str, model_name: str, temperature: float = 0.0, ma
         if '8B' in model_name:
             tensor_parallel_size = 1
         quantization = None
+        load_format = 'auto'
+        if 'bnb' in model_name:
+            quantization = 'bitsandbytes'
+            load_format = 'bitsandbytes'
+            tensor_parallel_size = 1
+            pipeline_parallel_size = kwargs.get('num_gpus', 4)
         llm = LLM(model=model_name, tensor_parallel_size=tensor_parallel_size, pipeline_parallel_size=pipeline_parallel_size,
                   seed=0, dtype='auto', max_seq_len_to_capture=4096, enable_prefix_caching=True,
                   enforce_eager=True, gpu_memory_utilization=kwargs.get('gpu_memory_utilization', 0.93),
-                  max_num_seqs=20, max_model_len=4096, quantization=quantization)
+                  max_num_seqs=20, max_model_len=4096, quantization=quantization, load_format=load_format)
         return llm
     else:
         # add any LLMs you want to use here using LangChain
@@ -76,7 +82,7 @@ if __name__ == '__main__':
     parser.add_argument('--query', type=str, help='query text', default="who are you?")
     args = parser.parse_args()
 
-    model = init_langchain_model(args.llm, args.model_name)
+    model = init_llm_client(args.llm, args.model_name)
     messages = [("system", "You are a helpful assistant. Please answer the question from the user."), ("human", args.query)]
     completion = model.invoke(messages)
     print(completion.content)

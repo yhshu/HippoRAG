@@ -5,7 +5,7 @@ sys.path.append('.')
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 
-from src.langchain_util import init_langchain_model, num_tokens_by_tiktoken
+from src.langchain_util import init_llm_client, num_tokens_by_tiktoken
 from src.processing import mean_pooling_embedding_with_normalization
 from src.elastic_search_tool import search_with_score
 import numpy as np
@@ -316,7 +316,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     retriever_name = args.retriever.replace('/', '_').replace('.', '_')
-    client = init_langchain_model(args.llm, args.llm_model)
+    client = init_llm_client(args.llm, args.llm_model)
     colbert_configs = {'root': f'data/lm_vectors/colbertv2/{args.dataset}', 'doc_index_name': 'nbits_2', 'phrase_index_name': 'nbits_2'}
 
     # load dataset and corpus

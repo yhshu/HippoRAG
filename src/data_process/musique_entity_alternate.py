@@ -13,7 +13,7 @@ from tqdm import tqdm
 import random
 import string
 
-from src.langchain_util import init_langchain_model
+from src.langchain_util import init_llm_client
 
 
 def random_char_replacement(name, num_replacements=2):
@@ -186,7 +186,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     random.seed(1)
-    client = init_langchain_model('openai', args.llm)
+    client = init_llm_client('openai', args.llm)
     set_llm_cache(SQLiteCache(database_path=".langchain.db"))
 
     musique_samples = json.load(open('data/musique.json'))
