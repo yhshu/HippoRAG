@@ -24,6 +24,14 @@ from src.hipporag import HippoRAG
 
 ircot_reason_instruction = 'You serve as an intelligent assistant, adept at facilitating users through complex, multi-hop reasoning across multiple documents. This task is illustrated through demonstrations, each consisting of a document set paired with a relevant question and its multi-hop reasoning thoughts. Your task is to generate one thought for current step, DON\'T generate the whole thoughts at once! If you reach what you believe to be the final step, start with "So the answer is:".'
 
+def generate_random_filename(length=8):
+    """Generate a random filename with a timestamp and random string."""
+    import time
+    timestamp = int(time.time())
+    import random
+    import string
+    random_str = ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+    return f"{timestamp}_{random_str}"
 
 def parse_prompt(file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
@@ -448,8 +456,13 @@ if __name__ == '__main__':
 
         results.append(sample)
         if (sample_idx + 1) % 10 == 0:
-            with open(output_path, 'w') as f:
-                json.dump(results, f)
+            try:
+                with open(output_path, 'w') as f:
+                    json.dump(results, f)
+            except OSError as e:
+                output_path = f"output/ircot_retrieval/{args.dataset}/{generate_random_filename()}.json"
+                with open(output_path, 'w') as f:
+                    json.dump(results, f)
     # end for each sample
 
     if do_eval:
