@@ -117,9 +117,15 @@ class BM25SparseRetriever(TextRetriever):
         import bm25s
         try:
             query_tokens = bm25s.tokenize(query, stemmer=self.stemmer)
+            if len(query_tokens.ids[0]) == 0:
+                if return_scores:
+                    return [], []
+                return []
             results, scores = self.retriever.retrieve(query_tokens, k=k)
         except Exception as e:
             print('get top-k indices exception', e)
+            print('query:', query)
+            print('#corpus:', len(self.corpus))
             exit(1)
 
         # for each result, get the index of the passage

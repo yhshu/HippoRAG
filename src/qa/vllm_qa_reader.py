@@ -27,7 +27,7 @@ def vllm_qa_read(data, demos, args, client, total_metrics, json_mode=False):
 
         all_messages.append(get_qa_input_messages(demos, retrieved, query, json_mode))
 
-    if 'meta-llama/Llama-3' in client.llm_engine.model_config.served_model_name:
+    if 'meta-llama/Llama-3' in client.llm_engine.model_config.served_model_name or 'Meta-Llama-3.' in client.llm_engine.model_config.served_model_name:
         from src.util.llama_cpp_service import langchain_message_to_llama_3_prompt
         all_prompts = [langchain_message_to_llama_3_prompt(qa_message) for qa_message in all_messages]
     else:
