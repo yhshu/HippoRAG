@@ -1,3 +1,4 @@
+import argparse
 import json
 import os
 
@@ -7,12 +8,16 @@ from src.data_process.create_dataset.wiki_corpus import read_enwiki_corpus
 from src.pangu.retrieval_api import BM25SparseRetriever
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--distractor', type=int, default=10000)
+    args = parser.parse_args()
+
     dataset = json.load(open('data/musique.json'))
 
     full_corpus, contents = read_enwiki_corpus()
     bm25_retriever = BM25SparseRetriever(contents, 'data/bm25_sparse/wiki_text')
 
-    num_distractor = 10000
+    num_distractor = args.distractor
     sampled_corpus = []
     collected = set()
     for sample_idx, sample in tqdm(enumerate(dataset), 'Collecting relevant wiki text'):
