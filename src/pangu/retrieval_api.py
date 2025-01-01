@@ -144,6 +144,23 @@ class BM25SparseRetriever(TextRetriever):
             return indices, res_score
         return indices
 
+    def get_top_k_sentences(self, query, k=10, distinct=True, return_scores=False):
+        import bm25s
+        try:
+            query_tokens = bm25s.tokenize(query, stemmer=self.stemmer)
+            if len(query_tokens.ids[0]) == 0:
+                if return_scores:
+                    return [], []
+                return []
+            results, scores = self.retriever.retrieve(query_tokens, k=k)
+            if return_scores:
+                return results, scores
+            return results
+        except Exception as e:
+            print('get top-k indices exception', e)
+            print('query:', query)
+            print('#corpus:', len(self.corpus))
+
     def scores_on_corpus(self, query):
         print("BM25SparseRetriever does not support scores_on_corpus method. Use get_top_k_indices instead.")
         pass
