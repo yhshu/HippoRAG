@@ -68,7 +68,7 @@ def init_llm_client(llm: str, model_name: str, temperature: float = 0.0, max_ret
         llm = LLM(model=model_name, tensor_parallel_size=tensor_parallel_size, pipeline_parallel_size=pipeline_parallel_size,
                   seed=0, dtype='auto', max_seq_len_to_capture=4096, enable_prefix_caching=True,
                   enforce_eager=True, gpu_memory_utilization=kwargs.get('gpu_memory_utilization', 0.93),
-                  max_num_seqs=20, max_model_len=4096, quantization=quantization, load_format=load_format)
+                  max_model_len=4096, quantization=quantization, load_format=load_format)
         return llm
     else:
         # add any LLMs you want to use here using LangChain

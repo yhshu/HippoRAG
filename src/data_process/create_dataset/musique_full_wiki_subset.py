@@ -12,7 +12,7 @@ if __name__ == '__main__':
     full_corpus, contents = read_enwiki_corpus()
     bm25_retriever = BM25SparseRetriever(contents, 'data/bm25_sparse/wiki_text')
 
-    num_distractor = 5000
+    num_distractor = 10000
     sampled_corpus = []
     collected = set()
     for sample_idx, sample in tqdm(enumerate(dataset), 'Collecting relevant wiki text'):
