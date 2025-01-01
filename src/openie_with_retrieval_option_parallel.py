@@ -28,7 +28,7 @@ def named_entity_recognition(passage: str, client, max_retry=5, extractor_name=N
     if not isinstance(client, ChatOpenAI):
         import vllm
         if isinstance(client, vllm.LLM):
-            return named_entity_recognition_batch_vllm(passage, client, max_retry, extractor_name)
+            return named_entity_recognition_batch_vllm(client, [passage], extractor_name)
     ner_messages = ner_prompts.format_prompt(user_input=passage)
 
     done = False
