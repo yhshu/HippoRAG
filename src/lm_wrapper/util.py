@@ -1,4 +1,4 @@
-def init_embedding_model(model_name):
+def init_embedding_model(model_name, **kwargs):
     if 'GritLM/' in model_name:
         from src.lm_wrapper.gritlm import GritLMWrapper
         return GritLMWrapper(model_name)
@@ -10,7 +10,7 @@ def init_embedding_model(model_name):
         return OpenAITextEmbeddingWrapper(model_name)
     elif model_name == 'nvidia/NV-Embed-v2':
         from src.lm_wrapper.nv_embed import NVEmbedV2Wrapper
-        return NVEmbedV2Wrapper(model_name=model_name)
+        return NVEmbedV2Wrapper(model_name=model_name, multi_gpu=kwargs.get('multi_gpu', False))
     elif model_name not in ['colbertv2', 'bm25']:
         from src.lm_wrapper.huggingface_util import HuggingFaceWrapper
         return HuggingFaceWrapper(model_name)  # HuggingFace model for retrieval

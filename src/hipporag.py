@@ -1,3 +1,4 @@
+import gc
 import json
 import logging
 import os
@@ -135,7 +136,6 @@ class HippoRAG:
         self.query_ner_cache = {row[query_key]: eval_json_str(row['triples']) for i, row in
                                 self.query_ner_cache.iterrows()}
 
-        self.embed_model = init_embedding_model(self.linking_retriever_name)
         self.dpr_only = dpr_only
         self.doc_ensemble = doc_ensemble
         self.corpus_path = corpus_path
@@ -190,12 +190,12 @@ class HippoRAG:
         if reranker_name is not None:
             # if (reranker_name.startswith('gpt') or reranker_name.startswith('ft:gpt')
             #         or reranker_name.startswith('o1-') or reranker_name in ['llama_cpp_server']):
-                # from src.rerank import LLMLogitsReranker
-                # reranker = LLMLogitsReranker(fact_rerank_model_name)
-                # from src.rerank import RankGPT
-                # reranker = RankGPT(rerank_model_name)
-                # from src.rerank import LLMFilter
-                # self.reranker = LLMFilter(reranker_name)
+            # from src.rerank import LLMLogitsReranker
+            # reranker = LLMLogitsReranker(fact_rerank_model_name)
+            # from src.rerank import RankGPT
+            # reranker = RankGPT(rerank_model_name)
+            # from src.rerank import LLMFilter
+            # self.reranker = LLMFilter(reranker_name)
             # elif reranker_name.startswith('meta-llama/Llama-'):
             #     from src.rerank import VLLMFilter
             #     self.reranker = VLLMFilter(reranker_name)
@@ -222,6 +222,12 @@ class HippoRAG:
         if self._qa_model is None:
             self._qa_model = init_llm_client('openai', 'gpt-4o-mini')
         return self._qa_model
+
+    @property
+    def embed_model(self):
+        if self._embed_model is None:
+            self._embed_model = init_embedding_model(self.linking_retriever_name)
+        return self._embed_model
 
     def get_passage_by_idx(self, passage_idx):
         """
@@ -698,8 +704,9 @@ class HippoRAG:
         try:
             self.graph_plus is not None
         except Exception as e:
-            print(f'Graph not loaded: {e}, corpus: {self.corpus_name}, extractor: {self.extraction_model_name_processed}, graph retriever: {self.graph_creating_retriever_name_processed}, '
-                  f'linker: {self.linking_retriever_name_processed}, graph type: {self.graph_type}')
+            print(
+                f'Graph not loaded: {e}, corpus: {self.corpus_name}, extractor: {self.extraction_model_name_processed}, graph retriever: {self.graph_creating_retriever_name_processed}, '
+                f'linker: {self.linking_retriever_name_processed}, graph type: {self.graph_type}')
             exit(1)
 
         for edge, weight in tqdm(self.graph_plus.items(), total=len(self.graph_plus), desc='Building Graph'):
@@ -749,9 +756,14 @@ class HippoRAG:
             self.logger.info(
                 'Loaded triple embeddings from: ' + triple_embeddings_path + ', shape: ' + str(self.triple_embeddings.shape))
         else:
+            self.logger.info('Encoding triples...')
+            self._embed_model = None
+            gc.collect()
+            self._embed_model = init_embedding_model(self.linking_retriever_name, multi_gpu=True)
             self.triple_embeddings = self.embed_model.encode_text(self.triples_str_list, return_cpu=True,
                                                                   return_numpy=True, norm=True, batch_size=80)
             pickle.dump(self.triple_embeddings, open(triple_embeddings_path, 'wb'))
+            self._embed_model = None
             self.logger.info(
                 'Saved triple embeddings to: ' + triple_embeddings_path + ', shape: ' + str(self.triple_embeddings.shape))
 
@@ -771,12 +783,15 @@ class HippoRAG:
                     self.kb_node_phrase_embeddings = np.squeeze(self.kb_node_phrase_embeddings, axis=1)
                 self.logger.info('Loaded phrase embeddings from: ' + kb_node_phrase_embeddings_path + ', shape: ' + str(self.kb_node_phrase_embeddings.shape))
             else:
+                self.logger.info('Encoding node phrases...')
+                # self.embed_model = init_embedding_model(self.linking_retriever_name, multi_gpu=True) todo
                 self.kb_node_phrase_embeddings = self.embed_model.encode_text(self.node_phrases.tolist(), return_cpu=True, return_numpy=True,
                                                                               norm=True, batch_size=80)
                 dir = os.path.dirname(kb_node_phrase_embeddings_path)
                 if not os.path.exists(dir):
                     os.makedirs(dir)
                 pickle.dump(self.kb_node_phrase_embeddings, open(kb_node_phrase_embeddings_path, 'wb'))
+                # self.embed_model = init_embedding_model(self.linking_retriever_name, multi_gpu=False) todo
                 self.logger.info('Saved phrase embeddings to: ' + kb_node_phrase_embeddings_path + ', shape: ' + str(self.kb_node_phrase_embeddings.shape))
 
     def load_node_vectors_from_string_encoding_cache(self, string_file_path):

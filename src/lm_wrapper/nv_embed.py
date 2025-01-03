@@ -17,6 +17,7 @@ class NVEmbedV2Wrapper(EmbeddingModelWrapper):
         self.model.max_seq_length = max_seq_length
         self.model.tokenizer.padding_side = "right"
         self.multi_gpu = multi_gpu
+        print(f'Initialized NV-Embed-v2 model, multi-GPU: {multi_gpu}')
 
     def _add_eos(self, input_examples: List[str]) -> List[str]:
         # Adds EOS token to each example
@@ -28,7 +29,7 @@ class NVEmbedV2Wrapper(EmbeddingModelWrapper):
             prompt = f"Instruct: {instruction}\nQuery: "
         else:
             prompt = None
-        print(f'NV-Embed-v2 encoding, batch size: {batch_size}')
+        # print(f'NV-Embed-v2 encoding, batch size: {batch_size}')
         return self.model.encode(self._add_eos(texts), batch_size=batch_size, prompt=prompt, normalize_embeddings=True)
 
     def encode_list_multi_gpu(self, texts: List[str], instruction: str, batch_size: int = 2) -> torch.Tensor:

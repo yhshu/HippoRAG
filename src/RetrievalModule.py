@@ -63,7 +63,7 @@ class RetrievalModule:
                 self.encode_strings_func = self.encode_strings_wrapper
             elif 'nvidia/NV-Embed' in retriever_name:
                 from src.lm_wrapper.nv_embed import NVEmbedV2Wrapper
-                self.plm = NVEmbedV2Wrapper(retriever_name)
+                self.plm = NVEmbedV2Wrapper(retriever_name, multi_gpu=True)
                 self.encode_strings_func = self.encode_strings_wrapper
             else:
                 if 'ckpt' in retriever_name:
@@ -113,7 +113,7 @@ class RetrievalModule:
 
         self.vector_dict = self.make_dictionary(sorted_df, precomp_strings, precomp_vectors)
 
-        print('Vectors Loaded.')
+        print(f'Vectors Loaded, length: {len(self.vector_dict)}')
 
         queries = string_df[string_df.type == 'query']
         kb = string_df[string_df.type == 'kb']
@@ -199,7 +199,7 @@ class RetrievalModule:
 
         return vector_dict
 
-    def encode_strings_wrapper(self, strs_to_encode, batch_size=1000):
+    def encode_strings_wrapper(self, strs_to_encode, batch_size=None):
         if not strs_to_encode:
             print('No strings to encode')
             return np.empty((0, 0)), strs_to_encode
@@ -286,8 +286,8 @@ class RetrievalModule:
 
         return all_cls, all_strings
 
-
-    def retrieve_knn(self, queries, knowledge_base, k=2047, batch_size=1000, index_batch_size=10000):
+    def retrieve_knn(self, queries, knowledge_base, k=2047, batch_size=10000, index_batch_size=10000):
+        print('Preparing to retrieve nearest neighbors...')
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         original_vecs = [self.vector_dict[s] for s in knowledge_base]
@@ -295,14 +295,16 @@ class RetrievalModule:
         if len(original_vecs) == 0:
             return {}
 
-        original_vecs = torch.tensor(original_vecs, dtype=torch.float32)
+        print(f'Normalizing original vectors, length: {len(original_vecs)}')
+        original_vecs = torch.tensor(original_vecs, dtype=torch.float32, device=device)
         original_vecs = torch.nn.functional.normalize(original_vecs, dim=1)
 
         new_vecs = [self.vector_dict[s] for s in queries]
         if len(new_vecs) == 0:
             return {}
 
-        new_vecs = torch.tensor(new_vecs, dtype=torch.float32)
+        print(f'Normalizing new vectors, length: {len(new_vecs)}')
+        new_vecs = torch.tensor(new_vecs, dtype=torch.float32, device=device)
         new_vecs = torch.nn.functional.normalize(new_vecs, dim=1)
 
         result = {}
@@ -315,10 +317,10 @@ class RetrievalModule:
             for i in range(0, len(knowledge_base_vecs), index_batch_size):
                 yield knowledge_base_vecs[i:i + index_batch_size], i
 
-        for query_batch, batch_start_idx in get_query_batches(new_vecs, batch_size):
-            query_batch = query_batch.clone().detach()
+        print('Preparing query batches')
+        query_batches = get_query_batches(new_vecs, batch_size)
+        for query_batch, batch_start_idx in tqdm(query_batches, total=len(new_vecs) // batch_size, desc='Retrieving Nearest Neighbors'):
             query_batch = query_batch.to(device)
-
             batch_similarities = []
             batch_indices = []
 
@@ -338,7 +340,7 @@ class RetrievalModule:
                 batch_indices.append(indices)
 
                 del similarity
-                kb_batch = kb_batch.cpu()
+                # kb_batch = kb_batch.cpu()
                 torch.cuda.empty_cache()
 
                 offset_kb += batch_size_kb
@@ -362,7 +364,7 @@ class RetrievalModule:
                 knn_strings = [knowledge_base[idx] for idx in global_indices.cpu().numpy()]
                 result[query] = (knn_strings, similarities_i.numpy().tolist())
 
-            query_batch = query_batch.cpu()
+            # query_batch = query_batch.cpu()
             torch.cuda.empty_cache()
         # end for each query batch
 
