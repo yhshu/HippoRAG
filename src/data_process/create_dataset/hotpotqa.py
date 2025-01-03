@@ -11,16 +11,30 @@ from src.processing import query_data_has_duplication, corpus_has_duplication
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dir', type=str, default='data/raw/hotpotqa')
-    parser.add_argument('--num_train', type=int)
-    parser.add_argument('--num_dev', type=int)
+    parser.add_argument('-ntrain', '--num_train', help='number of training samples', default=1000)
+    parser.add_argument('-ndev', '--num_dev', help='number of dev samples', default=1000)
+    parser.add_argument('-src', '--source', help='source of the data, e.g., `train`, `dev`, `test`', default='train')
     parser.add_argument('--seed', type=int, default=1)
     args = parser.parse_args()
 
-    train_data = json.load(open(os.path.join(args.dir, 'hotpot_train_v1.1.json')))
-    dev_data = json.load(open(os.path.join(args.dir, 'hotpot_dev_distractor_v1.json')))
+    split_num_sample = {}
+    if args.num_train is not None:
+        split_num_sample['train'] = args.num_train
+    if args.num_dev is not None:
+        split_num_sample['dev'] = args.num_dev
+    if args.num_test is not None:
+        split_num_sample['test'] = args.num_test
 
-    split_num_sample = {'train': args.num_train, 'dev': args.num_dev}
+    if args.source == 'train':
+        data = json.load(open(os.path.join(args.dir, 'hotpot_train_v1.1.json')))
+    elif args.source == 'dev':
+        data = json.load(open(os.path.join(args.dir, 'hotpot_dev_distractor_v1.json')))
+    else:
+        assert False, f'Invalid data source: {args.source}'
+
+    # todo: unfinished
     random.seed(args.seed)
+    random.shuffle(data)
 
     for split in split_num_sample:
         full_text_hash_set = set()
