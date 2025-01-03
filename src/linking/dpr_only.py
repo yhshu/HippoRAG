@@ -14,7 +14,7 @@ rerank_system_prompt = """Given a query and the top-k retrieved passages from tw
 - Return a JSON list of passage IDs, ordered by relevance, e.g., {"passage_id": [1, 3, 2]}."""
 
 
-def dense_passage_retrieval(hipporag: HippoRAG, query: str, rerank: bool = False, logs=None):
+def dense_passage_retrieval(hipporag: HippoRAG, query: str, rerank: bool = False, logs=None, batch_size=80):
     if 'colbertv2' in hipporag.linking_retriever_name:
         from colbert.data import Queries
         queries = Queries(path=None, data={0: query})
@@ -25,7 +25,7 @@ def dense_passage_retrieval(hipporag: HippoRAG, query: str, rerank: bool = False
     else:  # HuggingFace dense retrieval
         query_embedding = hipporag.embed_model.encode_text(query,
                                                            instruction=get_query_instruction(hipporag.embed_model, 'query_to_passage', hipporag.corpus_name),
-                                                           return_cpu=True, return_numpy=True, norm=True)
+                                                           return_cpu=True, return_numpy=True, norm=True, batch_size=batch_size)
         query_doc_scores = np.dot(hipporag.doc_embedding_mat, query_embedding.T)
         query_doc_scores = query_doc_scores.T[0]
 

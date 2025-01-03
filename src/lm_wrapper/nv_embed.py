@@ -9,13 +9,14 @@ from sentence_transformers import SentenceTransformer
 
 from src.lm_wrapper import EmbeddingModelWrapper
 
-
 class NVEmbedV2Wrapper(EmbeddingModelWrapper):
-    def __init__(self, model_name: str = 'nvidia/NV-Embed-v2', max_seq_length: int = 2048):
+    def __init__(self, model_name: str = 'nvidia/NV-Embed-v2', max_seq_length: int = 2048, multi_gpu=False):
         # Initialize the model with specified configurations
-        self.model = SentenceTransformer(model_name, trust_remote_code=True)
+        device = 'cuda' if multi_gpu is False else 'cpu'
+        self.model = SentenceTransformer(model_name, trust_remote_code=True, device=device)
         self.model.max_seq_length = max_seq_length
         self.model.tokenizer.padding_side = "right"
+        self.multi_gpu = multi_gpu
 
     def _add_eos(self, input_examples: List[str]) -> List[str]:
         # Adds EOS token to each example
@@ -27,13 +28,28 @@ class NVEmbedV2Wrapper(EmbeddingModelWrapper):
             prompt = f"Instruct: {instruction}\nQuery: "
         else:
             prompt = None
+        print(f'NV-Embed-v2 encoding, batch size: {batch_size}')
         return self.model.encode(self._add_eos(texts), batch_size=batch_size, prompt=prompt, normalize_embeddings=True)
 
-    def encode_text(self, text: Union[str, List[str]], instruction: str = '', norm: bool = True, return_cpu: bool = False, return_numpy: bool = False,
-                    batch_size=2) -> np.ndarray:
+    def encode_list_multi_gpu(self, texts: List[str], instruction: str, batch_size: int = 2) -> torch.Tensor:
+        # Encode the list of texts with instruction as prefix
+        if instruction is not None and instruction != '':
+            prompt = f"Instruct: {instruction}\nQuery: "
+        else:
+            prompt = None
+        print(f'NV-Embed-v2 encoding, batch size per GPU: {batch_size}, #GPU: {torch.cuda.device_count()}')
+        pool = self.model.start_multi_process_pool()
+        emb = self.model.encode_multi_process(self._add_eos(texts), pool, prompt=prompt, normalize_embeddings=True)
+        self.model.stop_multi_process_pool(pool)
+        return emb
+
+    def encode_text(self, text: Union[str, List[str]], instruction: str = '', norm: bool = True, return_cpu: bool = False, return_numpy: bool = False, batch_size=5) -> np.ndarray:
         if isinstance(text, str):
             text = [text]
-        embeddings = self.encode_list(text, instruction, batch_size=batch_size)
+        if self.multi_gpu:
+            embeddings = self.encode_list_multi_gpu(text, instruction, batch_size=batch_size)
+        else:
+            embeddings = self.encode_list(text, instruction, batch_size=batch_size)
 
         if isinstance(embeddings, torch.Tensor):
             if return_cpu:
@@ -51,7 +67,6 @@ class NVEmbedV2Wrapper(EmbeddingModelWrapper):
     def get_query_doc_scores(self, query_vec: np.ndarray, doc_vecs: np.ndarray) -> np.ndarray:
         # Calculate similarity scores between query and document vectors
         return np.dot(query_vec, doc_vecs.T)
-
 
 if __name__ == '__main__':
     queries = [
