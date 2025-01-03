@@ -9,7 +9,7 @@ from src.processing import fix_broken_generated_json
 
 
 import argparse
-from src.openie_with_retrieval_option_parallel import  named_entity_recognition_batch_vllm, openie_post_ner_extract_batch_vllm
+from src.openie_with_retrieval_option_parallel import named_entity_recognition_batch_vllm, openie_post_ner_extract_batch_vllm
 
 
 def openie_for_one_batch(corpus_path, extractor_name):
@@ -87,7 +87,6 @@ if __name__ == '__main__':
     parser.add_argument('--llm', type=str, default='vllm', help="LLM, e.g., 'openai' or 'together'")
     parser.add_argument('--extractor', type=str, default='neuralmagic/Meta-Llama-3.1-70B-Instruct-quantized.w8a8', help='Specific model name')
     parser.add_argument('--num_gpus', type=int, default=4)
-
     args = parser.parse_args()
     print(args)
 

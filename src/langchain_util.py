@@ -29,9 +29,14 @@ def init_llm_client(llm: str, model_name: str, temperature: float = 0.0, max_ret
     if llm == 'openai':
         # https://python.langchain.com/v0.1/docs/integrations/chat/openai/
         from langchain_openai import ChatOpenAI
-        assert model_name.startswith('gpt-') or model_name.startswith('ft:gpt-') or model_name.startswith('o1-'), f"LLM provider {llm}, model name {model_name} not supported."
+        assert (model_name.startswith('gpt-') or model_name.startswith('ft:gpt-')
+                or model_name.startswith('o1-') or model_name.startswith('deepseek')), \
+            f"LLM provider {llm}, model name {model_name} not supported."
         if model_name.startswith('o1-'):
             return ChatOpenAI(api_key=os.environ.get("OPENAI_API_KEY"), model=model_name, max_retries=max_retries, timeout=timeout, **kwargs)
+        elif model_name.startswith('deepseek'):
+            assert os.environ.get("DEEPSEEK_API_KEY"), "DEEPSEEK_API_KEY environment variable not set."
+            return ChatOpenAI(api_key=os.environ.get("DEEPSEEK_API_KEY"), openai_api_base='https://api.deepseek.com/v1', model=model_name, max_retries=max_retries, timeout=timeout, **kwargs)
         return ChatOpenAI(api_key=os.environ.get("OPENAI_API_KEY"), model=model_name, temperature=temperature, max_retries=max_retries, timeout=timeout, **kwargs)
     elif llm == 'together':
         # https://python.langchain.com/v0.1/docs/integrations/chat/together/
@@ -67,8 +72,8 @@ def init_llm_client(llm: str, model_name: str, temperature: float = 0.0, max_ret
             pipeline_parallel_size = kwargs.get('num_gpus', 4)
         llm = LLM(model=model_name, tensor_parallel_size=tensor_parallel_size, pipeline_parallel_size=pipeline_parallel_size,
                   seed=0, dtype='auto', max_seq_len_to_capture=4096, enable_prefix_caching=True,
-                  enforce_eager=True, gpu_memory_utilization=kwargs.get('gpu_memory_utilization', 0.93),
-                  max_model_len=4096, quantization=quantization, load_format=load_format)
+                  enforce_eager=False, gpu_memory_utilization=kwargs.get('gpu_memory_utilization', 0.93),
+                  max_model_len=4096, quantization=quantization, load_format=load_format, trust_remote_code=True)
         return llm
     else:
         # add any LLMs you want to use here using LangChain
