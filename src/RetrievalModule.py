@@ -319,7 +319,7 @@ class RetrievalModule:
 
         print('Preparing query batches')
         query_batches = get_query_batches(new_vecs, batch_size)
-        for query_batch, batch_start_idx in tqdm(query_batches, total=len(new_vecs) // batch_size, desc='Retrieving Nearest Neighbors'):
+        for query_batch, batch_start_idx in tqdm(query_batches, total=int(len(new_vecs) // batch_size), desc='Retrieving Nearest Neighbors'):
             query_batch = query_batch.to(device)
             batch_similarities = []
             batch_indices = []

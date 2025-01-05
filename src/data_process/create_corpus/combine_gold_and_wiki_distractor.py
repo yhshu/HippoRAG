@@ -27,6 +27,8 @@ if __name__ == '__main__':
     done = False
     openie_docs = []
     for batch_id in range(0, args.size // chunk_size + 1):
+        if len(corpus) >= args.size:
+            break
         batch_corpus = json.load(open(f'output/corpus_batch/{args.dataset}_{batch_id}_corpus.json', 'r'))
         docs = batch_corpus['docs']
         for doc in docs:

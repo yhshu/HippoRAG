@@ -97,6 +97,7 @@ class HippoRAG:
         self.extraction_model_name = extractor_name
         self.extraction_model_name_processed = extractor_name.replace('/', '_')
         self._client = None
+        self._embed_model = None
         assert graph_creating_retriever_name
         if linker_name is None:
             linker_name = graph_creating_retriever_name
@@ -757,8 +758,6 @@ class HippoRAG:
                 'Loaded triple embeddings from: ' + triple_embeddings_path + ', shape: ' + str(self.triple_embeddings.shape))
         else:
             self.logger.info('Encoding triples...')
-            self._embed_model = None
-            gc.collect()
             self._embed_model = init_embedding_model(self.linking_retriever_name, multi_gpu=True)
             self.triple_embeddings = self.embed_model.encode_text(self.triples_str_list, return_cpu=True,
                                                                   return_numpy=True, norm=True, batch_size=80)
@@ -784,14 +783,14 @@ class HippoRAG:
                 self.logger.info('Loaded phrase embeddings from: ' + kb_node_phrase_embeddings_path + ', shape: ' + str(self.kb_node_phrase_embeddings.shape))
             else:
                 self.logger.info('Encoding node phrases...')
-                # self.embed_model = init_embedding_model(self.linking_retriever_name, multi_gpu=True) todo
+                self._embed_model = init_embedding_model(self.linking_retriever_name, multi_gpu=True)
                 self.kb_node_phrase_embeddings = self.embed_model.encode_text(self.node_phrases.tolist(), return_cpu=True, return_numpy=True,
                                                                               norm=True, batch_size=80)
                 dir = os.path.dirname(kb_node_phrase_embeddings_path)
                 if not os.path.exists(dir):
                     os.makedirs(dir)
                 pickle.dump(self.kb_node_phrase_embeddings, open(kb_node_phrase_embeddings_path, 'wb'))
-                # self.embed_model = init_embedding_model(self.linking_retriever_name, multi_gpu=False) todo
+                self._embed_model = None
                 self.logger.info('Saved phrase embeddings to: ' + kb_node_phrase_embeddings_path + ', shape: ' + str(self.kb_node_phrase_embeddings.shape))
 
     def load_node_vectors_from_string_encoding_cache(self, string_file_path):
@@ -832,10 +831,13 @@ class HippoRAG:
             self.logger.info(f'Loaded doc embeddings from {cache_filename}, shape: {self.doc_embedding_mat.shape}')
         else:
             self.doc_embeddings = []
+            self.logger.info('Encoding passages...')
+            self._embed_model = init_embedding_model(self.linking_retriever_name, multi_gpu=True)
             self.doc_embedding_mat = self.embed_model.encode_text(self.dataset_df['paragraph'].tolist(), return_cpu=True, return_numpy=True, norm=True)
             if not os.path.isdir('data/lm_vectors/{}_mean/'.format(self.linking_retriever_name_processed)):
                 os.makedirs('data/lm_vectors/{}_mean/'.format(self.linking_retriever_name_processed))
             pickle.dump(self.doc_embedding_mat, open(cache_filename, 'wb'))
+            self._embed_model = None
             self.logger.info(f'Saved doc embeddings to {cache_filename}, shape: {self.doc_embedding_mat.shape}')
 
     def run_pagerank_igraph_chunk(self, reset_prob_chunk, damping=None):
