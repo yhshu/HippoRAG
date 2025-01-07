@@ -1,11 +1,12 @@
-import argparse
-import json
-import os
 import sys
 
 sys.path.append('.')
 
-from black.trans import defaultdict
+import argparse
+from collections import defaultdict
+import json
+import os
+
 from tqdm import tqdm
 from transformers.hf_argparser import string_to_bool
 
@@ -76,6 +77,8 @@ if __name__ == '__main__':
 
     k_list = [1, 5, 10, 20, 30, 50, 80, 100, 150, 200]
     metrics = defaultdict(float)
+
+    fact_comparison = []
     for sample_idx, sample in tqdm(enumerate(data), total=len(data), desc='Retrieval'):  # for each sample
         if args.dataset in ['hotpotqa', '2wikimultihopqa', 'hotpotqa_train']:
             sample_id = sample['_id']
@@ -116,8 +119,17 @@ if __name__ == '__main__':
             print()
         print()
 
+        fact_comparison.append({
+            'query': query,
+            'linked_facts': linked_facts[:20],
+            'oracle_facts': oracle_facts
+        })
+
     for k in k_list:
         metrics[f'R@{k}'] /= len(data)
         print(f'R@{k}: {round(metrics[f"R@{k}"], 4)}')
         metrics[f'P@{k}'] /= len(data)
         print(f'P@{k}: {round(metrics[f"P@{k}"], 4)}')
+
+    with open(f'output/query_to_fact/{args.dataset}/query_to_fact.json', 'w') as f:
+        json.dump(fact_comparison, f, indent=2)

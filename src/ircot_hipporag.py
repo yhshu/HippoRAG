@@ -472,8 +472,14 @@ if __name__ == '__main__':
             print(key, round(metrics_sum[key], 3))
         if hipporag.reranker is not None:
             print('num_dpr', hipporag.statistics['num_dpr'])
+            metrics_sum['num_dpr'] = hipporag.statistics['num_dpr']
+        # write metrics to file
+        metric_output_path = output_path.replace('.json', '.metric')
+        with open(metric_output_path, 'w') as f:
+            json.dump(metrics_sum, f)
+        print('Retrieval metrics saved to', metric_output_path)
 
     # save results
     with open(output_path, 'w') as f:
         json.dump(results, f)
-    print(f'Saved {len(results)} results to {output_path}')
+    print(f'Retrieval results saved {len(results)} to {output_path}')

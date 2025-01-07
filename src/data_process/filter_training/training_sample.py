@@ -64,16 +64,20 @@ if __name__ == '__main__':
     parser.add_argument('--extractor', type=str)
     parser.add_argument('--retriever', type=str)
     parser.add_argument('--linker', type=str)
+    parser.add_argument('--size', type=int, default=500, help='Number of samples to collect for each train/dev dataset')
+    parser.add_argument('--train', type=str, default='data/fact_filter/train.json', help='Path to training set')
+    parser.add_argument('--dev', type=str, default='data/fact_filter/dev.json', help='Path to dev set')
+    parser.add_argument('--fact', type=int, default=5, help='Number of facts to collect before filtering')
     args = parser.parse_args()
 
-    train_split = {'musique_train_1000': 500, '2wikimultihopqa_train_1000': 500}
-    dev_split = {'musique_dev_1000': 500, '2wikimultihopqa_dev_1000': 500}
-    num_before_filter = 5
+    train_split = {'musique_train_1000': args.size, '2wikimultihopqa_train_1000': args.size}
+    dev_split = {'musique_dev_1000': args.size, '2wikimultihopqa_dev_1000': args.size}
+    num_before_filter = args.fact
 
     os.makedirs('data/fact_filter', exist_ok=True)
 
     train_samples = []
-    train_output_path = f'data/fact_filter/train.json'
+    train_output_path = args.train
     if not os.path.isfile(train_output_path):
         for dataset_name in train_split:
             num_sample = train_split[dataset_name]
@@ -87,7 +91,7 @@ if __name__ == '__main__':
         print(f'File {train_output_path} already exists, skipping training data collection')
 
     dev_samples = []
-    dev_output_path = f'data/fact_filter/dev.json'
+    dev_output_path = args.dev
     if not os.path.isfile(dev_output_path):
         for dataset_name in dev_split:
             num_sample = dev_split[dataset_name]

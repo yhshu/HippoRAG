@@ -153,6 +153,8 @@ if __name__ == '__main__':
     parser.add_argument('--auto', type=str, default='light', help='Optimization level', choices=['light', 'medium', 'heavy'])
     parser.add_argument('--max_demos', type=int, default=10)
     parser.add_argument('--teacher', type=str, default='gpt-4o')
+    parser.add_argument('--train', type=str, help='Path to training set', default='data/fact_filter/train.json')
+    parser.add_argument('--dev', type=str, help='Path to dev set', default='data/fact_filter/dev.json')
     args = parser.parse_args()
 
     THREAD = 24
@@ -160,7 +162,7 @@ if __name__ == '__main__':
         dspy_llm = dspy.LM(model=f"openai/{args.llm}", max_tokens=2000, temperature=0.0)
     elif args.addr is not None and args.port is not None:
         url = f'http://{args.addr}:{args.port}/v1'
-        dspy_llm = dspy.LM(model=f"openai/{args.llm}", max_tokens=500, temperature=0.0, api_base=url, api_key='osunlp')
+        dspy_llm = dspy.LM(model=f"openai/{args.llm}", max_tokens=2000, temperature=0.0, api_base=url, api_key='osunlp')
     else:
         raise ValueError(f"LM not implemented: {args.llm}")
     dspy.settings.configure(lm=dspy_llm)
@@ -173,20 +175,17 @@ if __name__ == '__main__':
         teacher_lm = dspy.LM(model=f"openai/{args.teacher}", max_tokens=5000, temperature=1.0)
     elif args.addr is not None and args.port is not None:
         url = f'http://{args.addr}:{args.port}/v1'
-        teacher_lm = dspy.LM(model=f"openai/{args.teacher}", max_tokens=500, temperature=0.0, api_base=url, api_key='osunlp')
+        teacher_lm = dspy.LM(model=f"openai/{args.teacher}", max_tokens=2000, temperature=0.0, api_base=url, api_key='osunlp')
     else:
         raise NotImplementedError(f"Teacher model {args.teacher} not implemented yet.")
-
-    train = json.load(open('data/fact_filter/train.json'))
-    dev = json.load(open('data/fact_filter/dev.json'))
 
     from dspy.datasets import DataLoader
 
     dl = DataLoader()
-    trainset = dl.from_json('data/fact_filter/train.json',
+    trainset = dl.from_json(args.train,
                             fields=("question", "fact_before_filter", "fact_after_filter"),
                             input_keys=("question", "fact_before_filter"))
-    devset = dl.from_json('data/fact_filter/dev.json',
+    devset = dl.from_json(args.dev,
                           fields=("question", "fact_before_filter", "fact_after_filter"),
                           input_keys=("question", "fact_before_filter"))
 

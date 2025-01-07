@@ -19,6 +19,8 @@ def index_with_huggingface(dataset_name: str, run_ner: bool, num_passages, llm_p
         gpu_mem_util = 0.95
         if llm_provider == 'vllm':
             client = init_llm_client(llm_provider, extractor, num_gpus=num_gpus, gpu_memory_utilization=gpu_mem_util)  # LangChain model
+            num_thread = 1
+            print('Setting num_thread to 1 for VLLM')
         else:
             client = init_llm_client(llm_provider, extractor)
         openie_for_corpus(dataset_name, run_ner, num_passages, llm_provider, extractor, num_thread, client)
