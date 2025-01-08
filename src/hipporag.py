@@ -831,9 +831,10 @@ class HippoRAG:
             self.logger.info(f'Loaded doc embeddings from {cache_filename}, shape: {self.doc_embedding_mat.shape}')
         else:
             self.doc_embeddings = []
-            self.logger.info('Encoding passages...')
+            passages = self.dataset_df['paragraph'].tolist()
+            self.logger.info(f'Encoding passages, len: {len(passages)}...')
             self._embed_model = init_embedding_model(self.linking_retriever_name, multi_gpu=True)
-            self.doc_embedding_mat = self.embed_model.encode_text(self.dataset_df['paragraph'].tolist(), return_cpu=True, return_numpy=True, norm=True)
+            self.doc_embedding_mat = self.embed_model.encode_text(passages, return_cpu=True, return_numpy=True, norm=True)
             if not os.path.isdir('data/lm_vectors/{}_mean/'.format(self.linking_retriever_name_processed)):
                 os.makedirs('data/lm_vectors/{}_mean/'.format(self.linking_retriever_name_processed))
             pickle.dump(self.doc_embedding_mat, open(cache_filename, 'wb'))

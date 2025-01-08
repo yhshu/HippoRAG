@@ -29,7 +29,6 @@ class NVEmbedV2Wrapper(EmbeddingModelWrapper):
             prompt = f"Instruct: {instruction}\nQuery: "
         else:
             prompt = None
-        # print(f'NV-Embed-v2 encoding, batch size: {batch_size}')
         print(f'NV-Embed-v2 encoding, batch size: {batch_size}, text len: {len(texts)}')
         try:
             embeddings = self.model.encode(self._add_eos(texts), batch_size=batch_size, prompt=prompt, normalize_embeddings=True)
@@ -48,19 +47,17 @@ class NVEmbedV2Wrapper(EmbeddingModelWrapper):
             prompt = None
         print(f'NV-Embed-v2 encoding, batch size per GPU: {batch_size}, #GPU: {torch.cuda.device_count()}, len to encode: {len(texts)}')
         try:
-            self.model.to('cpu')
             pool = self.model.start_multi_process_pool()
-            emb = self.model.encode_multi_process(self._add_eos(texts), pool, prompt=prompt, normalize_embeddings=True)
+            emb = self.model.encode_multi_process(self._add_eos(texts), pool, prompt=prompt, batch_size=batch_size, normalize_embeddings=True)
             self.model.stop_multi_process_pool(pool)
         except Exception as e:
             print('Error in encode_list_multi_gpu:', e)
             print('Type of texts:', type(texts))
             print('Len of texts:', len(texts))
             print('Batch size:', batch_size)
-
         return emb
 
-    def encode_text(self, text: Union[str, List[str]], instruction: str = '', norm: bool = True, return_cpu: bool = False, return_numpy: bool = False, batch_size=5) -> np.ndarray:
+    def encode_text(self, text: Union[str, List[str]], instruction: str = '', norm: bool = True, return_cpu: bool = False, return_numpy: bool = False, batch_size=16) -> np.ndarray:
         if isinstance(text, str):
             text = [text]
         if self.multi_gpu:
