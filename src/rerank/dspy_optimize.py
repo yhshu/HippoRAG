@@ -158,24 +158,27 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     THREAD = 24
+    print(args)
+    
     if args.llm.startswith('gpt-') or args.llm.startswith('ft:gpt-') or args.llm.startswith('o1-'):
         dspy_llm = dspy.LM(model=f"openai/{args.llm}", max_tokens=2000, temperature=0.0)
-    elif args.addr is not None and args.port is not None:
+    elif args.addr is not None and args.port is not None and 'llama' in args.llm.lower():
         url = f'http://{args.addr}:{args.port}/v1'
-        dspy_llm = dspy.LM(model=f"openai/{args.llm}", max_tokens=2000, temperature=0.0, api_base=url, api_key='osunlp')
+        dspy_llm = dspy.LM(model=f"hosted_vllm/{args.llm}", max_tokens=2000, temperature=0.0, api_base=url, api_key='osunlp')
     else:
         raise ValueError(f"LM not implemented: {args.llm}")
     dspy.settings.configure(lm=dspy_llm)
 
     if args.teacher is None:
         args.teacher = args.llm
+    
     if args.teacher.startswith('gpt-') or args.teacher.startswith('ft:gpt-'):
         teacher_lm = dspy.LM(model=f"openai/{args.teacher}", max_tokens=2000, temperature=0.0)
     elif args.teacher.startswith('o1-'):
         teacher_lm = dspy.LM(model=f"openai/{args.teacher}", max_tokens=5000, temperature=1.0)
-    elif args.addr is not None and args.port is not None:
+    elif args.addr is not None and args.port is not None and 'llama' in args.teacher.lower():
         url = f'http://{args.addr}:{args.port}/v1'
-        teacher_lm = dspy.LM(model=f"openai/{args.teacher}", max_tokens=2000, temperature=0.0, api_base=url, api_key='osunlp')
+        teacher_lm = dspy.LM(model=f"hosted_vllm/{args.teacher}", max_tokens=2000, temperature=0.0, api_base=url, api_key='osunlp')
     else:
         raise NotImplementedError(f"Teacher model {args.teacher} not implemented yet.")
 
@@ -193,7 +196,7 @@ if __name__ == '__main__':
     evaluate = Evaluate(devset=devset[:], metric=filter_metric, num_threads=THREAD, display_progress=True, display_table=False)
 
     # Initialize optimizer
-    prompt_lm = dspy.LM(model=f"openai/{args.llm}", max_tokens=2000, temperature=0.0)
+    prompt_lm = dspy_llm
     kwargs = dict(num_threads=THREAD, teacher_settings=dict(lm=teacher_lm), prompt_model=prompt_lm)
     optimizer = MIPROv2(
         metric=filter_metric,
