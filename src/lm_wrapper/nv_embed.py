@@ -32,7 +32,7 @@ class NVEmbedV2Wrapper(EmbeddingModelWrapper):
         # print(f'NV-Embed-v2 encoding, batch size: {batch_size}')
         return self.model.encode(self._add_eos(texts), batch_size=batch_size, prompt=prompt, normalize_embeddings=True)
 
-    def encode_list_multi_gpu(self, texts: List[str], instruction: str, batch_size: int = 2) -> torch.Tensor:
+    def encode_list_multi_gpu(self, texts: List[str], instruction: str, batch_size: int) -> torch.Tensor:
         # Encode the list of texts with instruction as prefix
         if instruction is not None and instruction != '':
             prompt = f"Instruct: {instruction}\nQuery: "
@@ -44,7 +44,7 @@ class NVEmbedV2Wrapper(EmbeddingModelWrapper):
         self.model.stop_multi_process_pool(pool)
         return emb
 
-    def encode_text(self, text: Union[str, List[str]], instruction: str = '', norm: bool = True, return_cpu: bool = False, return_numpy: bool = False, batch_size=5) -> np.ndarray:
+    def encode_text(self, text: Union[str, List[str]], instruction: str = '', norm: bool = True, return_cpu: bool = False, return_numpy: bool = False, batch_size=10) -> np.ndarray:
         if isinstance(text, str):
             text = [text]
         if self.multi_gpu:
