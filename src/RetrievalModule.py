@@ -1,6 +1,7 @@
 import sys
 
 sys.path.append('.')
+
 from src.lm_wrapper.gritlm import GritLMWrapper
 from src.lm_wrapper.sentence_transformers_util import SentenceTransformersWrapper
 
@@ -16,8 +17,6 @@ import os
 
 import torch
 from tqdm import tqdm
-
-import gc
 
 from transformers import AutoModel, AutoTokenizer
 
@@ -70,7 +69,7 @@ class RetrievalModule:
                     self.plm = AutoModel.load_from_checkpoint(retriever_name)
                 else:
                     self.plm = AutoModel.from_pretrained(retriever_name)
-                self.encode_strings_func = self.encode_strings
+                self.encode_strings_func = self.encode_strings_hf
         except Exception as e:
             print(e)
             print('Loading {} failed. Possible reasons include: 1. Please make sure it is a valid model name; 2. GPU memory.'.format(retriever_name))
@@ -85,8 +84,8 @@ class RetrievalModule:
 
         # Get previously computed vectors
         precomp_strings, precomp_vectors = self.get_precomputed_plm_vectors(self.retrieval_name_dir)
-        print('len precomp_strings: ', len(precomp_strings))
-        print('len precomp_vectors: ', len(precomp_vectors))
+        print(f'len precomp_strings: {len(precomp_strings)}, type: {type(precomp_strings)}')
+        print(f'len precomp_vectors: {len(precomp_vectors)}, type: {type(precomp_vectors)}')
 
         # Get AUI Strings to be Encoded
         string_df = pd.read_csv(string_filename, sep='\t')
@@ -210,7 +209,7 @@ class RetrievalModule:
             batches = [strs_to_encode[i:i + batch_size] for i in range(0, len(strs_to_encode), batch_size)]
             embedding_list = []
             for batch in tqdm(batches, total=len(batches), desc='Encoding string by batch'):
-                embeddings = self.plm.encode_text(batch, return_numpy=True, return_cpu=True, norm=True, batch_size=80)
+                embeddings = self.plm.encode_text(batch, return_numpy=True, return_cpu=True, norm=True, batch_size=batch_size)
                 embedding_list.append(embeddings)
 
             embedding_dims = {emb.shape[1] for emb in embedding_list}
@@ -223,7 +222,7 @@ class RetrievalModule:
 
         return all_embeddings, strs_to_encode
 
-    def encode_strings(self, strs_to_encode):
+    def encode_strings_hf(self, strs_to_encode):
         self.plm.to('cuda')
         tokenizer = AutoTokenizer.from_pretrained(self.retriever_name)
 
@@ -319,7 +318,8 @@ class RetrievalModule:
 
         print('Preparing query batches')
         query_batches = get_query_batches(new_vecs, batch_size)
-        for query_batch, batch_start_idx in tqdm(query_batches, total=int(len(new_vecs) // batch_size), desc='Retrieving Nearest Neighbors'):
+        num_it = int(len(new_vecs) // batch_size)
+        for query_batch, batch_start_idx in tqdm(query_batches, total=num_it, desc='Retrieving Nearest Neighbors'):
             query_batch = query_batch.to(device)
             batch_similarities = []
             batch_indices = []
@@ -340,7 +340,7 @@ class RetrievalModule:
                 batch_indices.append(indices)
 
                 del similarity
-                # kb_batch = kb_batch.cpu()
+                kb_batch = kb_batch.cpu()
                 torch.cuda.empty_cache()
 
                 offset_kb += batch_size_kb
@@ -364,7 +364,7 @@ class RetrievalModule:
                 knn_strings = [knowledge_base[idx] for idx in global_indices.cpu().numpy()]
                 result[query] = (knn_strings, similarities_i.numpy().tolist())
 
-            # query_batch = query_batch.cpu()
+            query_batch = query_batch.cpu()
             torch.cuda.empty_cache()
         # end for each query batch
 

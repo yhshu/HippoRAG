@@ -11,7 +11,9 @@ if __name__ == '__main__':
     parser.add_argument('--llm', type=str, default='neuralmagic/Meta-Llama-3.1-70B-Instruct-quantized.w8a8',
                         help='LLM model name')
     parser.add_argument('--distractor', type=str, default='output/corpus_batch', help='Path to distractor dir')
+    parser.add_argument('--index_dataset', type=str, default='musique')
     parser.add_argument('--dataset', type=str, default='musique')
+    parser.add_argument('--retrieve', type=str, choices=['random', 'top'], default='random')
     args = parser.parse_args()
 
     llm_label = args.llm.replace('/', '_')
@@ -25,23 +27,45 @@ if __name__ == '__main__':
 
     chunk_size = 10000
     done = False
-    openie_docs = []
-    for batch_id in range(0, args.size // chunk_size + 1):
-        if len(corpus) >= args.size:
-            break
-        batch_corpus = json.load(open(f'output/corpus_batch/{args.dataset}_{batch_id}_corpus.json', 'r'))
-        docs = batch_corpus['docs']
-        for doc in docs:
+    openie_docs = [] # sampled distractors
+
+    if args.retrieve == 'top':
+        for batch_id in range(0, args.size // chunk_size + 1):
+            if len(corpus) >= args.size:
+                break
+            batch_corpus = json.load(open(f'output/corpus_batch/{args.index_dataset}_{batch_id}_corpus.json', 'r'))
+            docs = batch_corpus['docs']
+            for doc in docs:
+                content = doc['title'].strip() + '\n' + doc['text'].strip()
+                if content not in corpus_content_set:
+                    corpus_content_set.add(content)
+                    corpus.append({'title': doc['title'], 'text': doc['text']})
+                    openie_docs.append(doc)
+                if len(corpus) >= args.size:
+                    done = True
+                    break
+            if done:
+                break
+    elif args.retrieve == 'random':
+        all_openie_docs = []
+        for batch_id in range(0, args.size // chunk_size + 1):
+            batch_corpus = json.load(open(f'output/corpus_batch/{args.index_dataset}_{batch_id}_corpus.json', 'r'))
+            docs = batch_corpus['docs']
+            for doc in docs:
+                all_openie_docs.append(doc)
+
+        import random
+        random.shuffle(all_openie_docs)
+        for doc in all_openie_docs:
             content = doc['title'].strip() + '\n' + doc['text'].strip()
             if content not in corpus_content_set:
                 corpus_content_set.add(content)
                 corpus.append({'title': doc['title'], 'text': doc['text']})
                 openie_docs.append(doc)
             if len(corpus) >= args.size:
-                done = True
                 break
-        if done:
-            break
+    else:
+        raise ValueError(f'Invalid distractor retrieve option: {args.retrieve}')
     new_size = len(corpus)
 
     dataset_label = f'{args.dataset}_wiki_{args.size}'
