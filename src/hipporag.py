@@ -760,7 +760,7 @@ class HippoRAG:
             self.logger.info('Encoding triples...')
             self._embed_model = init_embedding_model(self.linking_retriever_name, multi_gpu=True)
             self.triple_embeddings = self.embed_model.encode_text(self.triples_str_list, return_cpu=True,
-                                                                  return_numpy=True, norm=True, batch_size=80)
+                                                                  return_numpy=True, norm=True, batch_size=16)
             pickle.dump(self.triple_embeddings, open(triple_embeddings_path, 'wb'))
             self._embed_model = None
             self.logger.info(
@@ -785,7 +785,7 @@ class HippoRAG:
                 self.logger.info('Encoding node phrases...')
                 self._embed_model = init_embedding_model(self.linking_retriever_name, multi_gpu=True)
                 self.kb_node_phrase_embeddings = self.embed_model.encode_text(self.node_phrases.tolist(), return_cpu=True, return_numpy=True,
-                                                                              norm=True, batch_size=80)
+                                                                              norm=True, batch_size=16)
                 dir = os.path.dirname(kb_node_phrase_embeddings_path)
                 if not os.path.exists(dir):
                     os.makedirs(dir)

@@ -14,7 +14,7 @@ rerank_system_prompt = """Given a query and the top-k retrieved passages from tw
 - Return a JSON list of passage IDs, ordered by relevance, e.g., {"passage_id": [1, 3, 2]}."""
 
 
-def dense_passage_retrieval(hipporag: HippoRAG, query: str, rerank: bool = False, logs=None, batch_size=80):
+def dense_passage_retrieval(hipporag: HippoRAG, query: str, rerank: bool = False, logs=None, batch_size=16):
     if 'colbertv2' in hipporag.linking_retriever_name:
         from colbert.data import Queries
         queries = Queries(path=None, data={0: query})

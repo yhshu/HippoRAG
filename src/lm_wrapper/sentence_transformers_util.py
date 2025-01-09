@@ -15,7 +15,7 @@ class SentenceTransformersWrapper(EmbeddingModelWrapper):
         if model_name.startswith("Alibaba-NLP/gte-Qwen2"):
             self.model.max_seq_length = max_seq_length
 
-    def encode_text(self, text, instruction=None, norm=True, return_cpu=True, return_numpy=True, batch_size=32):
+    def encode_text(self, text, instruction=None, norm=True, return_cpu=True, return_numpy=True, batch_size=16):
         if isinstance(text, str):
             text = [text]
         if self.model_name.startswith("Alibaba-NLP/gte-Qwen2"):
