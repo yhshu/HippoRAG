@@ -760,7 +760,7 @@ class HippoRAG:
             self.logger.info('Encoding triples...')
             self._embed_model = init_embedding_model(self.linking_retriever_name, multi_gpu=True)
             self.triple_embeddings = self.embed_model.encode_text(self.triples_str_list, return_cpu=True,
-                                                                  return_numpy=True, norm=True, batch_size=16)
+                                                                  return_numpy=True, norm=True, batch_size=80)
             pickle.dump(self.triple_embeddings, open(triple_embeddings_path, 'wb'))
             self._embed_model = None
             self.logger.info(
@@ -793,22 +793,49 @@ class HippoRAG:
                 self._embed_model = None
                 self.logger.info('Saved phrase embeddings to: ' + kb_node_phrase_embeddings_path + ', shape: ' + str(self.kb_node_phrase_embeddings.shape))
 
-    def load_node_vectors_from_string_encoding_cache(self, string_file_path):
+    def load_node_vectors_from_string_encoding_cache(self, string_file_path, batch_size=1000):
         self.logger.info('Loading node vectors from: ' + string_file_path)
-        kb_vectors = []
         self.strings = open(string_file_path, 'r').readlines()
+
+        # Load the precomputed kb vectors
         with open(f'data/lm_vectors/{self.linking_retriever_name_processed}_mean/vecs_{self.corpus_name}.p', 'rb') as f:
             kb_vectors = pickle.load(f)
+
         kb_mat = torch.Tensor(kb_vectors)
+
         try:
             self.strings = [s.strip() for s in self.strings]
             self.string_to_id = {string: i for i, string in enumerate(self.strings)}
-            kb_mat = kb_mat.T.divide(torch.linalg.norm(kb_mat, dim=1)).T
-            kb_mat = kb_mat.to('cuda')
+
+            # Initialize the result matrix, which will store the normalized vectors
+            kb_mat_normalized = torch.zeros_like(kb_mat)
+
+            # Process the matrix in batches
+            num_batches = (kb_mat.size(0) + batch_size - 1) // batch_size  # Calculate total number of batches
+            for i in range(num_batches):
+                start_idx = i * batch_size
+                end_idx = min((i + 1) * batch_size, kb_mat.size(0))  # Ensure we do not go beyond matrix dimensions
+
+                # Extract the current batch
+                batch = kb_mat[start_idx:end_idx]
+
+                # Calculate the norm for each row (phrase vector) in the batch
+                norms = torch.linalg.norm(batch, dim=1, keepdim=True)
+
+                # Normalize the batch (divide each row by its norm)
+                batch_normalized = batch / norms
+
+                # Store the normalized batch into the result matrix
+                kb_mat_normalized[start_idx:end_idx] = batch_normalized
+
+            kb_mat = kb_mat_normalized  # Now kb_mat is normalized
+            kb_mat = kb_mat.cpu()  # Transfer to CPU if needed for further processing
         except Exception as e:
             print(e)
             print('KB mat shape', kb_mat.shape)
             exit(1)
+
+        # Further processing (extract phrases, etc.)
         kb_only_indices = []
         num_non_vector_phrases = 0
         for i in range(len(self.kb_node_phrase_to_id)):
@@ -818,8 +845,11 @@ class HippoRAG:
 
             phrase_id = self.string_to_id.get(phrase, 0)
             kb_only_indices.append(phrase_id)
+
+        # Extract the final embeddings for the KB node phrases
         self.kb_node_phrase_embeddings = kb_mat[kb_only_indices]  # a matrix of phrase vectors
-        self.kb_node_phrase_embeddings = self.kb_node_phrase_embeddings.cpu().numpy()
+        self.kb_node_phrase_embeddings = self.kb_node_phrase_embeddings.numpy()
+
         self.logger.info('{} phrases did not have vectors.'.format(num_non_vector_phrases))
 
     def load_dpr_doc_embeddings(self):

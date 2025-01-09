@@ -68,7 +68,7 @@ if __name__ == '__main__':
         raise ValueError(f'Invalid distractor retrieve option: {args.retrieve}')
     new_size = len(corpus)
 
-    dataset_label = f'{args.dataset}_wiki_{args.size}'
+    dataset_label = f'{args.dataset}_wiki_{args.size}_{args.retrieve}'
     existing_openie_results = json.load(open(f'output/openie_{args.dataset}_results_ner_{llm_label}_{existing_corpus_size}.json'))
 
     corpus_output_path = f'data/{dataset_label}_corpus.json'
