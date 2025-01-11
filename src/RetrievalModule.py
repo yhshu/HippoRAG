@@ -26,6 +26,39 @@ from src.processing import processing_phrases, mean_pooling
 VECTOR_DIR = 'data/lm_vectors'
 
 
+def check_and_normalize(vectors, device, batch_size=1024):
+    """
+    Normalize the given vectors in batches if they are not already normalized, and show a progress bar.
+    
+    Args:
+    - vectors (Tensor): A tensor of vectors to be normalized.
+    - device (torch.device): The device (CPU or GPU) where the tensor resides.
+    - batch_size (int): The size of each batch to process.
+    
+    Returns:
+    - normalized_vectors (Tensor): The normalized vectors.
+    """
+    # Create an empty tensor to store the normalized vectors
+    normalized_vectors = torch.empty_like(vectors)
+    
+    # Iterate over the vectors in batches
+    num_batches = (vectors.size(0) + batch_size - 1) // batch_size  # Calculate number of batches
+    for i in tqdm(range(num_batches), desc="Normalizing Vectors"):
+        start_idx = i * batch_size
+        end_idx = min((i + 1) * batch_size, vectors.size(0))
+        
+        batch = vectors[start_idx:end_idx].to(device)  # Move batch to the device
+        
+        norms = torch.norm(batch, p=2, dim=1)
+        already_normalized_mask = torch.isclose(norms, torch.tensor(1.0, device=device))
+        
+        # Apply normalization to the batch where it's necessary
+        batch[~already_normalized_mask] = torch.nn.functional.normalize(batch[~already_normalized_mask], dim=1)
+        
+        normalized_vectors[start_idx:end_idx] = batch  # Store the result back
+        
+    return normalized_vectors
+
 class RetrievalModule:
     """
     Class designed to retrieve potential synonymy candidates for a set of UMLS terms from a set of entities.
@@ -285,7 +318,7 @@ class RetrievalModule:
 
         return all_cls, all_strings
 
-    def retrieve_knn(self, queries, knowledge_base, k=2047, batch_size=10000, index_batch_size=10000):
+    def retrieve_knn(self, queries, knowledge_base, k=2047, batch_size=5000, index_batch_size=10000):
         print('Preparing to retrieve nearest neighbors...')
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -296,7 +329,7 @@ class RetrievalModule:
 
         print(f'Normalizing original vectors, length: {len(original_vecs)}')
         original_vecs = torch.tensor(original_vecs, dtype=torch.float32, device=device)
-        original_vecs = torch.nn.functional.normalize(original_vecs, dim=1)
+        original_vecs = check_and_normalize(original_vecs, device)
 
         new_vecs = [self.vector_dict[s] for s in queries]
         if len(new_vecs) == 0:
@@ -304,7 +337,7 @@ class RetrievalModule:
 
         print(f'Normalizing new vectors, length: {len(new_vecs)}')
         new_vecs = torch.tensor(new_vecs, dtype=torch.float32, device=device)
-        new_vecs = torch.nn.functional.normalize(new_vecs, dim=1)
+        new_vecs = check_and_normalize(new_vecs, device)
 
         result = {}
 

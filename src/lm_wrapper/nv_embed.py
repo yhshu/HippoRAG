@@ -48,7 +48,7 @@ class NVEmbedV2Wrapper(EmbeddingModelWrapper):
         print(f'NV-Embed-v2 encoding, batch size per GPU: {batch_size}, #GPU: {torch.cuda.device_count()}, len to encode: {len(texts)}')
         try:
             pool = self.model.start_multi_process_pool()
-            emb = self.model.encode_multi_process(self._add_eos(texts), pool, prompt=prompt, batch_size=batch_size, normalize_embeddings=True)
+            emb = self.model.encode_multi_process(self._add_eos(texts), pool, prompt=prompt, batch_size=batch_size, normalize_embeddings=True, show_progress_bar=True)
             self.model.stop_multi_process_pool(pool)
         except Exception as e:
             print('Error in encode_list_multi_gpu:', e)
