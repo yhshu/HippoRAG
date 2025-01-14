@@ -62,6 +62,35 @@ def get_query_instruction(embedding_model: EmbeddingModelWrapper, task=None, dat
     return None
 
 
+def get_top_k_facts_indices_and_scores(query_embedding, fact_embedding, top_k: int, reranker=None, triples=None, query=None, oracle_triples=None):
+    query_fact_scores = np.dot(fact_embedding, query_embedding.T)  # (num_facts, dim) x (1, dim).T = (num_facts, 1)
+    query_fact_scores = np.squeeze(query_fact_scores) if query_fact_scores.ndim == 2 else query_fact_scores
+    query_fact_scores = min_max_normalize(query_fact_scores)
+
+    if top_k is not None:
+        top_k_fact_indices = np.argsort(query_fact_scores)[-top_k:][::-1].tolist()
+    else:
+        top_k_fact_indices = np.argsort(query_fact_scores)[::-1].tolist()
+
+    if reranker is not None:
+        assert triples is not None
+        top_k_facts = [triples[i] for i in top_k_fact_indices]
+        candidate_fact_indices = top_k_fact_indices
+        candidate_facts = top_k_facts
+        if reranker.reranker_name in ['oracle_triple']:
+            top_k_fact_indices, top_k_facts = reranker.rerank(
+                'fact_reranking', query, candidate_facts, candidate_fact_indices, oracle_triples=oracle_triples
+            )
+        else:
+            top_k_fact_indices, top_k_facts, reranker_dict = reranker.rerank(
+                'fact_reranking', query, candidate_facts, candidate_fact_indices, len_after_rerank=top_k
+            )
+            rerank_log = {'facts_before_rerank': candidate_facts, 'facts_after_rerank': top_k_facts}
+        return top_k_fact_indices, query_fact_scores, rerank_log
+    else:
+        return top_k_fact_indices, query_fact_scores
+
+
 class HippoRAG:
 
     def __init__(self, corpus_name='hotpotqa', extraction_model='openai', extractor_name='gpt-3.5-turbo-1106',
@@ -467,6 +496,7 @@ class HippoRAG:
                 pass
             else:  # huggingface dense retrieval
                 self.load_triple_vectors()
+                self.load_dpr_doc_embeddings()
                 sorted_doc_ids, sorted_scores, log = link_fact_by_dpr(self, query, link_top_k=link_top_k, oracle_triples=oracle_triples)
                 return sorted_doc_ids.tolist()[:doc_top_k], sorted_scores.tolist()[:doc_top_k], log
 
@@ -511,24 +541,25 @@ class HippoRAG:
                 query_ner_list = []
         return query_ner_list
 
-    def query_to_fact(self, query: str, top_k=10):
+
+    def query_to_fact(self, query: str, top_k=10, reranker=None, triples=None):
         if self.dpr_only:
             return []
-        else:
-            self.load_triple_vectors()
-            query_embedding = self.embed_model.encode_text(query, instruction=get_query_instruction(self.embed_model, 'query_to_fact', self.corpus_name),
-                                                           return_cpu=True, return_numpy=True, norm=True)
-            # rank and get link_top_k oracle facts given the query
-            query_fact_scores = np.dot(self.triple_embeddings, query_embedding.T)  # (num_facts, dim) x (1, dim).T = (num_facts, 1)
-            query_fact_scores = np.squeeze(query_fact_scores) if query_fact_scores.ndim == 2 else query_fact_scores
-            query_fact_scores = min_max_normalize(query_fact_scores)
 
-            if top_k is not None:
-                top_k_fact_indicies = np.argsort(query_fact_scores)[-top_k:][::-1].tolist()
-            else:
-                top_k_fact_indicies = np.argsort(query_fact_scores)[::-1].tolist()
-            top_k_facts = [self.triples[i] for i in top_k_fact_indicies]
-        return top_k_facts[:top_k]
+        self.load_triple_vectors()
+        query_embedding = self.embed_model.encode_text(query, instruction=get_query_instruction(self.embed_model, 'query_to_fact', self.corpus_name),
+                                                       return_cpu=True, return_numpy=True, norm=True)
+        if reranker is None:
+            top_k_fact_indices, query_fact_scores = get_top_k_facts_indices_and_scores(query_embedding, self.triple_embeddings, top_k)
+        else:
+            top_k_fact_indices, query_fact_scores, rerank_log = get_top_k_facts_indices_and_scores(query_embedding, self.triple_embeddings, top_k, reranker, self.triples)
+        top_k_facts = [self.get_triple(triple_idx) for triple_idx in top_k_fact_indices]
+        
+        if reranker is None:
+            return top_k_facts[:top_k]
+        else:
+            return top_k_facts, rerank_log
+
 
     def get_neighbors(self, prob_vector, max_depth=1):
 
@@ -864,7 +895,7 @@ class HippoRAG:
             passages = self.dataset_df['paragraph'].tolist()
             self.logger.info(f'Encoding passages, len: {len(passages)}...')
             self._embed_model = init_embedding_model(self.linking_retriever_name, multi_gpu=True)
-            self.doc_embedding_mat = self.embed_model.encode_text(passages, return_cpu=True, return_numpy=True, norm=True)
+            self.doc_embedding_mat = self.embed_model.encode_text(passages, return_cpu=True, return_numpy=True, norm=True, batch_size=16)
             if not os.path.isdir('data/lm_vectors/{}_mean/'.format(self.linking_retriever_name_processed)):
                 os.makedirs('data/lm_vectors/{}_mean/'.format(self.linking_retriever_name_processed))
             pickle.dump(self.doc_embedding_mat, open(cache_filename, 'wb'))

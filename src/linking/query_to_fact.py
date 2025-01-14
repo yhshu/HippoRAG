@@ -125,39 +125,28 @@ def llm_verify(hipporag, logs, messages, query, sorted_doc_ids, sorted_scores):
         dpr_sorted_doc_ids, dpr_sorted_scores, dpr_logs = dense_passage_retrieval(hipporag, query, False)
         return dpr_sorted_doc_ids, dpr_sorted_scores, dpr_logs
 
-
 def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, fact_embeddings, link_top_k, graph_search=True, oracle_triples=None):
     query_doc_scores = np.zeros(hipporag.docs_to_phrases_mat.shape[0])  # (num_docs,)
-    query_embedding = hipporag.embed_model.encode_text(query, instruction=get_query_instruction(hipporag.embed_model, 'query_to_fact', hipporag.corpus_name),
-                                                       return_cpu=True, return_numpy=True, norm=True)
-    # rank and get link_top_k oracle facts given the query
-    query_fact_scores = np.dot(fact_embeddings, query_embedding.T)  # (num_facts, dim) x (1, dim).T = (num_facts, 1)
-    query_fact_scores = np.squeeze(query_fact_scores) if query_fact_scores.ndim == 2 else query_fact_scores
-    query_fact_scores = min_max_normalize(query_fact_scores)
-
-    reranker_dict = None
-    if hipporag.reranker is not None:
-        candidate_fact_indices = np.argsort(query_fact_scores)[-link_top_k:][::-1].tolist()
-        candidate_facts = [candidate_triples[i] for i in candidate_fact_indices]
-        if hipporag.reranker_name in ['oracle_triple']:
-            top_k_fact_indicies, top_k_facts = hipporag.reranker.rerank('fact_reranking', query, candidate_facts, candidate_fact_indices, oracle_triples=oracle_triples)
-        else:
-            top_k_fact_indicies, top_k_facts, reranker_dict = hipporag.reranker.rerank('fact_reranking', query, candidate_facts, candidate_fact_indices, len_after_rerank=link_top_k)
-        rerank_log = {'facts_before_rerank': candidate_facts, 'facts_after_rerank': top_k_facts}
-
-        if len(top_k_facts) == 0:
-            # return DPR results
-            hipporag.load_dpr_doc_embeddings()
+    
+    query_embedding = hipporag.embed_model.encode_text(
+        query,
+        instruction=get_query_instruction(hipporag.embed_model, 'query_to_fact', hipporag.corpus_name),
+        return_cpu=True, return_numpy=True, norm=True
+    )
+    
+    from src.hipporag import get_top_k_facts_indices_and_scores
+    if hipporag.reranker is None:
+        top_k_fact_indices, query_fact_scores = get_top_k_facts_indices_and_scores(query_embedding, fact_embeddings, link_top_k)
+    else:
+        top_k_fact_indices, query_fact_scores, rerank_log = get_top_k_facts_indices_and_scores(query_embedding, fact_embeddings, link_top_k, hipporag.reranker, candidate_triples, query=query, oracle_triples=oracle_triples)
+        if len(top_k_fact_indices) == 0:
+            # return DPR results if no facts found after reranking
             hipporag.logger.info('No facts found after reranking, return DPR results')
             hipporag.statistics['num_dpr'] += 1
             return dense_passage_retrieval(hipporag, query, False, {'rerank': rerank_log})
-    else:  # no reranking
-        if link_top_k is not None:
-            top_k_fact_indicies = np.argsort(query_fact_scores)[-link_top_k:][::-1].tolist()
-        else:
-            top_k_fact_indicies = np.argsort(query_fact_scores)[::-1].tolist()
-        top_k_facts = [candidate_triples[i] for i in top_k_fact_indicies]
+    top_k_facts = [candidate_triples[i] for i in top_k_fact_indices]
 
+    # update query_doc_scores
     for rank, f in enumerate(top_k_facts):
         try:
             triple_tuple = tuple([phrase.lower() for phrase in f])
@@ -166,24 +155,21 @@ def link_query_to_fact_core(hipporag: HippoRAG, query, candidate_triples: list, 
             hipporag.logger.exception(f'Fact not found in the graph: {f}, {e}')
             continue
         else:
-            fact_score = query_fact_scores[top_k_fact_indicies[rank]] if query_fact_scores.ndim > 0 else query_fact_scores
+            fact_score = query_fact_scores[top_k_fact_indices[rank]] if query_fact_scores.ndim > 0 else query_fact_scores
             related_doc_ids = hipporag.triple_to_docs.get(retrieved_fact_id, [])
             for doc_id in related_doc_ids:
                 query_doc_scores[doc_id] += fact_score
 
-    if not graph_search:  # only fact linking, no graph search
+    if not graph_search:  # only return the scores without graph search
         sorted_doc_ids = np.argsort(query_doc_scores)[::-1]
         sorted_scores = query_doc_scores[sorted_doc_ids.tolist()]
         logs = None
     else:  # graph search
-        # from retrieved fact to nodes in the fact
         passage_node_weight = 0.05
-        # if reranker_dict is not None:
-        #     if 'confidence' in reranker_dict:
-        #         passage_node_weight = 0.05 if reranker_dict['confidence'] == 'high' else 0.25
-        #     print(f'passage_node_weight: {passage_node_weight}')
-        sorted_doc_ids, sorted_scores, logs, ppr_phrase_probs, ppr_doc_prob = graph_search_with_fact_entities(hipporag, query, link_top_k, query_doc_scores, query_fact_scores,
-                                                                                                              top_k_facts, top_k_fact_indicies, return_ppr=True, passage_node_weight=passage_node_weight)
+        sorted_doc_ids, sorted_scores, logs, ppr_phrase_probs, ppr_doc_prob = graph_search_with_fact_entities(
+            hipporag, query, link_top_k, query_doc_scores, query_fact_scores,
+            top_k_facts, top_k_fact_indices, return_ppr=True, passage_node_weight=passage_node_weight
+        )
 
     if hipporag.reranker is not None:
         logs['rerank'] = rerank_log

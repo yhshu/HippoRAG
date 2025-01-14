@@ -13,11 +13,11 @@ class NVEmbedV2Wrapper(EmbeddingModelWrapper):
     def __init__(self, model_name: str = 'nvidia/NV-Embed-v2', max_seq_length: int = 2048, multi_gpu=False):
         # Initialize the model with specified configurations
         device = 'cuda' if multi_gpu is False else 'cpu'
+        print(f'Initialized NV-Embed-v2 model, multi-GPU: {multi_gpu}, max_seq_length: {max_seq_length}, device: {device}')
         self.model = SentenceTransformer(model_name, trust_remote_code=True, device=device)
         self.model.max_seq_length = max_seq_length
         self.model.tokenizer.padding_side = "right"
         self.multi_gpu = multi_gpu
-        print(f'Initialized NV-Embed-v2 model, multi-GPU: {multi_gpu}, max_seq_length: {max_seq_length}, device: {device}')
 
     def _add_eos(self, input_examples: List[str]) -> List[str]:
         # Adds EOS token to each example

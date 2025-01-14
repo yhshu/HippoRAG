@@ -379,6 +379,7 @@ class DSPyFilter(Reranker):
         from src.rerank.dspy_optimize import FactFilterProgram
         import dspy
 
+        self.reranker_name = model_name
         self.program = FactFilterProgram()
         if model_name.startswith('gpt-'):
             dspy_llm = dspy.LM(model=f"{model_name}", max_tokens=512, temperature=0.0)
