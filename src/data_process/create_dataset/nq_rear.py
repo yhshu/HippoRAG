@@ -1,35 +1,15 @@
+import sys
+sys.path.append('.')
 import json
 import random
 
 from src.data_process.util import generate_hash
 from src.processing import query_data_has_duplication, corpus_has_duplication
 
-if __name__ == '__main__':
-    data = json.load(open('data/nq-test-rear.json'))
-    random.seed(1)
-    random.shuffle(data)
-
-    sampled_data = []
-    for sample in data:
-        contexts = sample['ctxs']
-        reference = sample['reference']
-
-        has_supporting = False
-        for c in contexts:
-            # if any reference is in the context, then it is a supporting document
-            for r in reference:
-                if r.lower() in c.lower():
-                    has_supporting = True
-                    break
-        if has_supporting:
-            sampled_data.append(sample)
-
-        if len(sampled_data) >= 1000:
-            break
-
+def get_corpus_from_data(data):
     corpus = []
     corpus_content_hash_set = set()
-    for sample in sampled_data:
+    for sample in data:
         contexts = sample['ctxs']
         reference = sample['reference']
         annotated_contexts = []
@@ -46,7 +26,6 @@ if __name__ == '__main__':
                     break
             annotated_contexts.append({'title': title, 'text': content, 'is_supporting': is_supporting})
 
-
             content_hash = generate_hash(title + '\n' + content)
             if content_hash not in corpus_content_hash_set:
                 corpus_content_hash_set.add(content_hash)
@@ -55,16 +34,55 @@ if __name__ == '__main__':
 
         sample['contexts'] = annotated_contexts
         del sample['ctxs']
+    # end for each sample
+    return corpus
 
-    query_data_has_duplication(sampled_data, False, False)
-    corpus_has_duplication(corpus)
 
-    data_output_path = 'data/nq_rear.json'
-    with open(data_output_path, 'w') as f:
-        json.dump(sampled_data, f)
-        print(f'{len(sampled_data)} samples saved to {data_output_path}')
+def save_data(data, output_path):
+    with open(output_path, 'w') as f:
+        json.dump(data, f)
+        print(f'{len(data)} samples saved to {output_path}')
 
-    corpus_output_path = 'data/nq_rear_corpus.json'
-    with open(corpus_output_path, 'w') as f:
+def save_corpus(corpus, output_path):
+    with open(output_path, 'w') as f:
         json.dump(corpus, f)
-        print(f'{len(corpus)} samples saved to {corpus_output_path}')
+        print(f'{len(corpus)} samples saved to {output_path}')
+
+
+if __name__ == '__main__':
+    data = json.load(open('data/nq-test-rear.json'))
+    random.seed(1)
+    random.shuffle(data)
+
+    test_data = []
+    dev_data = []
+    for sample in data:
+        contexts = sample['ctxs']
+        reference = sample['reference']
+
+        has_supporting = False
+        for c in contexts:
+            # if any reference is in the context, then it is a supporting document
+            for r in reference:
+                if r.lower() in c.lower():
+                    has_supporting = True
+                    break
+        if has_supporting:
+            if len(test_data) < 1000:
+                test_data.append(sample)
+            elif len(dev_data) < 1000:
+                dev_data.append(sample)
+
+    assert len(test_data) == 1000
+    test_corpus = get_corpus_from_data(test_data)
+    query_data_has_duplication(test_data, False, False)
+    corpus_has_duplication(test_corpus)
+    save_data(test_data, 'data/nq_rear.json')
+    save_corpus(test_corpus, 'data/nq_rear_corpus.json')
+
+    assert len(dev_data) == 1000
+    dev_corpus = get_corpus_from_data(dev_data)
+    query_data_has_duplication(dev_data, False, False)
+    corpus_has_duplication(dev_corpus)
+    save_data(dev_data, 'data/nq_rear_dev.json')
+    save_corpus(dev_corpus, 'data/nq_rear_dev_corpus.json')

@@ -26,7 +26,7 @@ class GritLMWrapper(EmbeddingModelWrapper):
     def encode_list(self, texts: list, instruction: str, batch_size=16):
         return self.model.encode(texts, instruction=gritlm_instruction(instruction), batch_size=batch_size)
 
-    def encode_text(self, text: Union[str, List], instruction: str = '', norm=True, return_numpy=False, return_cpu=False, batch_size=None):
+    def encode_text(self, text: Union[str, List], instruction: str = '', norm=True, return_numpy=False, return_cpu=False, batch_size=16):
         if isinstance(text, str):
             text = [text]
         if isinstance(text, list):
