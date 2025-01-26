@@ -20,6 +20,8 @@ class SentenceTransformersWrapper(EmbeddingModelWrapper):
             text = [text]
         if self.model_name.startswith("Alibaba-NLP/gte-Qwen2"):
             return self.model.encode(text, prompt=instruction, batch_size=batch_size)
+        else:
+            return self.model.encode(text, batch_size=batch_size)
 
 
 if __name__ == '__main__':

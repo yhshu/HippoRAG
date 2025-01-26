@@ -2,7 +2,7 @@ def init_embedding_model(model_name, **kwargs):
     if 'GritLM/' in model_name:
         from src.lm_wrapper.gritlm import GritLMWrapper
         return GritLMWrapper(model_name)
-    elif model_name.startswith("Alibaba-NLP/gte-Qwen"):
+    elif model_name.startswith("Alibaba-NLP/gte-Qwen") or model_name.startswith("sentence-transformers/"):
         from src.lm_wrapper.sentence_transformers_util import SentenceTransformersWrapper
         return SentenceTransformersWrapper(model_name)
     elif model_name.startswith('text-embedding-'):  # OpenAI text embedding models

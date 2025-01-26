@@ -77,6 +77,8 @@ def get_top_k_facts_indices_and_scores(query_embedding, fact_embedding, top_k: i
         top_k_facts = [triples[i] for i in top_k_fact_indices]
         candidate_fact_indices = top_k_fact_indices
         candidate_facts = top_k_facts
+        assert query is not None
+
         if reranker.reranker_name in ['oracle_triple']:
             top_k_fact_indices, top_k_facts = reranker.rerank(
                 'fact_reranking', query, candidate_facts, candidate_fact_indices, oracle_triples=oracle_triples
@@ -552,7 +554,7 @@ class HippoRAG:
         if reranker is None:
             top_k_fact_indices, query_fact_scores = get_top_k_facts_indices_and_scores(query_embedding, self.triple_embeddings, top_k)
         else:
-            top_k_fact_indices, query_fact_scores, rerank_log = get_top_k_facts_indices_and_scores(query_embedding, self.triple_embeddings, top_k, reranker, self.triples)
+            top_k_fact_indices, query_fact_scores, rerank_log = get_top_k_facts_indices_and_scores(query_embedding, self.triple_embeddings, top_k, reranker, triples, query)
         top_k_facts = [self.get_triple(triple_idx) for triple_idx in top_k_fact_indices]
         
         if reranker is None:

@@ -17,7 +17,7 @@ class HuggingFaceWrapper(EmbeddingModelWrapper):
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.device = device
 
-    def encode_text(self, text: Union[str, List], instruction=None, norm=True, return_cpu=False, return_numpy=False):
+    def encode_text(self, text: Union[str, List], instruction=None, norm=True, return_cpu=False, return_numpy=False, batch_size=None):
         encoding_func = mean_pooling_embedding_with_normalization if norm else mean_pooling_embedding
         with torch.no_grad():
             if isinstance(text, str):
