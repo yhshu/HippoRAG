@@ -3,8 +3,6 @@ import copy
 import json
 import re
 from tqdm import tqdm
-from src.pangu.retrieval_api import BM25SparseRetriever
-from thefuzz import fuzz
 
 
 def normalize_text(text):
